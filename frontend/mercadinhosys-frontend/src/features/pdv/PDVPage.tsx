@@ -620,7 +620,7 @@ const PDVPage: React.FC = () => {
                                                                         const val = e.target.value.replace(/\D/g, '');
                                                                         const masked = val.replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
                                                                         setDadosEntrega({
-                                                                            endereco: { ...(dadosEntrega?.endereco || {}), cep: masked }
+                                                                            endereco: { ...(dadosEntrega?.endereco || {}), cep: masked } as any
                                                                         });
                                                                     }}
                                                                     placeholder="00000-000"
