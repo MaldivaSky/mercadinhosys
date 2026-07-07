@@ -515,15 +515,15 @@ const PDVPage: React.FC = () => {
                                                                                 distancia_km: res.data.distancia_km,
                                                                                 taxa_entrega: res.data.taxa_sugerida 
                                                                             });
-                                                                            import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                            import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`, { id: 'cep-toast' }));
                                                                         } else {
-                                                                            import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa pelo CEP."));
+                                                                            import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa pelo CEP.", { id: 'cep-toast' }));
                                                                         }
                                                                     } catch (err: any) {
                                                                         console.warn("Não foi possível estimar a taxa: ", err.response?.data?.error);
                                                                     }
                                                                 } else {
-                                                                    import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente."));
+                                                                    import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente.", { id: 'cep-toast' }));
                                                                 }
                                                             } else if (paraEntregar && (!c || !c.cep)) {
                                                                 toast.success("Cliente sem CEP. Insira a taxa de entrega manualmente.");
@@ -587,18 +587,18 @@ const PDVPage: React.FC = () => {
                                                                         distancia_km: res.data.distancia_km,
                                                                         taxa_entrega: res.data.taxa_sugerida 
                                                                     });
-                                                                    import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                    import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`, { id: 'cep-toast' }));
                                                                 } else {
-                                                                    import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa pelo CEP."));
+                                                                    import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa pelo CEP.", { id: 'cep-toast' }));
                                                                 }
                                                             } catch (err: any) {
                                                                 console.warn("Não foi possível estimar a taxa: ", err.response?.data?.error);
                                                             }
                                                         } else {
-                                                            import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente."));
+                                                            import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente.", { id: 'cep-toast' }));
                                                         }
                                                     } else if (e.target.checked && !cliente?.cep) {
-                                                        import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente."));
+                                                        import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente.", { id: 'cep-toast' }));
                                                     }
                                                 }}
                                             />
@@ -645,15 +645,15 @@ const PDVPage: React.FC = () => {
                                                                                         distancia_km: res.data.distancia_km,
                                                                                         taxa_entrega: res.data.taxa_sugerida
                                                                                     });
-                                                                                    toast.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`);
+                                                                                    import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`, { id: 'cep-toast' }));
                                                                                 } else {
-                                                                                    toast.error(res.data?.error || "Erro ao calcular.");
+                                                                                    import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular.", { id: 'cep-toast' }));
                                                                                 }
                                                                             } catch (err: any) {
-                                                                                console.warn("Não foi possível estimar a taxa", err);
+                                                                                import('react-hot-toast').then(m => m.default.error("Erro na API.", { id: 'cep-toast' }));
                                                                             }
                                                                         } else {
-                                                                            toast.error("Digite um CEP válido.");
+                                                                            import('react-hot-toast').then(m => m.default.error("Digite um CEP válido.", { id: 'cep-toast' }));
                                                                         }
                                                                     }}
                                                                     className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl px-3 flex items-center justify-center text-slate-500 dark:text-slate-300 transition-all"
@@ -682,9 +682,12 @@ const PDVPage: React.FC = () => {
                                                                                     distancia_km: res.data.distancia_km,
                                                                                     taxa_entrega: res.data.taxa_sugerida 
                                                                                 });
+                                                                                import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`, { id: 'cep-toast' }));
+                                                                            } else {
+                                                                                import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao recalcular.", { id: 'cep-toast' }));
                                                                             }
                                                                         } catch (err) {
-                                                                            console.warn("Não foi possível re-estimar a taxa.", err);
+                                                                            import('react-hot-toast').then(m => m.default.error("Erro na API.", { id: 'cep-toast' }));
                                                                         }
                                                                     }
                                                                 }}
