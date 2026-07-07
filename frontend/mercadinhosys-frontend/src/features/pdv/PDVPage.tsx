@@ -609,7 +609,7 @@ const PDVPage: React.FC = () => {
                                                         <p className="text-xs text-orange-600 font-bold">⚠️ Recomendado selecionar o cliente acima para puxar o endereço automaticamente.</p>
                                                     )}
                                                     
-                                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                                    <div className="grid grid-cols-2 gap-4">
                                                         <div>
                                                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">CEP Destino</label>
                                                             <div className="relative flex gap-1">
@@ -660,32 +660,6 @@ const PDVPage: React.FC = () => {
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Distância Estimada (KM)</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="number"
-                                                                    disabled
-                                                                    value={dadosEntrega?.distancia_km !== undefined && dadosEntrega?.distancia_km !== 0 ? dadosEntrega.distancia_km : ''}
-                                                                    placeholder="Auto"
-                                                                    className="w-full p-3 pr-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-gray-100 dark:bg-gray-800/50 text-slate-700 dark:text-slate-300 text-sm font-bold opacity-80 cursor-not-allowed"
-                                                                />
-                                                                <span className="absolute right-2 top-3.5 px-2 py-0.5 rounded text-[8px] font-black bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 uppercase tracking-wider">Auto</span>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-1">Taxa (R$)</label>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                value={dadosEntrega?.taxa_entrega !== undefined ? dadosEntrega.taxa_entrega : ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    setDadosEntrega({ taxa_entrega: (val === '' ? '' : parseFloat(val)) as any });
-                                                                }}
-                                                                className="w-full p-3 rounded-xl border border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-sm font-black focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all"
-                                                            />
-                                                        </div>
-                                                        <div>
                                                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Veículo</label>
                                                             <select
                                                                 value={dadosEntrega?.veiculo || 'moto'}
@@ -715,6 +689,32 @@ const PDVPage: React.FC = () => {
                                                                 <option value="moto">🏍️ Moto</option>
                                                                 <option value="carro">🚗 Carro</option>
                                                             </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Distância Estimada (KM)</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="number"
+                                                                    disabled
+                                                                    value={dadosEntrega?.distancia_km !== undefined && dadosEntrega?.distancia_km !== 0 ? dadosEntrega.distancia_km : ''}
+                                                                    placeholder="Auto"
+                                                                    className="w-full p-3 pr-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-gray-100 dark:bg-gray-800/50 text-slate-700 dark:text-slate-300 text-sm font-bold opacity-80 cursor-not-allowed"
+                                                                />
+                                                                <span className="absolute right-2 top-3.5 px-2 py-0.5 rounded text-[8px] font-black bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 uppercase tracking-wider">Auto</span>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-1">Taxa (R$)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={dadosEntrega?.taxa_entrega !== undefined ? dadosEntrega.taxa_entrega : ''}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setDadosEntrega({ taxa_entrega: (val === '' ? '' : parseFloat(val)) as any });
+                                                                }}
+                                                                className="w-full p-3 rounded-xl border border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-sm font-black focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
