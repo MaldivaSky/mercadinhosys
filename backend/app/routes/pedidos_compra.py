@@ -47,6 +47,7 @@ def listar_pedidos():
             joinedload(PedidoCompra.fornecedor),
             joinedload(PedidoCompra.funcionario),
             joinedload(PedidoCompra.itens),
+            joinedload(PedidoCompra.conta_pagar),
         )
         if estab_id and str(estab_id).lower() != 'all':
             query = query.filter_by(estabelecimento_id=estab_id)
@@ -80,6 +81,35 @@ def listar_pedidos():
                         if item.produto:
                             item_data['produto'] = item.produto.to_dict()
                         pedido_dict['itens'].append(item_data)
+
+                # ── Status Financeiro (ContaPagar vinculada) ──────────────
+                cp = getattr(pedido, 'conta_pagar', None)
+                if cp is None:
+                    # Fallback: busca direta pelo pedido_compra_id
+                    cp = ContaPagar.query.filter_by(pedido_compra_id=pedido.id).first()
+
+                if cp:
+                    vencido = (
+                        cp.status in ('aberto', 'pendente') and
+                        cp.data_vencimento and
+                        cp.data_vencimento < date.today()
+                    )
+                    pedido_dict['financeiro'] = {
+                        'status': cp.status,                         # aberto | pago | vencido | cancelado
+                        'status_display': (
+                            'Vencido' if vencido else
+                            'Pago'    if cp.status == 'pago' else
+                            'Em aberto'
+                        ),
+                        'vencido': vencido,
+                        'valor_original': float(cp.valor_original) if cp.valor_original else None,
+                        'valor_pago': float(cp.valor_pago) if cp.valor_pago else None,
+                        'data_vencimento': cp.data_vencimento.isoformat() if cp.data_vencimento else None,
+                        'numero_documento': cp.numero_documento,
+                    }
+                else:
+                    pedido_dict['financeiro'] = None
+
                 pedidos.append(pedido_dict)
             except Exception as e:
                 from flask import current_app
@@ -458,7 +488,7 @@ def receber_pedido_compra():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@pedidos_compra_bp.route('/<int:pedido_id>/devolver', methods=['POST'])
+@pedidos_compra_bp.route('/pedidos-compra/<int:pedido_id>/devolver', methods=['POST'])
 @funcionario_required
 def devolver_pedido_compra(pedido_id):
     """

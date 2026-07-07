@@ -42,7 +42,7 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                 // 2. Carregar Despesas
                 try {
                     // Fetch boletos (Contas a Pagar) em vez de despesas genéricas
-                    const resBoletos = await apiClient.get('/pedidos-compra/boletos-fornecedores/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
+                    const resBoletos = await apiClient.get('/boletos-fornecedores/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
                     const boletosData = resBoletos.data.boletos || resBoletos.data.data || [];
                     
                     // Mapear para o formato esperado pelo UI (que usava Despesa)
@@ -81,7 +81,10 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
     const stats = {
         totalPedidos: pedidos.length,
         valorTotalPedidos: pedidos.reduce((sum, p) => sum + (p.total || 0), 0),
-        pedidosConcluidos: pedidos.filter(p => p.status === 'Entregue' || p.status === 'Concluído').length,
+        pedidosConcluidos: pedidos.filter(p => {
+            const s = (p.status || '').toLowerCase();
+            return ['entregue', 'concluído', 'concluido', 'recebido'].includes(s);
+        }).length,
         totalDespesasPagas: despesas.filter(d => d.forma_pagamento && !d.data_vencimento || new Date(d.data_vencimento) < new Date()).reduce((sum, d) => sum + (d.valor || 0), 0)
     };
 
@@ -153,7 +156,7 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                                                 <td className="px-4 py-3 text-gray-600 dark:text-gray-300">#{p.numero_pedido}</td>
                                                 <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">{formatCurrency(p.total)}</td>
                                                 <td className="px-4 py-3 text-center">
-                                                    <span className={`px-2 py-1 text-[10px] uppercase font-black rounded-full ${p.status === 'Entregue' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>
+                                                    <span className={`px-2 py-1 text-[10px] uppercase font-black rounded-full ${['entregue', 'concluído', 'concluido', 'recebido'].includes((p.status || '').toLowerCase()) ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>
                                                 </td>
                                             </tr>
                                         ))}

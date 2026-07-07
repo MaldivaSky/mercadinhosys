@@ -21,7 +21,8 @@ import {
     Activity,
     Navigation,
     Receipt,
-    MapPin
+    MapPin,
+    ShoppingBag
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 import { canAccessRoute } from '../../utils/permissions';
@@ -31,6 +32,7 @@ const menuItems = [
     { to: '/pdv', icon: ShoppingCart, label: 'PDV' },
     { to: '/pdv?manage=true', icon: DollarSign, label: 'Gerenciar Caixa' },
     { to: '/products', icon: Package, label: 'Produtos' },
+    { to: '/compras', icon: ShoppingBag, label: 'Compras & Doca' },
     { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
     { to: '/customers', icon: Users, label: 'Clientes' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign, Building2, Activity, Target, MapPin } from 'lucide-react';
+import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign, Building2, Activity, Target, MapPin, ShoppingBag } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import EstablishmentSelector from '../EstablishmentSelector';
 import { authService } from '../../features/auth/authService';
@@ -15,6 +15,7 @@ const mainTabs = [
 
 const allMenuItems = [
     { to: '/pdv?manage=true', icon: DollarSign, label: 'Caixa' },
+    { to: '/compras', icon: ShoppingBag, label: 'Compras & Doca' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/sfa', icon: MapPin, label: 'SFA (Externo)' },
     { to: '/sfa/gestao', icon: MapPin, label: 'Gestão SFA' },

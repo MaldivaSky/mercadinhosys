@@ -1509,7 +1509,8 @@ def relatorio_analitico_fornecedores():
 def sincronizar_metricas_fornecedor(fornecedor_id):
     """Sincroniza métricas de um fornecedor (chamar após cada pedido)"""
     try:
-        from app.models import CondicaoPagamento
+        from app.models import CondicaoPagamento, MovimentacaoEstoque, Produto
+        from datetime import timedelta
         fornecedor = Fornecedor.query.get(fornecedor_id)
         if not fornecedor:
             return
@@ -1530,76 +1531,136 @@ def sincronizar_metricas_fornecedor(fornecedor_id):
         pedidos = pedidos + pedidos_recebidos
 
         total_compras = len(pedidos)
-        if total_compras == 0:
-            return
-            
         valor_total = sum(float(p.total) for p in pedidos)
+
+        # Se não há pedidos, fallback para MovimentacaoEstoque de entrada para calcular o valor_total_comprado real
+        if valor_total == 0:
+            movs = db.session.query(func.sum(MovimentacaoEstoque.valor_total)).join(Produto).filter(
+                MovimentacaoEstoque.tipo == 'entrada',
+                Produto.fornecedor_id == fornecedor_id,
+                MovimentacaoEstoque.estabelecimento_id == fornecedor.estabelecimento_id
+            ).scalar()
+            valor_total = float(movs or 0.0)
 
         # Atualizar básicos
         fornecedor.total_compras = total_compras
         fornecedor.valor_total_comprado = valor_total
 
+        import re
+        
         # === CÁLCULO DE INTELIGÊNCIA ===
-        # 1. Pontualidade
         atraso_total_dias = 0
         entregas_no_prazo = 0
         pedidos_com_data = 0
         
-        # 2. Desconto
-        desconto_acumulado_percentual = 0
-        
-        # 3. Prazo Pagamento
-        dias_prazo_acumulado = 0
-        todas_condicoes = {c.nome: c.dias_prazo for c in CondicaoPagamento.query.filter_by(estabelecimento_id=fornecedor.estabelecimento_id).all()}
+        total_bruto_acumulado = 0.0
+        total_desconto_acumulado = 0.0
 
         for p in pedidos:
             # Pontualidade
-            if p.data_recebimento and p.data_previsao_entrega:
+            data_receb = p.data_recebimento
+            if not data_receb and p.status in ['concluido', 'recebido']:
+                data_receb = p.data_pedido.date() if p.data_pedido else None
+                
+            data_prev = p.data_previsao_entrega
+            if not data_prev and p.data_pedido:
+                prazo = fornecedor.prazo_entrega or 7
+                data_prev = p.data_pedido.date() + timedelta(days=prazo)
+
+            if data_receb and data_prev:
                 pedidos_com_data += 1
-                diff = (p.data_recebimento - p.data_previsao_entrega).days
+                diff = (data_receb - data_prev).days
                 if diff <= 0:
                     entregas_no_prazo += 1
                 else:
                     atraso_total_dias += diff
                     
-            # Desconto
-            subtotal = float(p.subtotal or 0)
-            desc = float(p.desconto or 0)
-            if subtotal > 0:
-                desconto_acumulado_percentual += (desc / subtotal) * 100
+            # Desconto Real (Itens + Global)
+            bruto_pedido = 0.0
+            desconto_itens = 0.0
+            if p.itens:
+                for item in p.itens:
+                    qtd = float(item.quantidade_solicitada or 0)
+                    preco = float(item.preco_unitario or 0)
+                    desc_perc = float(item.desconto_percentual or 0)
+                    
+                    bruto_item = qtd * preco
+                    valor_desc_item = bruto_item * (desc_perc / 100)
+                    
+                    bruto_pedido += bruto_item
+                    desconto_itens += valor_desc_item
+            
+            # Fallback se itens não estiverem detalhados
+            if bruto_pedido == 0:
+                bruto_pedido = float(p.subtotal or 0) + float(p.desconto or 0)
                 
-            # Pagamento
-            if p.condicao_pagamento:
-                dias_prazo_acumulado += todas_condicoes.get(p.condicao_pagamento, 0)
+            total_bruto_acumulado += bruto_pedido
+            total_desconto_acumulado += desconto_itens + float(p.desconto or 0)
 
         # Atualizar Métricas Inteligentes no Modelo
         if pedidos_com_data > 0:
             fornecedor.percentual_entregas_no_prazo = (entregas_no_prazo / pedidos_com_data) * 100
             fornecedor.atraso_medio_dias = (atraso_total_dias / pedidos_com_data)
         else:
+            # Padrões mais reais caso não existam dados de atraso: 100% no prazo
             fornecedor.percentual_entregas_no_prazo = 100.0
             fornecedor.atraso_medio_dias = 0.0
             
-        fornecedor.desconto_medio_percentual = desconto_acumulado_percentual / total_compras
-        fornecedor.prazo_pagamento_medio_dias = dias_prazo_acumulado / total_compras
+        if total_bruto_acumulado > 0:
+            fornecedor.desconto_medio_percentual = (total_desconto_acumulado / total_bruto_acumulado) * 100
+        else:
+            fornecedor.desconto_medio_percentual = 0.0
+            
+        # --- Prazo de Pagamento Máximo (Contas a Pagar) ---
+        maior_prazo = 0
+        from app.models import ContaPagar
+        boletos = ContaPagar.query.filter_by(fornecedor_id=fornecedor.id, estabelecimento_id=fornecedor.estabelecimento_id).all()
+        if boletos:
+            for boleto in boletos:
+                if boleto.data_emissao and boleto.data_vencimento:
+                    prazo_dias = (boleto.data_vencimento - boleto.data_emissao).days
+                    if prazo_dias > maior_prazo:
+                        maior_prazo = prazo_dias
+        
+        # Fallback para deduzir prazo da string de forma_pagamento se nenhum boleto deu prazo maior
+        if maior_prazo == 0:
+            forma = str(fornecedor.forma_pagamento or "")
+            nums = [int(n) for n in re.findall(r'\d+', forma)]
+            if nums:
+                maior_prazo = max(nums)
+                
+        fornecedor.prazo_pagamento_medio_dias = float(maior_prazo)
 
-        # Calcular Score Geral (0-100)
-        # Pesos: Pontualidade (50%), Descontos (25%), Pagamento (25%)
-        # Score Pontualidade (máx 50)
-        score_pont = (fornecedor.percentual_entregas_no_prazo / 100.0) * 50
+        # Calcular Score Inteligente e Lógico (0-100)
+        # 1. Base neutra/boa: Começa com 80 pontos (presunção de inocência)
+        # 2. Bônus por prazo de pagamento (max +15 pts) -> 30 dias = +10, 60 dias = +15
+        # 3. Bônus por desconto (max +15 pts) -> 5% = +7.5 pts
+        # 4. Penalidade por atraso médio (cada dia perde 2 pontos, max -40 pts)
+        # 5. Penalidade se o fornecedor for inativo (sem volume financeiro algum)
         
-        # Score Desconto (máx 25) - ex: 10% de desconto médio é ótimo, dá 25 pts. Acima disso capeia.
-        score_desc = min((fornecedor.desconto_medio_percentual / 10.0) * 25, 25)
+        score = 80.0
         
-        # Score Pagamento (máx 25) - ex: 30 dias médio é padrão (15 pts), 60 dias (25 pts)
-        score_pag = min((fornecedor.prazo_pagamento_medio_dias / 60.0) * 25, 25)
+        # Bônus Prazo (até +15 pontos se ele der prazo de até 60 dias)
+        score += min((fornecedor.prazo_pagamento_medio_dias / 60.0) * 15, 15)
         
-        fornecedor.score_geral = int(score_pont + score_desc + score_pag)
+        # Bônus Desconto (até +15 pontos)
+        score += min((fornecedor.desconto_medio_percentual / 10.0) * 15, 15)
+        
+        # Penalidade de atraso (até -40 pontos)
+        if fornecedor.atraso_medio_dias > 0:
+            score -= min(fornecedor.atraso_medio_dias * 2, 40)
+            
+        # Penalidade de inatividade (cai pra 50 se não vendeu nada nem teve movimentação)
+        if valor_total == 0:
+            score -= 30
+            
+        # Manter nos limites
+        fornecedor.score_geral = int(max(0, min(100, score)))
 
         # Atualizar classificação baseada no valor total E pontuação
-        if fornecedor.score_geral >= 80 and valor_total > 50000:
+        if fornecedor.score_geral >= 85 and valor_total > 50000:
             fornecedor.classificacao = "PREMIUM"
-        elif fornecedor.score_geral >= 70:
+        elif fornecedor.score_geral >= 75:
             fornecedor.classificacao = "A"
         elif fornecedor.score_geral >= 50:
             fornecedor.classificacao = "B"
@@ -1633,16 +1694,46 @@ def get_inteligencia(id):
         ).order_by(PedidoCompra.data_recebimento.desc()).limit(10).all()
         
         timeline = []
-        for p in pedidos:
-            if p.data_recebimento and p.data_previsao_entrega:
-                diff = (p.data_recebimento - p.data_previsao_entrega).days
+        from datetime import timedelta
+        
+        if pedidos:
+            for p in pedidos:
+                data_receb = p.data_recebimento
+                if not data_receb and p.status in ['concluido', 'recebido']:
+                    data_receb = p.data_pedido.date() if p.data_pedido else None
+                    
+                data_prev = p.data_previsao_entrega
+                if not data_prev and p.data_pedido:
+                    prazo = fornecedor.prazo_entrega or 7
+                    data_prev = p.data_pedido.date() + timedelta(days=prazo)
+
+                if data_receb and data_prev:
+                    diff = (data_receb - data_prev).days
+                    timeline.append({
+                        "id": p.id,
+                        "numero": p.numero_pedido,
+                        "data": data_receb.isoformat(),
+                        "total": float(p.total),
+                        "atraso_dias": diff,
+                        "no_prazo": diff <= 0
+                    })
+        else:
+            # Se não há pedidos de compra, preencher a timeline com movimentações de estoque manuais!
+            from app.models import MovimentacaoEstoque, Produto
+            movs = MovimentacaoEstoque.query.join(Produto).filter(
+                MovimentacaoEstoque.tipo == 'entrada',
+                Produto.fornecedor_id == id,
+                MovimentacaoEstoque.estabelecimento_id == estabelecimento_id
+            ).order_by(MovimentacaoEstoque.created_at.desc()).limit(10).all()
+            
+            for m in movs:
                 timeline.append({
-                    "id": p.id,
-                    "numero": p.numero_pedido,
-                    "data": p.data_recebimento.isoformat(),
-                    "total": float(p.total),
-                    "atraso_dias": diff,
-                    "no_prazo": diff <= 0
+                    "id": m.id,
+                    "numero": f"MOV-{m.id}",
+                    "data": m.created_at.date().isoformat() if m.created_at else None,
+                    "total": float(m.valor_total or 0),
+                    "atraso_dias": 0,
+                    "no_prazo": True
                 })
         
         return jsonify({

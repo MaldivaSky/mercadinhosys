@@ -20,6 +20,16 @@ export interface PedidoCompra {
   observacoes?: string;
   total_itens: number;
   itens?: PedidoCompraItem[];
+  // Status Financeiro Vinculado
+  financeiro?: {
+    status: 'aberto' | 'pago' | 'vencido' | 'cancelado' | 'pendente';
+    status_display: string;
+    vencido: boolean;
+    valor_original: number;
+    valor_pago?: number;
+    data_vencimento?: string;
+    numero_documento?: string;
+  } | null;
   // Campos expandidos para detalhes
   fornecedor?: {
     cnpj: string;

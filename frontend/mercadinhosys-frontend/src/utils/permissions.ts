@@ -44,7 +44,7 @@ export type Modulo =
     | 'dashboard' | 'pdv' | 'gestao_caixa' | 'vendas' | 'produtos'
     | 'fornecedores' | 'clientes' | 'sfa' | 'sfa_gestao' | 'delivery'
     | 'despesas' | 'fiscal' | 'auditoria' | 'funcionarios' | 'rh'
-    | 'rh_gestao' | 'ponto' | 'relatorios' | 'configuracoes';
+    | 'rh_gestao' | 'ponto' | 'relatorios' | 'configuracoes' | 'compras';
 
 /** Níveis com acesso a cada módulo (Regras de Acesso do produto). */
 export const MODULOS_POR_NIVEL: Record<Modulo, number[]> = {
@@ -53,6 +53,7 @@ export const MODULOS_POR_NIVEL: Record<Modulo, number[]> = {
     gestao_caixa:  [1, 2, 4],
     vendas:        [1, 2],
     produtos:      [1, 2, 4, 5],
+    compras:       [1, 2, 4],
     fornecedores:  [1, 2, 4, 5],
     clientes:      [1, 2, 4, 5],
     sfa:           [1, 2, 5],
@@ -75,7 +76,7 @@ export const MODULOS_POR_NIVEL: Record<Modulo, number[]> = {
 
 /** Módulos incluídos no Plano Grátis. */
 export const MODULOS_PLANO_GRATIS: Modulo[] = [
-    'dashboard', 'pdv', 'gestao_caixa', 'vendas', 'produtos',
+    'dashboard', 'pdv', 'gestao_caixa', 'vendas', 'produtos', 'compras',
     'fornecedores', 'despesas', 'funcionarios', 'configuracoes',
 ];
 
@@ -102,6 +103,7 @@ export const ROTA_MODULO: Record<string, Modulo> = {
     '/pdv': 'pdv',
     '/pdv?manage=true': 'gestao_caixa',
     '/products': 'produtos',
+    '/compras': 'compras',
     '/suppliers': 'fornecedores',
     '/customers': 'clientes',
     '/sales': 'vendas',

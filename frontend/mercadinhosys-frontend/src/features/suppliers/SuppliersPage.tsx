@@ -96,9 +96,9 @@ const SuppliersPage: React.FC = () => {
         const com_produtos = suppliers.filter(s => (s.total_produtos || 0) > 0).length;
         const sem_produtos = total - com_produtos;
 
-        // Top fornecedor por total de produtos
+        // Top fornecedor por valor total comprado
         const topFornecedor = suppliers.reduce((max, s) =>
-            (s.total_produtos || 0) > (max.total_produtos || 0) ? s : max
+            (s.valor_total_comprado || 0) > (max.valor_total_comprado || 0) ? s : max
             , suppliers[0] || null);
 
         const totalProdutos = suppliers.reduce((sum, s) => sum + (s.total_produtos || 0), 0);
