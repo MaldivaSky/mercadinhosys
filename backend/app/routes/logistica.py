@@ -348,16 +348,35 @@ def estimar_taxa_cep():
             logradouro = viacep.get('logradouro', '')
             localidade = viacep.get('localidade', '')
             uf = viacep.get('uf', '')
-            query = f"{logradouro}, {localidade}, {uf}, Brasil"
+            bairro = viacep.get('bairro', '')
+            
             headers = {'User-Agent': 'MercadinhoSys/1.0 (admin@mercadinhosys.com.br)'}
             
-            nom = requests.get(f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1", headers=headers, timeout=4).json()
-            if nom and len(nom) > 0:
-                return float(nom[0]['lat']), float(nom[0]['lon'])
-                
+            # 2.a Tenta por rua
+            if logradouro:
+                query = f"{logradouro}, {localidade}, {uf}, Brasil"
+                nom = requests.get(f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1", headers=headers, timeout=4).json()
+                if nom and len(nom) > 0:
+                    return float(nom[0]['lat']), float(nom[0]['lon'])
+                    
+            # 2.b Tenta por CEP postalcode
             nom_cep = requests.get(f"https://nominatim.openstreetmap.org/search?postalcode={cep_clean}&country=Brazil&format=json", headers=headers, timeout=4).json()
             if nom_cep and len(nom_cep) > 0:
                 return float(nom_cep[0]['lat']), float(nom_cep[0]['lon'])
+                
+            # 2.c Fallback: tenta por bairro + cidade
+            if bairro:
+                query_bairro = f"{bairro}, {localidade}, {uf}, Brasil"
+                nom_bairro = requests.get(f"https://nominatim.openstreetmap.org/search?q={query_bairro}&format=json&limit=1", headers=headers, timeout=4).json()
+                if nom_bairro and len(nom_bairro) > 0:
+                    return float(nom_bairro[0]['lat']), float(nom_bairro[0]['lon'])
+                    
+            # 2.d Fallback final: tenta apenas pela cidade
+            if localidade:
+                query_cidade = f"{localidade}, {uf}, Brasil"
+                nom_cidade = requests.get(f"https://nominatim.openstreetmap.org/search?q={query_cidade}&format=json&limit=1", headers=headers, timeout=4).json()
+                if nom_cidade and len(nom_cidade) > 0:
+                    return float(nom_cidade[0]['lat']), float(nom_cidade[0]['lon'])
         except:
             pass
             
