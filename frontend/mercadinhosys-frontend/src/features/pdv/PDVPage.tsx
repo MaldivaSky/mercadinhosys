@@ -792,11 +792,19 @@ const PDVPage: React.FC = () => {
                 }}
                 onImprimir={async () => {
                     if (!vendaFinalizada) return;
+                    if (vendaFinalizada.offline) {
+                        import('react-hot-toast').then(m => m.default.error("Não é possível imprimir comprovante de venda offline. Aguarde a sincronização."));
+                        return;
+                    }
                     setMostrarModalNotaFiscal(false);
                     setCupomModalAberto(true);
                 }}
                 onEnviarEmail={async (email) => {
                     if (!vendaFinalizada) return;
+                    if (vendaFinalizada.offline) {
+                        import('react-hot-toast').then(m => m.default.error("Não é possível enviar email de venda offline. Aguarde a sincronização."));
+                        return;
+                    }
                     setEnviandoEmail(true);
                     try {
                         await showToast.promise(pdvService.enviarCupomFiscal(vendaFinalizada.id, email), {
@@ -819,6 +827,10 @@ const PDVPage: React.FC = () => {
                 enviando={enviandoEmail}
                 onVisualizar={async () => {
                     if (!vendaFinalizada) return;
+                    if (vendaFinalizada.offline) {
+                        import('react-hot-toast').then(m => m.default.error("Não é possível visualizar cupom de venda offline. Aguarde a sincronização."));
+                        return;
+                    }
                     setMostrarModalNotaFiscal(false);
                     setCupomModalAberto(true);
                 }}

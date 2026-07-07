@@ -104,7 +104,15 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
         onProdutoSelecionado(produto);
         setQuery('');
         setResultados([]);
-        inputRef.current?.focus();
+        
+        const un = ((produto as any).unidade_medida || 'UN').toUpperCase();
+        const isPeso = UNIDADES_PESO.includes(un) || produto.tipo === 'granel';
+        
+        if (!isPeso) {
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 50);
+        }
     };
 
     /** Calcula badge de validade */

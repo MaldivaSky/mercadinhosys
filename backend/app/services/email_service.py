@@ -308,6 +308,12 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
                             <td class="total-value">R$ {{ fmt(comprovante.desconto) }}</td>
                         </tr>
                         {% endif %}
+                        {% if comprovante.taxa_entrega and comprovante.taxa_entrega > 0 %}
+                        <tr class="total-row">
+                            <td>Taxa de Entrega</td>
+                            <td class="total-value">R$ {{ fmt(comprovante.taxa_entrega) }}</td>
+                        </tr>
+                        {% endif %}
                         <tr class="grand-total">
                             <td class="grand-label">TOTAL LÍQUIDO</td>
                             <td class="grand-price">R$ {{ fmt(comprovante.total) }}</td>
@@ -327,12 +333,31 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
                         </tr>
                         {% endif %}
                         {% endif %}
+                        
+                        {# Tributos Aproximados #}
+                        {% if comprovante.valor_tributos %}
+                        <tr>
+                            <td colspan="2" style="padding-top: 15px; text-align: center; font-size: 10px; color: #94a3b8;">
+                                Trib aprox R$ {{ fmt(comprovante.valor_tributos) }} ({{ fmt(comprovante.percentual_tributos) }}%) Fonte: IBPT
+                            </td>
+                        </tr>
+                        {% endif %}
                     </table>
 
                     <div style="margin-top: 30px; text-align: center;">
                         <span style="background-color: #f1f5f9; padding: 6px 15px; border-radius: 20px; font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase;">
                             PAGAMENTO: {{ comprovante.forma_pagamento }}
                         </span>
+                        
+                        {# QR Code Placeholder ou Real #}
+                        <div style="margin-top: 20px;">
+                            <p style="font-size: 10px; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; font-weight: bold;">Consulta via QR Code</p>
+                            {% if comprovante.qr_code %}
+                            <img src="{{ comprovante.qr_code }}" alt="QR Code NFC-e" style="width: 120px; height: 120px; border-radius: 8px;" />
+                            {% else %}
+                            <div style="width: 120px; height: 120px; background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #94a3b8; font-weight: bold;">QR Code não gerado</div>
+                            {% endif %}
+                        </div>
                     </div>
                 </td>
             </tr>

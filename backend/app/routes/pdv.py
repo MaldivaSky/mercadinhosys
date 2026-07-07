@@ -1437,6 +1437,28 @@ def enviar_cupom_email():
         # Preparar dados estruturados para o email_service
         from app.services.email_service import enviar_cupom_fiscal
         
+        # Obter taxa de entrega (se houver)
+        from app.models import Entrega
+        entrega = Entrega.query.filter_by(venda_id=venda_id).first()
+        taxa_entrega = float(entrega.taxa_entrega) if entrega and entrega.taxa_entrega else 0.0
+
+        # Tributos (estimativa)
+        valor_tributos = sum(
+            float(it.get("total_item") or 0) * (
+                float(it.get("icms_aliquota") or 0)
+                + float(it.get("pis_aliquota") or 0)
+                + float(it.get("cofins_aliquota") or 0)
+            ) / 100
+            for it in itens_venda
+        )
+        subtotal_venda = float(venda_data.get("subtotal") or 0)
+        percentual_tributos = (valor_tributos / subtotal_venda * 100) if subtotal_venda > 0 else 0
+        
+        # QR Code placeholder se não houver nfce
+        from app.models import DocumentoFiscal
+        doc_fiscal = DocumentoFiscal.query.filter_by(venda_id=venda_id).first()
+        qr_code = doc_fiscal.qr_code if doc_fiscal and doc_fiscal.qr_code else None
+        
         # Melhoria na extração e formatação da data (Extreme Precision)
         data_venda = venda_data.get("data_venda")
         data_str = ""
@@ -1501,7 +1523,11 @@ def enviar_cupom_email():
                 "forma_pagamento": (venda_data.get("forma_pagamento") or "Dinheiro").replace("_", " ").title(),
                 "valor_recebido": float(venda_data.get("valor_recebido") or 0),
                 "troco": float(venda_data.get("troco") or 0),
-                "rodape": "Obrigado pela preferência!"
+                "rodape": "Obrigado pela preferência!",
+                "valor_tributos": round(valor_tributos, 2),
+                "percentual_tributos": round(percentual_tributos, 2),
+                "taxa_entrega": round(taxa_entrega, 2),
+                "qr_code": qr_code
             },
             "estabelecimento": {
                 "nome_fantasia": estabelecimento_data.get("nome_fantasia", "MercadinhoSys"),

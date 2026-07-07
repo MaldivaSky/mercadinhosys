@@ -952,6 +952,12 @@ def buscar_clientes():
                     "saldo_devedor": float(cliente.saldo_devedor or 0), # Fiado
                     "classificacao": calcular_classificacao_cliente(cliente),
                     "limite_disponivel": calcular_limite_disponivel(cliente),
+                    "cep": cliente.cep or "",
+                    "logradouro": cliente.logradouro or "",
+                    "numero": cliente.numero or "",
+                    "bairro": cliente.bairro or "",
+                    "cidade": cliente.cidade or "",
+                    "estado": cliente.estado or "",
                 }
             )
 
