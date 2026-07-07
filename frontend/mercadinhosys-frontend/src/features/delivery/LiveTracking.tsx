@@ -92,7 +92,7 @@ const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega: _entrega }) => {
                 */}
                 <MapContainer 
                     center={centerPoint as [number, number]} 
-                    zoom={13} 
+                    zoom={16} 
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                 >
