@@ -120,19 +120,37 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ clientes, loading, onRowC
                              fontSize: '0.7rem',
                              letterSpacing: 0.5,
                              textTransform: 'uppercase',
-                             bgcolor: segmento === 'Campeão' ? '#e8f5e9' : 
-                                      segmento === 'Fiel' ? '#e3f2fd' : 
-                                      segmento === 'Perdido' ? '#ffebee' : '#f3e5f5',
-                             color: segmento === 'Campeão' ? '#2e7d32' : 
-                                      segmento === 'Fiel' ? '#1565c0' : 
-                                      segmento === 'Perdido' ? '#c62828' : '#7b1fa2',
+                             bgcolor: segmento === 'VIP' ? '#f3e8ff' : 
+                                      segmento === 'Premium' ? '#dbeafe' : 
+                                      segmento === 'Final de Semana' ? '#dcfce7' : 
+                                      segmento === 'Caçador de Promoções' ? '#fce7f3' : 
+                                      segmento === 'Raro' ? '#ffedd5' : 
+                                      segmento === 'Novo' ? '#ccfbf1' : '#f3f4f6',
+                             color: segmento === 'VIP' ? '#7e22ce' : 
+                                      segmento === 'Premium' ? '#1d4ed8' : 
+                                      segmento === 'Final de Semana' ? '#15803d' :
+                                      segmento === 'Caçador de Promoções' ? '#be185d' : 
+                                      segmento === 'Raro' ? '#c2410c' : 
+                                      segmento === 'Novo' ? '#0f766e' : '#374151',
                              border: '1px solid',
-                             borderColor: segmento === 'Campeão' ? '#c8e6c9' : 
-                                      segmento === 'Fiel' ? '#bbdefb' : 
-                                      segmento === 'Perdido' ? '#ffcdd2' : '#e1bee7',
+                             borderColor: segmento === 'VIP' ? '#e9d5ff' : 
+                                      segmento === 'Premium' ? '#bfdbfe' : 
+                                      segmento === 'Final de Semana' ? '#bbf7d0' : 
+                                      segmento === 'Caçador de Promoções' ? '#fbcfe8' : 
+                                      segmento === 'Raro' ? '#fed7aa' : 
+                                      segmento === 'Novo' ? '#99f6e4' : '#e5e7eb',
                            }}
                         />
                      ) : <span className="text-xs text-gray-400">—</span>}
+                     {rfmCliente?.risco_inadimplencia && rfmCliente.risco_inadimplencia !== 'BAIXO' && (
+                         <Tooltip title={`Risco de Inadimplência: ${rfmCliente.risco_inadimplencia}`}>
+                             <Chip
+                                label={rfmCliente.risco_inadimplencia}
+                                size="small"
+                                sx={{ ml: 1, height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: rfmCliente.risco_inadimplencia === 'ALTO' ? '#fee2e2' : '#fef3c7', color: rfmCliente.risco_inadimplencia === 'ALTO' ? '#b91c1c' : '#b45309' }}
+                             />
+                         </Tooltip>
+                     )}
                   </td>
                   <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-center">
                     <div className="flex justify-center space-x-1" onClick={(e) => e.stopPropagation()}>
@@ -221,12 +239,20 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ clientes, loading, onRowC
                   <div className="flex flex-col items-end gap-1">
                      {segmento && (
                         <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
-                            segmento === 'Campeão' ? 'bg-green-50 text-green-700 border-green-200' : 
-                            segmento === 'Fiel' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
-                            segmento === 'Perdido' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-purple-50 text-purple-700 border-purple-200'
+                            segmento === 'VIP' ? 'bg-purple-50 text-purple-700 border-purple-200' : 
+                            segmento === 'Premium' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                            segmento === 'Final de Semana' ? 'bg-green-50 text-green-700 border-green-200' : 
+                            segmento === 'Caçador de Promoções' ? 'bg-pink-50 text-pink-700 border-pink-200' : 
+                            segmento === 'Raro' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
+                            segmento === 'Novo' ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-gray-50 text-gray-700 border-gray-200'
                         }`}>
                           {segmento}
                         </span>
+                     )}
+                     {rfmCliente?.risco_inadimplencia && rfmCliente.risco_inadimplencia !== 'BAIXO' && (
+                         <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${rfmCliente.risco_inadimplencia === 'ALTO' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                             {rfmCliente.risco_inadimplencia} RISCO
+                         </span>
                      )}
                   </div>
                 </div>

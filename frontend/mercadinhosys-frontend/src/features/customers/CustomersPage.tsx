@@ -46,13 +46,11 @@ import CustomerDetailsModal from './components/CustomerDetailsModal';
 import CustomerForm from './components/CustomerForm';
 import CustomerTable from './components/CustomerTable';
 import CustomersCommandToolbar from './components/CustomersCommandToolbar';
-import CustomersAdvancedFiltersModal from './components/CustomersAdvancedFiltersModal';
+import CustomersAdvancedFiltersModal, { StatusFilter, SegmentFilter } from './components/CustomersAdvancedFiltersModal';
 import PinDialog from '../../components/modals/PinDialog';
 
 type CRMTab = 'overview' | 'recovery' | 'campaigns' | 'portfolio';
 type CampaignKey = 'reactivation' | 'vip' | 'debt' | 'promotion';
-type StatusFilter = 'todos' | 'ativos' | 'inativos';
-type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo' | 'VIP' | 'Em Risco';
 
 type DashboardState = {
     total: number;
@@ -71,6 +69,9 @@ type RfmCustomer = {
     recency_days?: number;
     frequency?: number;
     monetary?: number;
+    risco_inadimplencia?: string;
+    bom_pagador?: boolean;
+    sugestao_limite?: number;
 };
 
 type CRMCustomer = Cliente & {
@@ -80,6 +81,9 @@ type CRMCustomer = Cliente & {
     whatsappNumber: string;
     hasDebt: boolean;
     actionPriority: number;
+    risco_inadimplencia: string;
+    bom_pagador: boolean;
+    sugestao_limite: number;
 };
 
 type CampaignConfig = {
@@ -145,11 +149,12 @@ const campaignConfigs: CampaignConfig[] = [
 ];
 
 const segmentColors: Record<string, string> = {
-    'Campeão': '#16a34a',
-    'Fiel': '#2563eb',
-    'Regular': '#7c3aed',
-    'Risco': '#ea580c',
-    'Perdido': '#dc2626',
+    'VIP': '#7c3aed',
+    'Premium': '#2563eb',
+    'Final de Semana': '#16a34a',
+    'Caçador de Promoções': '#db2777',
+    'Regular': '#4b5563',
+    'Raro': '#ea580c',
     'Novo': '#0f766e',
 };
 
@@ -169,16 +174,11 @@ const buildWhatsAppUrl = (cliente: Cliente, message: string) => {
     return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
 };
 
-const classifyLifecycle = (cliente: Cliente, segment: string, lastPurchaseDays: number | null) => {
-    const debt = Number(cliente.saldo_devedor || 0);
-    const totalPurchases = Number(cliente.total_compras || 0);
-    const totalSpent = Number(cliente.valor_total_gasto || 0);
-
-    if (debt > 0) return 'carteira_aberta';
-    if (segment === 'Campeão' || totalSpent >= 5000) return 'vip';
-    if (segment === 'Risco' || (lastPurchaseDays !== null && lastPurchaseDays >= 45)) return 'em_risco';
-    if (!cliente.ativo || segment === 'Perdido' || (lastPurchaseDays !== null && lastPurchaseDays >= 90)) return 'inativo';
-    if (totalPurchases <= 1) return 'novo';
+const classifyLifecycle = (segment: string, ativo: boolean) => {
+    if (!ativo) return 'inativo';
+    if (segment === 'Raro') return 'em_risco';
+    if (segment === 'VIP' || segment === 'Premium') return 'vip';
+    if (segment === 'Novo') return 'novo';
     return 'ativo';
 };
 
@@ -320,7 +320,7 @@ const CustomersPage: React.FC = () => {
     const [fiadoContaSelecionada, setFiadoContaSelecionada] = useState<number | null>(null);
     const [fiadoContaExpandida, setFiadoContaExpandida] = useState<number | null>(null);
     const [recalcLoading, setRecalcLoading] = useState(false);
-    const [rfmData, setRfmData] = useState<{ customers?: RfmCustomer[]; segments?: Record<string, number>; window_days?: number } | null>(null);
+    const [rfmData, setRfmData] = useState<{ customers?: RfmCustomer[]; segments?: Record<string, number>; consumidor_final?: { percentual_vendas: number; valor_arrecadado: number }; window_days?: number } | null>(null);
     const [activeTab, setActiveTab] = useState<CRMTab>('overview');
     const [selectedCampaign, setSelectedCampaign] = useState<CampaignKey>('reactivation');
     const [campaignCustomerId, setCampaignCustomerId] = useState<number | null>(null);
@@ -336,7 +336,7 @@ const CustomersPage: React.FC = () => {
         const params = new URLSearchParams(location.search);
         const seg = params.get('segmento') as SegmentFilter | null;
         const tab = params.get('tab') as CRMTab | null;
-        const segmentosValidos: SegmentFilter[] = ['todos', 'Campeão', 'Fiel', 'Regular', 'Risco', 'Perdido', 'Novo', 'VIP', 'Em Risco'];
+        const segmentosValidos: SegmentFilter[] = ['todos', 'VIP', 'Premium', 'Final de Semana', 'Caçador de Promoções', 'Regular', 'Raro', 'Novo', 'Em Risco'];
         if (seg && segmentosValidos.includes(seg)) {
             setSegmentFilter(seg);
             setActiveTab(tab || 'portfolio');
@@ -443,7 +443,7 @@ const CustomersPage: React.FC = () => {
                 const crmSegment =
                     rfmCustomer?.segment ||
                     (Number(cliente.total_compras || 0) <= 1 ? 'Novo' : 'Regular');
-                const lifecycle = classifyLifecycle(cliente, crmSegment, lastPurchaseDays);
+                const lifecycle = classifyLifecycle(crmSegment, Boolean(cliente.ativo));
                 const debt = Number(cliente.saldo_devedor || 0);
 
                 return {
@@ -454,6 +454,9 @@ const CustomersPage: React.FC = () => {
                     whatsappNumber: normalizePhone(cliente.celular || cliente.telefone),
                     hasDebt: debt > 0,
                     actionPriority: lifecyclePriority(lifecycle, debt),
+                    risco_inadimplencia: rfmCustomer?.risco_inadimplencia || 'BAIXO',
+                    bom_pagador: rfmCustomer?.bom_pagador ?? true,
+                    sugestao_limite: rfmCustomer?.sugestao_limite || 0
                 };
             })
             .sort((a, b) => b.actionPriority - a.actionPriority);
@@ -502,7 +505,7 @@ const CustomersPage: React.FC = () => {
         [crmClientes],
     );
     const clientesVip = useMemo(
-        () => crmClientes.filter((cliente) => ['vip', 'Campeão', 'Fiel'].includes(cliente.lifecycle) || ['Campeão', 'Fiel'].includes(cliente.crmSegment)),
+        () => crmClientes.filter((cliente) => ['vip', 'VIP', 'Premium'].includes(cliente.lifecycle) || ['VIP', 'Premium'].includes(cliente.crmSegment)),
         [crmClientes],
     );
     const clientesPromotion = useMemo(
@@ -571,6 +574,7 @@ const CustomersPage: React.FC = () => {
         const inRisk = crmClientes.filter((cliente) => cliente.lifecycle === 'em_risco').length;
         const inactive = crmClientes.filter((cliente) => cliente.lifecycle === 'inativo').length;
         const debt = clientesComFiado.length;
+        const consumidor_final = rfmData?.consumidor_final?.percentual_vendas || 0;
         const mesAtual = new Date().getMonth();
         const aniversariantes = crmClientes.filter((cliente) => {
             const dn = (cliente as any).data_nascimento;
@@ -578,8 +582,8 @@ const CustomersPage: React.FC = () => {
             const d = new Date(String(dn).includes('T') ? dn : `${dn}T00:00:00`);
             return !isNaN(d.getTime()) && d.getMonth() === mesAtual;
         }).length;
-        return { vip, inRisk, inactive, debt, aniversariantes };
-    }, [crmClientes, clientesVip, clientesComFiado]);
+        return { vip, inRisk, inactive, debt, aniversariantes, consumidor_final };
+    }, [crmClientes, clientesVip, clientesComFiado, rfmData]);
 
     const handleRecalcularMetricas = async () => {
         setRecalcLoading(true);
@@ -1014,6 +1018,9 @@ const CustomersPage: React.FC = () => {
                 </div>
                 <div className="min-w-[260px] sm:min-w-0 snap-start">
                     <KpiCard title="Fiado Em Aberto" value={formatCurrency(totalFiadoAberto)} subtitle={`${crmStats.debt} clientes com saldo`} color="#d97706" icon={<AttachMoneyIcon />} onClick={() => { setFiadoFilter(true); setActiveTab('portfolio'); }} />
+                </div>
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard title="Consumidor Final" value={`${crmStats.consumidor_final}%`} subtitle="Vendas não identificadas" color="#0ea5e9" icon={<InsightsIcon />} onClick={() => {}} />
                 </div>
             </div>
 

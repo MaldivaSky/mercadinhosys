@@ -822,6 +822,13 @@ class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     data_atualizacao = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     deleted_at = db.Column(db.DateTime, nullable=True)
+    
+    # Inteligência de Crédito e CRM Avançado
+    score_credito = db.Column(db.Integer, default=500) # 0 a 1000
+    bom_pagador = db.Column(db.Boolean, default=True)
+    risco_inadimplencia = db.Column(db.String(20), default="BAIXO") # BAIXO, MEDIO, ALTO
+    atraso_medio_dias = db.Column(db.Float, default=0.0)
+
     __table_args__ = (db.Index("ix_cliente_cpf", "cpf"), db.Index("ix_cliente_nome", "nome"), db.UniqueConstraint("estabelecimento_id", "cpf", name="uq_cliente_estab_cpf"))
 
     @staticmethod
@@ -835,48 +842,134 @@ class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
 
     @classmethod
     def calcular_rfm(cls, estabelecimento_id, days: int = 180) -> Dict[str, Any]:
-        days = int(days) if days else 180
-        if days <= 0: days = 180
-        data_inicio = utcnow() - timedelta(days=days)
-        
-        query = db.session.query(Venda.cliente_id, func.count(Venda.id), func.coalesce(func.sum(Venda.total), 0), func.max(Venda.data_venda))\
-            .filter(Venda.data_venda >= data_inicio, Venda.status == "finalizada", Venda.cliente_id.isnot(None))
-            
+        from sqlalchemy import text
+        from datetime import datetime, timezone
+
+        estab_filter = ""
+        venda_estab_filter = ""
+        params = {}
         if str(estabelecimento_id).lower() != 'all':
-            query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
-            
-        rows = query.group_by(Venda.cliente_id).all()
-        now = utcnow()
+            estab_filter = "AND c.estabelecimento_id = :estab_id"
+            venda_estab_filter = "AND v.estabelecimento_id = :estab_id"
+            params["estab_id"] = estabelecimento_id
+
+        engine_name = str(db.engine.name).lower()
+        if 'sqlite' in engine_name:
+            dow_expr = "CAST(strftime('%w', v.data_venda) AS INTEGER)"
+        else:
+            dow_expr = "EXTRACT(DOW FROM v.data_venda)"
+
+        # Query principal de inteligência (sem limite de 180 dias fixo, varre base ativa com compras)
+        sql = f"""
+        SELECT 
+            c.id as cliente_id,
+            c.nome,
+            c.total_compras,
+            c.valor_total_gasto,
+            c.ultima_compra,
+            c.saldo_devedor,
+            c.score_credito,
+            SUM(CASE WHEN {dow_expr} IN (0, 6) THEN 1 ELSE 0 END) as vendas_fds,
+            SUM(CASE WHEN v.desconto > 0 THEN 1 ELSE 0 END) as vendas_promo
+        FROM clientes c
+        LEFT JOIN vendas v ON v.cliente_id = c.id AND v.status = 'finalizada' {venda_estab_filter}
+        WHERE c.ativo = true AND c.deleted_at IS NULL AND c.total_compras > 0
+        {estab_filter}
+        GROUP BY c.id, c.nome, c.total_compras, c.valor_total_gasto, c.ultima_compra, c.saldo_devedor, c.score_credito
+        """
+        
+        rows = db.session.execute(text(sql), params).fetchall()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        
         metrics = []
         for r in rows:
-            ultima = r[3]
-            recency_days = (now - ultima).days if ultima else days
-            metrics.append({"cliente_id": int(r[0]), "recency_days": int(recency_days), "frequency": int(r[1] or 0), "monetary": float(r[2] or 0)})
-        if not metrics: return {"segments": {}, "customers": [], "window_days": days}
-        def _score_quintile(values_sorted, value, higher_is_better: bool) -> int:
-            n = len(values_sorted)
-            if n == 1: return 3
-            import bisect
-            idx = bisect.bisect_right(values_sorted, value) - 1
-            if idx < 0: idx = 0
-            p = (idx + 1) / n
-            score = int(p * 5)
-            if score < 1: score = 1
-            if score > 5: score = 5
-            return score if higher_is_better else (6 - score)
-        recency_sorted = sorted(m["recency_days"] for m in metrics)
+            ultima = r.ultima_compra
+            recency_days = (now - ultima).days if ultima else 999
+            ticket_medio = float(r.valor_total_gasto) / int(r.total_compras) if r.total_compras else 0
+            metrics.append({
+                "cliente_id": r.cliente_id,
+                "nome": r.nome,
+                "recency_days": int(recency_days),
+                "frequency": int(r.total_compras),
+                "monetary": float(r.valor_total_gasto),
+                "ticket_medio": ticket_medio,
+                "saldo_devedor": float(r.saldo_devedor or 0),
+                "score_credito": int(r.score_credito or 500),
+                "vendas_fds": int(r.vendas_fds or 0),
+                "vendas_promo": int(r.vendas_promo or 0)
+            })
+
+        if not metrics:
+            return {"segments": {}, "customers": [], "consumidor_final": {}, "window_days": days}
+
         frequency_sorted = sorted(m["frequency"] for m in metrics)
-        monetary_sorted = sorted(m["monetary"] for m in metrics)
-        segments_count = {"Campeão": 0, "Fiel": 0, "Risco": 0, "Perdido": 0, "Regular": 0}
+        ticket_sorted = sorted(m["ticket_medio"] for m in metrics)
+
+        # Limiares 75%
+        freq_alta = frequency_sorted[int(len(frequency_sorted) * 0.75)] if len(frequency_sorted) > 3 else 3
+        ticket_alto = ticket_sorted[int(len(ticket_sorted) * 0.75)] if len(ticket_sorted) > 3 else 100
+
+        segments_count = {
+            "VIP": 0, "Premium": 0, "Final de Semana": 0, 
+            "Caçador de Promoções": 0, "Novo": 0, "Raro": 0, "Regular": 0
+        }
         customers = []
+
         for m in metrics:
-            rs = _score_quintile(recency_sorted, m["recency_days"], False)
-            fs = _score_quintile(frequency_sorted, m["frequency"], True)
-            ms = _score_quintile(monetary_sorted, m["monetary"], True)
-            seg = cls.segmentar_rfm(rs, fs, ms)
-            segments_count[seg] = segments_count.get(seg, 0) + 1
-            customers.append({**m, "recency_score": rs, "frequency_score": fs, "monetary_score": ms, "segment": seg})
-        return {"segments": segments_count, "customers": customers, "window_days": days}
+            f = m["frequency"]
+            tm = m["ticket_medio"]
+            r_days = m["recency_days"]
+            fds = m["vendas_fds"]
+            promo = m["vendas_promo"]
+
+            seg = "Regular"
+            if f == 1: seg = "Novo"
+            elif r_days > 90 and f < freq_alta: seg = "Raro"
+            elif f >= freq_alta and tm >= ticket_alto: seg = "VIP"
+            elif f >= freq_alta or tm >= ticket_alto: seg = "Premium"
+            elif fds > (f * 0.5): seg = "Final de Semana"
+            elif promo > (f * 0.5): seg = "Caçador de Promoções"
+
+            segments_count[seg] += 1
+            
+            risco = "BAIXO"
+            if m["saldo_devedor"] > 0:
+                if m["score_credito"] < 300: risco = "ALTO"
+                elif m["score_credito"] < 700: risco = "MEDIO"
+
+            bom_pagador = m["saldo_devedor"] == 0 or m["score_credito"] >= 700
+            sugestao_limite = round(tm * f * 0.3, 2) if m["score_credito"] >= 600 else 0
+
+            customers.append({
+                **m,
+                "segment": seg,
+                "risco_inadimplencia": risco,
+                "bom_pagador": bom_pagador,
+                "sugestao_limite": sugestao_limite
+            })
+
+        cf_sql = f"""
+        SELECT 
+            COUNT(*) as total_vendas,
+            SUM(CASE WHEN cliente_id IS NULL THEN 1 ELSE 0 END) as cf_vendas,
+            SUM(CASE WHEN cliente_id IS NULL THEN total ELSE 0 END) as cf_valor
+        FROM vendas
+        WHERE status = 'finalizada'
+        {estab_filter.replace('c.estabelecimento_id', 'estabelecimento_id')}
+        """
+        cf_row = db.session.execute(text(cf_sql), params).fetchone()
+        
+        consumidor_final = {
+            "percentual_vendas": round((cf_row.cf_vendas / cf_row.total_vendas * 100) if cf_row.total_vendas else 0, 1),
+            "valor_arrecadado": float(cf_row.cf_valor or 0)
+        }
+
+        return {
+            "segments": segments_count,
+            "customers": customers,
+            "consumidor_final": consumidor_final,
+            "window_days": days
+        }
 
 class Fornecedor(db.Model, MultiTenantMixin, EnderecoMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
     __tablename__ = "fornecedores"

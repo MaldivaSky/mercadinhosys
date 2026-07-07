@@ -2,7 +2,7 @@ import React from 'react';
 import { X, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 export type StatusFilter = 'todos' | 'ativos' | 'inativos';
-export type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo' | 'VIP' | 'Em Risco';
+export type SegmentFilter = 'todos' | 'VIP' | 'Premium' | 'Final de Semana' | 'Caçador de Promoções' | 'Regular' | 'Raro' | 'Novo' | 'Em Risco';
 
 interface CustomersAdvancedFiltersModalProps {
     show: boolean;
@@ -99,13 +99,13 @@ const CustomersAdvancedFiltersModal: React.FC<CustomersAdvancedFiltersModalProps
                             className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="todos">Todos os segmentos</option>
-                            <option value="Campeão">Campeões</option>
-                            <option value="Fiel">Fiéis</option>
-                            <option value="Regular">Regulares</option>
-                            <option value="Risco">Em Risco</option>
-                            <option value="Perdido">Perdidos</option>
-                            <option value="Novo">Novos</option>
                             <option value="VIP">VIP</option>
+                            <option value="Premium">Premium</option>
+                            <option value="Final de Semana">Final de Semana</option>
+                            <option value="Caçador de Promoções">Caçador de Promoções</option>
+                            <option value="Regular">Regulares</option>
+                            <option value="Raro">Raro</option>
+                            <option value="Novo">Novos</option>
                             <option value="Em Risco">Em Risco</option>
                         </select>
                     </div>

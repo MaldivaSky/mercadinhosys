@@ -985,27 +985,29 @@ def recalcular_metricas_clientes():
         from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
-        clientes_lista = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).all()
+        if str(estabelecimento_id).lower() == 'all':
+            clientes_lista = Cliente.query.all()
+        else:
+            clientes_lista = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).all()
+            
         atualizados = 0
 
         for cliente in clientes_lista:
             # Vendas do cliente
-            vendas_cliente = Venda.query.filter_by(
-                cliente_id=cliente.id,
-                estabelecimento_id=estabelecimento_id,
-                status="finalizada"
-            ).all()
+            q_vendas = Venda.query.filter_by(cliente_id=cliente.id, status="finalizada")
+            if str(estabelecimento_id).lower() != 'all':
+                q_vendas = q_vendas.filter_by(estabelecimento_id=estabelecimento_id)
+            vendas_cliente = q_vendas.all()
 
             total_compras = len(vendas_cliente)
             valor_total_gasto = sum(float(v.total or 0) for v in vendas_cliente)
             ultima_compra = max((v.data_venda for v in vendas_cliente if v.data_venda), default=None)
 
             # Contas a receber em aberto (fiado)
-            contas_abertas = ContaReceber.query.filter_by(
-                cliente_id=cliente.id,
-                estabelecimento_id=estabelecimento_id,
-                status="aberto"
-            ).all()
+            q_contas = ContaReceber.query.filter_by(cliente_id=cliente.id, status="aberto")
+            if str(estabelecimento_id).lower() != 'all':
+                q_contas = q_contas.filter_by(estabelecimento_id=estabelecimento_id)
+            contas_abertas = q_contas.all()
             saldo_devedor = sum(float(c.valor_atual or 0) for c in contas_abertas)
 
             cliente.total_compras = total_compras
