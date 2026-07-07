@@ -164,6 +164,7 @@ def get_turno_atual():
             "id": turno.id,
             "km_inicial": float(turno.km_inicial),
             "data_turno": turno.data_turno.isoformat(),
+            "horario_inicio": turno.horario_inicio.isoformat() + "Z" if turno.horario_inicio else None,
             "veiculo_id": turno.veiculo_id,
             "tipo_combustivel": turno.tipo_combustivel
         }

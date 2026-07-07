@@ -469,7 +469,7 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     const ativas = entregas.filter(e => !['entregue', 'cancelada', 'pendente', 'em_preparo'].includes(e.status) && (e as any).motorista_id === meuMotoristaId);
     
     // Filtros de Turno e Histórico
-    const dataTurno = turno?.data_turno ? new Date(turno.data_turno).getTime() : null;
+    const dataTurno = (turno?.horario_inicio || turno?.data_turno) ? new Date(turno.horario_inicio || turno.data_turno).getTime() : null;
     const todasConcluidas = entregas.filter(e => e.status === 'entregue' && (e as any).motorista_id === meuMotoristaId);
     
     const concluidasTurno = dataTurno 
@@ -574,7 +574,7 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                 </div>
                 
                 <div className="flex items-center justify-between mt-3 px-1">
-                    <span className="text-xs text-blue-100/70 font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Início: {new Date(turno.data_turno).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className="text-xs text-blue-100/70 font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Início: {new Date(turno.horario_inicio || turno.data_turno).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     <span className="text-xs text-emerald-100/90 font-bold flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30"><Fuel className="w-3 h-3" /> {kmPorLitroCalculado} KM/L</span>
                 </div>
                 
