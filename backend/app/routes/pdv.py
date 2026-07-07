@@ -808,7 +808,8 @@ def finalizar_venda():
         # Início do processo atômico
         # 1. VALIDAÇÃO DE REGRAS DE NEGÓCIO (PLANO E CRÉDITO)
         tem_fiado = any((p.get("forma") or p.get("forma_pagamento", "")).lower() == "fiado" for p in pagamentos_data)
-        if tem_fiado and not is_saas_admin:
+        is_local_admin = str(funcionario_data.get("role", "")).upper() == "ADMIN" or str(funcionario_data.get("cargo", "")).lower() in ["admin", "administrador"]
+        if tem_fiado and not (is_saas_admin or is_local_admin):
             # Trava de Plano SaaS (Gratuito/Pro vs Premium/Basic)
             plano_atual = (estabelecimento.plano or "Basic").upper()
             if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:

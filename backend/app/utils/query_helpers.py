@@ -327,7 +327,7 @@ def get_funcionario_safe(func_id):
             # Força cast para int se for puramente numérico para evitar erros de tipo no Postgres
             if str(func_id).isdigit():
                 row = db.session.execute(
-                    text("SELECT id, nome, email, username, estabelecimento_id, cargo FROM funcionarios WHERE id = :fid"),
+                    text("SELECT id, nome, email, username, estabelecimento_id, cargo, is_super_admin FROM funcionarios WHERE id = :fid"),
                     {"fid": int(func_id)}
                 ).fetchone()
         except Exception:
@@ -336,7 +336,7 @@ def get_funcionario_safe(func_id):
         # Tentativa 2: Por Username (Se a primeira falhou ou func_id é string literal)
         if not row:
             row = db.session.execute(
-                text("SELECT id, nome, email, username, estabelecimento_id, cargo FROM funcionarios WHERE username = :funame"),
+                text("SELECT id, nome, email, username, estabelecimento_id, cargo, is_super_admin FROM funcionarios WHERE username = :funame"),
                 {"funame": str(func_id)}
             ).fetchone()
 
@@ -351,7 +351,8 @@ def get_funcionario_safe(func_id):
             "login": row[3], # Mantido para compatibilidade interna
             "username": row[3],
             "estabelecimento_id": row[4],
-            "cargo": row[5]
+            "cargo": row[5],
+            "is_super_admin": row[6] if len(row) > 6 else False
         }
 
         def _fetch_col(col, default=None):

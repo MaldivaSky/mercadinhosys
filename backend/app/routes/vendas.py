@@ -745,7 +745,15 @@ def criar_venda():
             return jsonify({"error": f"Valor total pago (R$ {total_pago:.2f}) é menor que o total da venda (R$ {total:.2f})"}), 400
 
         tem_restrito = any((p.get("forma_pagamento") or p.get("forma")) in ["fiado", "vale_alimentacao", "vale_refeicao"] for p in pagamentos_data)
-        if tem_restrito:
+        is_saas_admin = claims.get("is_super_admin", False)
+        
+        # O Admin logado acessa tudo na fase de teste
+        from app.utils.query_helpers import get_funcionario_safe
+        user_id = claims.get("sub", 1)
+        func_dados = get_funcionario_safe(user_id) or {}
+        is_local_admin = str(func_dados.get("role", "")).upper() == "ADMIN" or str(func_dados.get("cargo", "")).lower() in ["admin", "administrador"]
+
+        if tem_restrito and not (is_saas_admin or is_local_admin):
             plano_atual = (estabelecimento.plano or "Basic").upper()
             if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
                 return jsonify({"error": "FUNCIONALIDADE_RESTRITA", "message": "Seu plano não permite vendas no FIADO/VALE."}), 403
