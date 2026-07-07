@@ -33,6 +33,7 @@ from app.models import (
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import quota_required, permission_required
+from app.decorators.rbac import gerente_required, resource_required
 
 def to_decimal(value, precision=2):
     """Converte qualquer valor numérico para Decimal de forma segura com precisão variável"""
@@ -510,6 +511,7 @@ def catalogo_importar():
 @produtos_bp.route("/bulk-update-prices", methods=["POST"], strict_slashes=False)
 @produtos_bp.route("/bulk-update-prices/", methods=["POST"])
 @funcionario_required
+@gerente_required
 def bulk_update_prices():
     """Atualiza preços de múltiplos produtos em massa"""
     try:
@@ -613,7 +615,11 @@ def listar_produtos():
         por_pagina = request.args.get("por_pagina", 50, type=int)
         
         # Parâmetros de filtro
-        ativo = request.args.get("ativo")
+        # O frontend envia "ativos" (productsService); aceita também "ativo"
+        # (legado). Antes só "ativo" era lido e o filtro era ignorado em
+        # silêncio — a lista mostrava inativos enquanto os cards contavam
+        # só ativos.
+        ativo = request.args.get("ativos", request.args.get("ativo"))
         categoria = request.args.get("categoria")
         fornecedor_id = request.args.get("fornecedor_id", type=int)
         estoque_status = request.args.get("estoque_status") # baixo, esgotado, normal
@@ -650,6 +656,13 @@ def listar_produtos():
         # Filtro de Tenant OBRIGATÓRIO (Zero Leak)
         if str(estabelecimento_id).lower() != 'all':
             query = query.filter(Produto.estabelecimento_id == estabelecimento_id)
+
+        # Filtros de validade lidos aqui (antes dos aliases) para o alias
+        # "validade" funcionar — antes ele setava uma variável local que era
+        # sobrescrita pela releitura do request mais abaixo.
+        validade_proxima = request.args.get("validade_proxima")
+        dias_validade = request.args.get("dias_validade", 30, type=int)
+        vencidos = request.args.get("vencidos")
 
         # Alias de filtros de alerta
         if filtro_alerta == "baixo_estoque":
@@ -704,10 +717,6 @@ def listar_produtos():
             )
 
         # 8. Filtros de Validade (produto OU lotes do produto; fallback só por produto se lotes falhar)
-        validade_proxima = request.args.get("validade_proxima")
-        dias_validade = request.args.get("dias_validade", 30, type=int)
-        vencidos = request.args.get("vencidos")
-
         hoje = date.today()
 
         try:
@@ -769,8 +778,11 @@ def listar_produtos():
             # contadores do dashboard. Evita depender da coluna gravada (que pode estar
             # desatualizada/NULL e fazia o filtro voltar vazio).
             if str(estabelecimento_id).lower() != "all":
-                # Janela ampla (~10 anos) para aproximar "todo o histórico", igual às estatísticas.
-                classificacoes = Produto.calcular_classificacao_abc_dinamica(estabelecimento_id, periodo_dias=3650)
+                # Janela móvel de 90 dias, cacheada por tenant — MESMA fonte que os
+                # cards/estatísticas usam. Antes recalculava ~10 anos de vendas a
+                # cada request (principal causa de lentidão do filtro).
+                from app.utils.abc_cache import get_classificacoes_abc
+                classificacoes = get_classificacoes_abc(estabelecimento_id)
                 ids_com_venda = list(classificacoes.keys())
                 if filtro_rapido == "classe_a":
                     ids_a = [pid for pid, c in classificacoes.items() if c == "A"]
@@ -835,15 +847,27 @@ def listar_produtos():
             "categoria": Produto.categoria_id,
             "atualizado": Produto.updated_at,
             "margem_lucro": Produto.margem_lucro,
-            "valor_total_estoque": func.coalesce(Produto.preco_custo * Produto.quantidade, 0)
+            "valor_total_estoque": func.coalesce(Produto.preco_custo * Produto.quantidade, 0),
+            # Ordenações usadas pelos filtros rápidos e pelo modal de filtros
+            # avançados — estavam fora da whitelist e caíam em silêncio para
+            # "nome" (o usuário pedia "mais vendidos" e recebia ordem alfabética).
+            "total_vendido": Produto.total_vendido,
+            "quantidade_vendida": Produto.quantidade_vendida,
+            "ultima_venda": Produto.ultima_venda,
+            "data_validade": Produto.data_validade,
         }
+
+        # Colunas nullable: produto nunca vendido / sem validade sempre por
+        # último, em qualquer direção — senão o "top vendidos desc" começava
+        # com uma página de NULLs no Postgres.
+        _COLUNAS_NULLABLE = {"total_vendido", "quantidade_vendida", "ultima_venda", "data_validade", "margem_lucro"}
 
         coluna_ordenacao = COLUNAS_ORDENACAO_VALIDAS.get(ordenar_por, Produto.nome)
 
-        if direcao == "desc":
-            query = query.order_by(coluna_ordenacao.desc())
-        else:
-            query = query.order_by(coluna_ordenacao.asc())
+        ordem = coluna_ordenacao.desc() if direcao == "desc" else coluna_ordenacao.asc()
+        if ordenar_por in _COLUNAS_NULLABLE:
+            ordem = ordem.nullslast()
+        query = query.order_by(ordem, Produto.id.asc())
 
         import math
         _giro_buckets = ("giro_rapido", "giro_normal", "giro_lento")
@@ -963,42 +987,35 @@ def listar_produtos():
             try:
                 lotes = []
                 if precisa_consultar_lotes:
+                    # Os lotes já vieram na página via subqueryload(Produto.lotes);
+                    # filtrar em memória evita as 2-3 queries POR PRODUTO que
+                    # faziam o modal de vencimentos disparar 200-300 round-trips
+                    # ao banco remoto (a causa do modal lento).
+                    def _lote_do_tenant(l):
+                        return (
+                            l.ativo
+                            and (l.quantidade or 0) > 0
+                            and (str(estabelecimento_id).lower() == 'all'
+                                 or l.estabelecimento_id == estabelecimento_id)
+                        )
+
+                    base_lotes = [l for l in (produto.lotes or []) if _lote_do_tenant(l)]
+
                     if validade_proxima and validade_proxima.lower() == "true":
                         limite = hoje + timedelta(days=dias_validade)
-                        lotes = (
-                            ProdutoLote.query.filter_by(
-                                produto_id=produto.id,
-                                estabelecimento_id=estabelecimento_id,
-                                ativo=True,
-                            )
-                            .filter(ProdutoLote.quantidade > 0)
-                            .filter(ProdutoLote.data_validade >= hoje, ProdutoLote.data_validade <= limite)
-                            .order_by(ProdutoLote.data_validade.asc())
-                            .all()
-                        )
+                        lotes = [
+                            l for l in base_lotes
+                            if l.data_validade and hoje <= l.data_validade <= limite
+                        ]
                     elif vencidos and vencidos.lower() == "true":
-                        lotes = (
-                            ProdutoLote.query.filter_by(
-                                produto_id=produto.id,
-                                estabelecimento_id=estabelecimento_id,
-                                ativo=True,
-                            )
-                            .filter(ProdutoLote.quantidade > 0)
-                            .filter(ProdutoLote.data_validade < hoje)
-                            .order_by(ProdutoLote.data_validade.asc())
-                            .all()
-                        )
+                        lotes = [
+                            l for l in base_lotes
+                            if l.data_validade and l.data_validade < hoje
+                        ]
                     elif expandir_por_lote:
-                        lotes = (
-                            ProdutoLote.query.filter_by(
-                                produto_id=produto.id,
-                                estabelecimento_id=estabelecimento_id,
-                                ativo=True,
-                            )
-                            .filter(ProdutoLote.quantidade > 0)
-                            .order_by(ProdutoLote.data_validade.asc())
-                            .all()
-                        )
+                        lotes = list(base_lotes)
+
+                    lotes.sort(key=lambda l: l.data_validade or date.max)
 
                 for l in lotes:
                     preco_lote = getattr(l, "preco_venda", None)
@@ -1030,8 +1047,9 @@ def listar_produtos():
                     })
 
                 if precisa_consultar_lotes:
-                    lotes_fifo = produto.get_lotes_disponiveis()
-                    for l in lotes_fifo:
+                    # FIFO em memória (mesma ordenação de get_lotes_disponiveis),
+                    # sem mais uma query por produto.
+                    for l in sorted(base_lotes, key=lambda x: x.data_validade or date.max):
                         pv = getattr(l, "preco_venda", None)
                         if pv is not None:
                             produto_dict["preco_venda_efetivo"] = float(pv)
@@ -1072,12 +1090,12 @@ def listar_produtos():
             db.session.rollback()
         except Exception:
             pass
-        return jsonify({
-            "success": False, 
-            "message": "Erro interno ao listar produtos", 
-            "error": str(e),
-            "traceback": error_details if current_app.debug else None
-        }), 500
+        # Detalhes só no log — expor str(e)/traceback na resposta vaza
+        # estrutura interna (tabelas, paths) para qualquer usuário logado.
+        payload = {"success": False, "message": "Erro interno ao listar produtos"}
+        if current_app.debug:
+            payload["error"] = str(e)
+        return jsonify(payload), 500
 
 
 @produtos_bp.route("/<int:id>", methods=["GET"], strict_slashes=False)
@@ -1543,6 +1561,7 @@ def criar_produto():
 
 @produtos_bp.route("/<int:id>", methods=["PUT"], strict_slashes=False)
 @funcionario_required
+@gerente_required
 def atualizar_produto(id):
     """Atualiza um produto existente"""
     try:
@@ -1770,6 +1789,7 @@ def atualizar_produto(id):
 
 @produtos_bp.route("/<int:id>", methods=["DELETE"], strict_slashes=False)
 @funcionario_required
+@gerente_required
 def deletar_produto(id):
     """Desativa um produto (soft delete)"""
     try:
@@ -1836,6 +1856,7 @@ def deletar_produto(id):
 
 @produtos_bp.route("/<int:id>/toggle-ativo", methods=["PATCH"])
 @funcionario_required
+@gerente_required
 def toggle_ativo_produto(id):
     try:
         user = get_current_user()
@@ -1872,6 +1893,7 @@ def toggle_ativo_produto(id):
 
 @produtos_bp.route("/<int:id>/estoque", methods=["POST"])
 @funcionario_required
+@resource_required("estoque")
 def ajustar_estoque(id):
     """Ajusta o estoque de um produto com movimentação registrada"""
     try:
@@ -2049,6 +2071,7 @@ def ajustar_estoque(id):
 
 @produtos_bp.route("/<int:id>/preco", methods=["POST"])
 @funcionario_required
+@gerente_required
 def atualizar_preco(id):
     """Atualiza preços do produto com histórico de auditoria"""
     try:
@@ -2149,6 +2172,7 @@ def atualizar_preco(id):
 
 @produtos_bp.route("/<int:id>/descarte", methods=["POST"])
 @funcionario_required
+@gerente_required
 def descartar_produto(id):
     """
     Realiza o descarte de mercadoria (vencida/estragada).
@@ -2404,14 +2428,12 @@ def listar_produtos_estoque():
         # Obter claims do JWT
         from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        
-        # Atualizar classificações ABC se não foram atualizadas recentemente
-        try:
-            Produto.atualizar_classificacoes_abc(estabelecimento_id, periodo_dias=90)
-        except Exception as abc_error:
-            current_app.logger.warning(f"⚠️ Erro ao atualizar ABC: {str(abc_error)}")
-            # Continuar mesmo se falhar
-        
+
+        # NOTA: esta rota é LEGADA (o frontend usa GET /produtos/). O recálculo
+        # de ABC que rodava aqui a cada request (uma query de UPDATE por produto
+        # + commit) foi removido — era um dos maiores gargalos do sistema.
+        # A classificação agora vem do cache (app/utils/abc_cache.py).
+
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
         ativos = request.args.get("ativos", None, type=str)
@@ -2576,13 +2598,6 @@ def listar_produtos_estoque():
             }
             
             produtos_lista.append(produto_dict)
-
-        # DEBUG: Log do primeiro produto para verificar dados
-        if produtos_lista:
-            current_app.logger.info(f"🔍 PRIMEIRO PRODUTO ENVIADO: {produtos_lista[0]['nome']}")
-            current_app.logger.info(f"   quantidade_vendida: {produtos_lista[0]['quantidade_vendida']}")
-            current_app.logger.info(f"   total_vendido: {produtos_lista[0]['total_vendido']}")
-            current_app.logger.info(f"   ultima_venda: {produtos_lista[0]['ultima_venda']}")
 
         return jsonify({
             "produtos": produtos_lista,
@@ -2839,11 +2854,29 @@ def obter_estatisticas_produtos():
         # Aplicar filtro rápido
         if filtro_rapido:
             hoje = datetime.now(timezone.utc)
-            
-            if filtro_rapido == "classe_a":
-                query = query.filter(func.upper(Produto.classificacao_abc) == "A")
-            elif filtro_rapido == "classe_c":
-                query = query.filter(func.upper(Produto.classificacao_abc) == "C")
+
+            if filtro_rapido in ("classe_a", "classe_b", "classe_c"):
+                # MESMA fonte da listagem (ABC dinâmica 90d cacheada) — antes as
+                # stats filtravam pela coluna gravada e a lista pela dinâmica,
+                # então o total do card divergia da lista. classe_b nem existia.
+                if str(estabelecimento_id).lower() != "all":
+                    from app.utils.abc_cache import get_classificacoes_abc
+                    classificacoes = get_classificacoes_abc(estabelecimento_id)
+                    alvo = filtro_rapido.split("_")[1].upper()
+                    ids_alvo = [pid for pid, c in classificacoes.items() if c == alvo]
+                    if alvo == "C":
+                        # Encalhados = classe C por faturamento + sem venda no período
+                        ids_com_venda = list(classificacoes.keys())
+                        if ids_com_venda:
+                            query = query.filter(or_(
+                                Produto.id.in_(ids_alvo if ids_alvo else [-1]),
+                                ~Produto.id.in_(ids_com_venda),
+                            ))
+                    else:
+                        query = query.filter(Produto.id.in_(ids_alvo if ids_alvo else [-1]))
+                else:
+                    alvo = filtro_rapido.split("_")[1].upper()
+                    query = query.filter(func.upper(Produto.classificacao_abc) == alvo)
             elif filtro_rapido == "repor_urgente":
                 query = query.filter(
                     or_(
@@ -2936,7 +2969,10 @@ def obter_estatisticas_produtos():
         if str(estabelecimento_id).lower() != "all":
             ids_no_escopo = [row[0] for row in query.with_entities(Produto.id).all()]
             if ids_no_escopo:
-                classificacoes = Produto.calcular_classificacao_abc_dinamica(estabelecimento_id, periodo_dias=3650)
+                # Janela 90d cacheada — antes agregava ~10 anos de venda_itens a
+                # CADA mudança de filtro na tela (principal gargalo das stats).
+                from app.utils.abc_cache import get_classificacoes_abc
+                classificacoes = get_classificacoes_abc(estabelecimento_id)
                 ids_no_escopo_set = set(ids_no_escopo)
                 for pid, classe in classificacoes.items():
                     if pid in ids_no_escopo_set and classe in abc_dict:
@@ -2958,19 +2994,42 @@ def obter_estatisticas_produtos():
                 else:
                     abc_dict["C"] += t # Fallback
 
-        # 4. Status de Validade (SQL Condicional)
+        # 4. Status de Validade — ESPELHA as condições da listagem (produto OU
+        # lotes ativos com estoque). Antes contava só Produto.data_validade com
+        # controlar_validade=True, e a lista considerava lotes também: o card
+        # dizia X e o modal/lista mostrava Y.
         hoje = datetime.now(timezone.utc).date()
-        vence_15_dias = hoje + timedelta(days=15)
-        vence_30_dias = hoje + timedelta(days=30)
-        vence_90_dias = hoje + timedelta(days=90)
 
-        # Buscamos apenas os produtos que controlam validade e possuem data definida
-        validade_query = query.filter(Produto.controlar_validade == True, Produto.data_validade != None)
-        
-        vencidos_count = validade_query.filter(Produto.data_validade < hoje).count()
-        vence_15_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_15_dias).count()
-        vence_30_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_30_dias).count()
-        vence_90_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_90_dias).count()
+        def _count_validade_janela(dias=None, apenas_vencidos=False):
+            if apenas_vencidos:
+                cond_produto = and_(
+                    Produto.quantidade > 0,
+                    Produto.data_validade.isnot(None),
+                    Produto.data_validade < hoje,
+                )
+            else:
+                limite = hoje + timedelta(days=dias)
+                cond_produto = and_(
+                    Produto.data_validade.isnot(None),
+                    Produto.data_validade >= hoje,
+                    Produto.data_validade <= limite,
+                )
+            subq = db.session.query(ProdutoLote.produto_id).filter(
+                ProdutoLote.ativo == True,
+                ProdutoLote.quantidade > 0,
+            )
+            if apenas_vencidos:
+                subq = subq.filter(ProdutoLote.data_validade < hoje)
+            else:
+                subq = subq.filter(ProdutoLote.data_validade >= hoje, ProdutoLote.data_validade <= limite)
+            if str(estabelecimento_id).lower() != 'all':
+                subq = subq.filter(ProdutoLote.estabelecimento_id == estabelecimento_id)
+            return query.filter(or_(cond_produto, Produto.id.in_(subq.distinct()))).count()
+
+        vencidos_count = _count_validade_janela(apenas_vencidos=True)
+        vence_15_count = _count_validade_janela(dias=15)
+        vence_30_count = _count_validade_janela(dias=30)
+        vence_90_count = _count_validade_janela(dias=90)
 
         # 5. Margem Alta/Baixa e Giro (Aproximação ou limite para não estourar RAM)
         # O cálculo de Margem por item e Giro usa lógica Python no código atual (VMD, divisões).
@@ -4414,7 +4473,11 @@ def atualizar_classificacao_abc():
         estatisticas = Produto.atualizar_classificacoes_abc(
             estabelecimento_id, periodo_dias
         )
-        
+
+        # Recálculo manual invalida o cache — os cards/filtros refletem na hora.
+        from app.utils.abc_cache import invalidar
+        invalidar(estabelecimento_id if str(estabelecimento_id).lower() != 'all' else None)
+
         current_app.logger.info(
             f"Classificação ABC atualizada para estabelecimento {estabelecimento_id}: "
             f"{estatisticas['produtos_atualizados']} produtos atualizados"

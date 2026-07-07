@@ -1169,15 +1169,21 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     @staticmethod
     def atualizar_classificacoes_abc(estabelecimento_id: int, periodo_dias: int = 90):
         classificacoes = Produto.calcular_classificacao_abc_dinamica(estabelecimento_id, periodo_dias)
+        # Uma única query pelo tenant inteiro — antes era um Produto.query.get()
+        # POR produto classificado (milhares de round-trips no banco remoto).
+        produtos = Produto.query.filter(Produto.estabelecimento_id == estabelecimento_id).all()
         atualizados = 0
-        for pid, cls in classificacoes.items():
-            p = Produto.query.get(pid)
-            if p and p.estabelecimento_id == estabelecimento_id:
-                p.classificacao_abc = cls
-                atualizados += 1
-        sem = Produto.query.filter(Produto.estabelecimento_id == estabelecimento_id, Produto.ativo == True, ~Produto.id.in_(classificacoes.keys())).all()
-        for p in sem:
-            p.classificacao_abc = 'C'
+        sem = []
+        for p in produtos:
+            nova = classificacoes.get(p.id)
+            if nova is None:
+                if p.ativo:
+                    sem.append(p)
+                    nova = 'C'
+                else:
+                    continue
+            if p.classificacao_abc != nova:
+                p.classificacao_abc = nova
             atualizados += 1
         db.session.commit()
         return {'produtos_atualizados': atualizados, 'classe_a': sum(1 for c in classificacoes.values() if c == 'A'),

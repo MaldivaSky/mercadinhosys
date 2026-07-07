@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Calculator,
@@ -185,7 +185,12 @@ const ProductsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setFiltros(prev => ({ ...prev, busca: buscaLocal })), 500);
+    // Guard de igualdade: sem ele, o debounce criava um objeto novo de filtros
+    // mesmo com a busca inalterada — recarregando lista e estatísticas em dobro
+    // já na abertura da página.
+    const timer = setTimeout(() => {
+      setFiltros(prev => (prev.busca === buscaLocal ? prev : { ...prev, busca: buscaLocal }));
+    }, 500);
     return () => clearTimeout(timer);
   }, [buscaLocal]);
 
@@ -207,44 +212,60 @@ const ProductsPage: React.FC = () => {
   }, [loadStats]);
 
   // Handle location state for opening modals from Hub
+  // Guarda de reprocessamento: produtos recarregam várias vezes (ajuste de
+  // estoque, refresh) e o location.state não muda — sem a guarda, o modal
+  // REABRIA sozinho depois de cada ação (a "dificuldade" de navegação do Hub).
+  const stateTratadoRef = useRef<unknown>(null);
+
   useEffect(() => {
-    if (location.state && produtos.length > 0) {
-      const state = location.state as any;
+    if (!location.state || stateTratadoRef.current === location.state) return;
+    const state = location.state as any;
+
+    // O Hub envia o próprio objeto do produto (state.produto): o modal abre
+    // IMEDIATAMENTE, sem esperar a lista carregar. Antes o clique ficava
+    // travado até a listagem terminar e falhava em silêncio se o produto não
+    // estivesse na página atual (25 itens por página).
+    const resolver = (id?: number): Produto | undefined => {
+      if (state.produto && (!id || state.produto.id === id)) return state.produto as Produto;
+      return produtos.find(p => p.id === id);
+    };
+
+    let tratado = true;
+
+    if (state.openHistoryFor) {
+      const prod = resolver(state.openHistoryFor);
+      if (prod) { setSelectedProduct(prod); setShowProductHistory(true); } else tratado = false;
+    } else if (state.openAdjustFor) {
+      const prod = resolver(state.openAdjustFor);
+      if (prod) { openStockModal(prod); } else tratado = false;
+    } else if (state.openDiscardFor) {
+      const prod = resolver(state.openDiscardFor);
+      if (prod) { abrirFluxoDescarte(prod); } else tratado = false;
+    } else if (state.openEditFor) {
+      const prod = resolver(state.openEditFor);
+      // Deep-link do HUB também exige PIN ANTES de abrir a edição — mesma
+      // regra do botão de editar da lista (openEditModal).
+      if (prod) { openEditModal(prod); } else tratado = false;
+    } else if (state.openDeleteFor) {
+      // Exclusão vinda do Hub passa pelo MESMO fluxo com PIN da lista — o
+      // botão do Hub excluía com window.confirm, pulando o PIN.
+      const prod = resolver(state.openDeleteFor);
+      if (prod) { handleDelete(prod.id, prod); } else tratado = false;
+    } else if (state.abrirPedido) {
+      // Deep-link "Fazer Pedido" vindo do card de fornecedor no dashboard:
+      // abre o painel de pedidos já com o fornecedor selecionado.
+      setPedidoInicialFornecedor(state.fornecedorId);
+      setShowPurchaseOrders(true);
+    }
+
+    if (tratado) {
       if (state.returnTo) setReturnToRoute(state.returnTo);
-      
-      if (state.openHistoryFor) {
-        const prod = produtos.find(p => p.id === state.openHistoryFor);
-        if (prod) {
-          setSelectedProduct(prod);
-          setShowProductHistory(true);
-        }
-      } else if (state.openAdjustFor) {
-        const prod = produtos.find(p => p.id === state.openAdjustFor);
-        if (prod) {
-          setSelectedProduct(prod);
-          setShowStockModal(true);
-        }
-      } else if (state.openDiscardFor) {
-        const prod = produtos.find(p => p.id === state.openDiscardFor);
-        if (prod) {
-          abrirFluxoDescarte(prod);
-        }
-      } else if (state.openEditFor) {
-        const prod = produtos.find(p => p.id === state.openEditFor);
-        if (prod) {
-          // Deep-link do HUB também exige PIN ANTES de abrir a edição — mesma
-          // regra do botão de editar da lista (openEditModal). Antes abria direto.
-          openEditModal(prod);
-        }
-      } else if (state.abrirPedido) {
-        // Deep-link "Fazer Pedido" vindo do card de fornecedor no dashboard:
-        // abre o painel de pedidos já com o fornecedor selecionado.
-        setPedidoInicialFornecedor(state.fornecedorId);
-        setShowPurchaseOrders(true);
-      }
+      stateTratadoRef.current = location.state;
       // Clear state so it doesn't reopen on reload
       window.history.replaceState({}, document.title);
     }
+    // Sem snapshot e produto ainda não listado: mantém o state para
+    // reprocessar quando a lista carregar.
   }, [location.state, produtos]);
 
   const handleCloseModal = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
@@ -271,8 +292,8 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: number) => {
-    const prod = produtos.find(p => p.id === id);
+  const handleDelete = (id: number, produtoRef?: Produto) => {
+    const prod = produtoRef ?? produtos.find(p => p.id === id);
     requirePin(
       () => doDelete(id),
       'Excluir produto',
@@ -407,6 +428,7 @@ const ProductsPage: React.FC = () => {
     // Limpa outros filtros ao clicar no dashboard
     setFiltros({ busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' });
     setFiltroRapido(null); // Desativar filtro rápido se houver lógica conflitante
+    setBuscaLocal(''); // Input de busca acompanha — antes exibia um texto que não estava aplicado
 
     if (filterType === 'esgotado') {
       setFiltros(prev => ({ ...prev, estoque_status: 'esgotado' }));
@@ -444,6 +466,7 @@ const ProductsPage: React.FC = () => {
 
   const handleQuickFilterChange = (filter: string | null) => {
     setFiltroRapido(filter);
+    setBuscaLocal('');
 
     // Resetar filtros base e aplicar o específico
     const novosFiltros: ProdutoFiltros = { busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' };
@@ -587,14 +610,22 @@ const ProductsPage: React.FC = () => {
 
       <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
-      <AdvancedFiltersModal 
+      <AdvancedFiltersModal
         show={showFilters}
         onClose={() => setShowFilters(false)}
         filtros={filtros}
-        setFiltros={setFiltros}
         categorias={categorias}
         fornecedores={fornecedores}
-        onApply={() => { setShowFilters(false); setPage(1); }}
+        onApply={(novosFiltros) => {
+          // Troca atômica: uma única fonte de verdade. O chip de filtro rápido
+          // acompanha o que foi aplicado — antes "Limpar" no modal zerava o
+          // filtro mas o chip continuava aceso.
+          setFiltros(novosFiltros);
+          setFiltroRapido(novosFiltros.filtro_rapido ?? null);
+          setBuscaLocal(novosFiltros.busca ?? '');
+          setShowFilters(false);
+          setPage(1);
+        }}
       />
 
       <div className="products-table-wrapper">

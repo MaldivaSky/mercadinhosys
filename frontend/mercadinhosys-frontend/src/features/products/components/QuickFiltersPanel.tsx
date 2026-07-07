@@ -68,19 +68,22 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
         },
         {
             id: 'giro_rapido',
-            label: 'Vendendo Bem',
+            label: 'Giro Rápido',
             icon: <Zap className="w-4 h-4" />,
             color: 'blue',
             count: counts.giro_rapido,
-            description: 'Vendeu nos últimos 7 dias',
+            // Descrições espelham o critério REAL (cobertura de estoque via
+            // classificar_giro_produto no backend) — o rótulo antigo prometia
+            // "vendeu nos últimos 7 dias", que não era o que o filtro fazia.
+            description: 'Estoque gira em até 15 dias no ritmo atual de venda',
         },
         {
             id: 'giro_lento',
-            label: 'Parados +30 dias',
+            label: 'Giro Lento',
             icon: <TrendingDown className="w-4 h-4" />,
             color: 'orange',
             count: counts.giro_lento,
-            description: 'Sem venda há mais de 30 dias',
+            description: 'Estoque leva mais de 60 dias para girar (ou sem vendas)',
         },
         {
             id: 'margem_alta',

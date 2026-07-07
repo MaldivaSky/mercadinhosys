@@ -22,8 +22,10 @@ export default function ProductHubPage() {
 
     useEffect(() => {
         if (!id) return;
-        
-        setLoading(true);
+
+        // Só mostra o spinner de página inteira no primeiro carregamento;
+        // trocar o período não deve "piscar" a tela toda.
+        setLoading(prev => (hubData ? prev : true));
         productsService.getProductHubData(parseInt(id), periodo)
             .then(data => {
                 if (data.success) {
@@ -39,7 +41,7 @@ export default function ProductHubPage() {
             .finally(() => {
                 setLoading(false);
             });
-            
+
         // Fetch vendas histórico
         let dias = 30;
         if (periodo === '7d') dias = 7;
@@ -54,13 +56,16 @@ export default function ProductHubPage() {
                         data: v.data,
                         quantidade_total: v.quantidade,
                         preco_medio: v.quantidade > 0 ? (v.valor_total / v.quantidade).toFixed(2) : 0,
-                        custo_estimado: hubData?.produto?.preco_custo || 0 // Usando custo atual como proxy simples
                     }));
                     setVendasHistorico(vendasFormatadas);
                 }
             })
             .catch(err => console.error('Erro ao carregar histórico de vendas:', err));
-    }, [id, periodo, hubData?.produto?.preco_custo]);
+        // custo_estimado do gráfico é enriquecido no render (a partir do hubData);
+        // tê-lo como dependência aqui fazia o Hub buscar TUDO duas vezes e
+        // reexibir o spinner assim que os dados chegavam.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, periodo]);
 
     if (loading) {
         return (
@@ -84,6 +89,10 @@ export default function ProductHubPage() {
     }
 
     const { produto, estatisticas, historico_precos, lotes, pedidos_pendentes } = hubData;
+
+    // Custo atual como proxy no gráfico de giro — enriquecido aqui no render
+    // (não no fetch) para o histórico não depender do hubData no useEffect.
+    const vendasChart = vendasHistorico.map((v) => ({ ...v, custo_estimado: produto?.preco_custo || 0 }));
 
     // Calcular KPIs Avançados
     const margemReal = estatisticas?.valor_total_vendido > 0 && produto?.preco_custo > 0
@@ -248,7 +257,7 @@ export default function ProductHubPage() {
             {/* Ações Rápidas Integradas */}
             <div className="hub-actions-wrapper">
                 <button 
-                    onClick={() => navigate('/products', { state: { openEditFor: produto.id, returnTo: `/products/${produto.id}` } })}
+                    onClick={() => navigate('/products', { state: { openEditFor: produto.id, produto, returnTo: `/products/${produto.id}` } })}
                     className="btn-primary" 
                     style={{ background: '#0284c7', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold' }}
                 >
@@ -277,7 +286,7 @@ export default function ProductHubPage() {
                     {produto.ativo ? 'Inativar Produto' : 'Reativar Produto'}
                 </button>
                 <button 
-                    onClick={() => navigate('/products', { state: { openHistoryFor: produto.id, returnTo: `/products/${produto.id}` } })}
+                    onClick={() => navigate('/products', { state: { openHistoryFor: produto.id, produto, returnTo: `/products/${produto.id}` } })}
                     className="btn-primary" 
                     style={{ background: '#4f46e5', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold' }}
                 >
@@ -285,7 +294,7 @@ export default function ProductHubPage() {
                     Histórico & Movimentações
                 </button>
                 <button 
-                    onClick={() => navigate('/products', { state: { openAdjustFor: produto.id } })}
+                    onClick={() => navigate('/products', { state: { openAdjustFor: produto.id, produto } })}
                     className="btn-secondary" 
                     style={{ background: '#f1f5f9', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #cbd5e1' }}
                 >
@@ -293,21 +302,19 @@ export default function ProductHubPage() {
                     Ajustar Estoque
                 </button>
                 <button 
-                    onClick={() => navigate('/products', { state: { openDiscardFor: produto.id } })}
+                    onClick={() => navigate('/products', { state: { openDiscardFor: produto.id, produto } })}
                     className="btn-secondary" 
                     style={{ background: '#fef2f2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #fecaca' }}
                 >
                     <AlertTriangle size={18} />
                     Descartar Perda/Vencido
                 </button>
-                <button 
+                <button
                     onClick={() => {
-                        if (window.confirm('ATENÇÃO! Esta ação é irreversível e excluirá definitivamente este produto. Deseja continuar?')) {
-                            productsService.delete(produto.id, true).then(() => {
-                                alert('Produto excluído com sucesso.');
-                                navigate('/products');
-                            }).catch(() => alert('Erro ao excluir produto.'));
-                        }
+                        // Exclusão passa pelo MESMO fluxo com PIN da lista de
+                        // produtos — este botão excluía direto com window.confirm,
+                        // pulando o PIN exigido pela regra de segurança.
+                        navigate('/products', { state: { openDeleteFor: produto.id, produto } });
                     }}
                     className="btn-secondary" 
                     style={{ background: '#fff1f2', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #fda4af', marginLeft: 'auto' }}
@@ -391,9 +398,9 @@ export default function ProductHubPage() {
                         Analise o volume de vendas (Giro) em relação às mudanças de preço e custo médio do período.
                     </p>
                     <div style={{ width: '100%', height: 350, marginTop: '20px' }}>
-                        {vendasHistorico.length > 0 ? (
+                        {vendasChart.length > 0 ? (
                             <ResponsiveContainer>
-                                <ComposedChart data={vendasHistorico} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                                <ComposedChart data={vendasChart} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis dataKey="data" stroke="#94a3b8" fontSize={12} tickFormatter={(val) => {
                                         const d = new Date(val);

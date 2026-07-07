@@ -70,65 +70,64 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
         try {
             setLoading(true);
 
-            // Carregar histórico de preços
-            try {
-                const precosRes = await apiClient.get(`/produtos/${produto.id}/historico-precos`);
-                setHistoricoPrecos(precosRes.data.historico || []);
-            } catch (error) {
-                console.error('Erro ao carregar histórico de preços:', error);
+            // TODAS as requisições em paralelo. Antes eram 5 awaits em cascata:
+            // o modal levava a SOMA das latências (segundos no banco remoto)
+            // para abrir; agora leva o tempo da mais lenta.
+            const [precosRes, vendasRes, prodRes, fornecedorRes, pedidosRes] = await Promise.allSettled([
+                apiClient.get(`/produtos/${produto.id}/historico-precos`),
+                apiClient.get(`/produtos/${produto.id}/vendas-historico`),
+                apiClient.get(`/produtos/${produto.id}`),
+                produto.fornecedor_id
+                    ? apiClient.get(`/fornecedores/${produto.fornecedor_id}`)
+                    : Promise.reject(new Error('sem fornecedor')),
+                produto.fornecedor_id
+                    ? apiClient.get('/pedidos-compra/', { params: { fornecedor_id: produto.fornecedor_id, per_page: 5 } })
+                    : Promise.reject(new Error('sem fornecedor')),
+            ]);
+
+            if (precosRes.status === 'fulfilled') {
+                setHistoricoPrecos(precosRes.value.data.historico || []);
+            } else {
+                console.error('Erro ao carregar histórico de preços:', precosRes.reason);
                 setHistoricoPrecos([]);
             }
 
-            // Carregar histórico de vendas (últimos 90 dias)
-            try {
-                const vendasRes = await apiClient.get(`/produtos/${produto.id}/vendas-historico`);
-                setVendasHistorico(vendasRes.data.historico || []);
-                setEstatisticasVendas(vendasRes.data.estatisticas || null);
-            } catch (error) {
-                console.error('Erro ao carregar histórico de vendas:', error);
+            if (vendasRes.status === 'fulfilled') {
+                setVendasHistorico(vendasRes.value.data.historico || []);
+                setEstatisticasVendas(vendasRes.value.data.estatisticas || null);
+            } else {
+                console.error('Erro ao carregar histórico de vendas:', vendasRes.reason);
                 setVendasHistorico([]);
                 setEstatisticasVendas(null);
             }
 
-            // Carregar dados principais do produto (movimentações, fornecedor fallback)
             let prodData: any = null;
-            try {
-                const prodRes = await apiClient.get(`/produtos/${produto.id}`);
-                prodData = prodRes.data;
+            if (prodRes.status === 'fulfilled') {
+                prodData = prodRes.value.data;
                 setMovimentacoesEstoque(prodData.movimentacoes || []);
-            } catch (error) {
-                console.error('Erro ao carregar movimentações:', error);
+            } else {
+                console.error('Erro ao carregar movimentações:', prodRes.reason);
                 setMovimentacoesEstoque([]);
             }
 
-            // Carregar informações do fornecedor e última compra
             if (produto.fornecedor_id) {
-                try {
-                    const fornecedorRes = await apiClient.get(`/fornecedores/${produto.fornecedor_id}`);
-                    setFornecedorInfo(fornecedorRes.data.fornecedor || fornecedorRes.data);
-                } catch (error) {
-                    console.error('Erro ao carregar fornecedor:', error);
+                if (fornecedorRes.status === 'fulfilled') {
+                    setFornecedorInfo(fornecedorRes.value.data.fornecedor || fornecedorRes.value.data);
+                } else {
+                    console.error('Erro ao carregar fornecedor:', fornecedorRes.reason);
                     setFornecedorInfo(null);
                 }
-
-                try {
-                    const pedidosRes = await apiClient.get('/pedidos-compra/', {
-                        params: { fornecedor_id: produto.fornecedor_id, per_page: 5 }
-                    });
-                    setUltimaCompra(pedidosRes.data.pedidos?.[0] || null);
-                    setHistoricoCompras(pedidosRes.data.pedidos || []);
-                } catch (error) {
-                    console.error('Erro ao carregar última compra:', error);
+                if (pedidosRes.status === 'fulfilled') {
+                    setUltimaCompra(pedidosRes.value.data.pedidos?.[0] || null);
+                    setHistoricoCompras(pedidosRes.value.data.pedidos || []);
+                } else {
+                    console.error('Erro ao carregar última compra:', pedidosRes.reason);
                     setUltimaCompra(null);
                     setHistoricoCompras([]);
                 }
             } else {
                 // Tenta usar o fornecedor mapeado via pedidos_compra pelo backend
-                if (prodData && prodData.produto && prodData.produto.fornecedor) {
-                    setFornecedorInfo(prodData.produto.fornecedor);
-                } else {
-                    setFornecedorInfo(null);
-                }
+                setFornecedorInfo(prodData?.produto?.fornecedor || null);
                 setUltimaCompra(null);
             }
         } catch (error) {
