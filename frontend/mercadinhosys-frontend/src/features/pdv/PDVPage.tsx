@@ -503,25 +503,27 @@ const PDVPage: React.FC = () => {
                                                                 });
                                                                 
                                                                 // Calcula automático a distância/taxa pelo CEP
-                                                                try {
-                                                                    const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
-                                                                        cep_destino: cepDest,
-                                                                        veiculo: dadosEntrega?.veiculo || 'moto' 
-                                                                    });
-                                                                    if (res.data?.success) {
-                                                                        setDadosEntrega({ 
-                                                                            distancia_km: res.data.distancia_km,
-                                                                            taxa_entrega: res.data.taxa_sugerida 
+                                                                if (cepDest && cepDest !== '00000-000') {
+                                                                    try {
+                                                                        const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
+                                                                            cep_destino: cepDest,
+                                                                            veiculo: dadosEntrega?.veiculo || 'moto' 
                                                                         });
-                                                                        toast.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`);
-                                                                    } else {
-                                                                        toast.error(res.data?.error || "Erro ao calcular taxa.");
+                                                                        if (res.data?.success) {
+                                                                            setDadosEntrega({ 
+                                                                                distancia_km: res.data.distancia_km,
+                                                                                taxa_entrega: res.data.taxa_sugerida 
+                                                                            });
+                                                                            toast.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`);
+                                                                        }
+                                                                    } catch (err: any) {
+                                                                        console.warn("Não foi possível estimar a taxa: ", err.response?.data?.error);
                                                                     }
-                                                                } catch (err: any) {
-                                                                    toast.error(err.response?.data?.error || "Falha na comunicação");
+                                                                } else {
+                                                                    toast.success("Cliente sem CEP. Insira a taxa de entrega manualmente.");
                                                                 }
                                                             } else if (paraEntregar && (!c || !c.cep)) {
-                                                                toast.error("Este cliente não tem CEP cadastrado ou os dados estão desatualizados.");
+                                                                toast.success("Cliente sem CEP. Insira a taxa de entrega manualmente.");
                                                             }
                                                             setActiveSection('pagamento'); 
                                                         }} 
@@ -571,25 +573,27 @@ const PDVPage: React.FC = () => {
                                                         });
                                                         
                                                         // Calcula automático
-                                                        try {
-                                                            const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
-                                                                cep_destino: cepDest,
-                                                                veiculo: dadosEntrega?.veiculo || 'moto'
-                                                            });
-                                                            if (res.data?.success) {
-                                                                setDadosEntrega({ 
-                                                                    distancia_km: res.data.distancia_km,
-                                                                    taxa_entrega: res.data.taxa_sugerida 
+                                                        if (cepDest && cepDest !== '00000-000') {
+                                                            try {
+                                                                const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
+                                                                    cep_destino: cepDest,
+                                                                    veiculo: dadosEntrega?.veiculo || 'moto'
                                                                 });
-                                                                import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
-                                                            } else {
-                                                                import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa."));
+                                                                if (res.data?.success) {
+                                                                    setDadosEntrega({ 
+                                                                        distancia_km: res.data.distancia_km,
+                                                                        taxa_entrega: res.data.taxa_sugerida 
+                                                                    });
+                                                                    import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                }
+                                                            } catch (err: any) {
+                                                                console.warn("Não foi possível estimar a taxa: ", err.response?.data?.error);
                                                             }
-                                                        } catch (err: any) {
-                                                            import('react-hot-toast').then(m => m.default.error(err.response?.data?.error || "Falha na comunicação"));
+                                                        } else {
+                                                            import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente."));
                                                         }
                                                     } else if (e.target.checked && !cliente?.cep) {
-                                                        import('react-hot-toast').then(m => m.default.error("Este cliente não tem CEP cadastrado ou os dados estão desatualizados. Remova e adicione novamente."));
+                                                        import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente."));
                                                     }
                                                 }}
                                             />
@@ -638,16 +642,20 @@ const PDVPage: React.FC = () => {
                                                                 onChange={async (e) => {
                                                                     const veiculo = e.target.value as 'moto' | 'carro';
                                                                     setDadosEntrega({ veiculo });
-                                                                    if (cliente?.cep) {
-                                                                        const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
-                                                                            cep_destino: cliente.cep,
-                                                                            veiculo
-                                                                        });
-                                                                        if (res.data?.success) {
-                                                                            setDadosEntrega({ 
-                                                                                distancia_km: res.data.distancia_km,
-                                                                                taxa_entrega: res.data.taxa_sugerida 
+                                                                    if (cliente?.cep && cliente.cep !== '00000-000') {
+                                                                        try {
+                                                                            const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
+                                                                                cep_destino: cliente.cep,
+                                                                                veiculo
                                                                             });
+                                                                            if (res.data?.success) {
+                                                                                setDadosEntrega({ 
+                                                                                    distancia_km: res.data.distancia_km,
+                                                                                    taxa_entrega: res.data.taxa_sugerida 
+                                                                                });
+                                                                            }
+                                                                        } catch (err) {
+                                                                            console.warn("Não foi possível re-estimar a taxa.", err);
                                                                         }
                                                                     }
                                                                 }}
