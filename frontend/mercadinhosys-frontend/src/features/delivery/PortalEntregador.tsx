@@ -5,11 +5,13 @@ import { apiClient } from '../../api/apiClient';
 import {
     Navigation, MapPin, Phone, CheckCircle2, Clock,
     PackageCheck, Truck, AlertCircle, RefreshCw,
-    Smartphone, Package, Radio, WifiOff
+    Smartphone, Package, Radio, WifiOff, Fuel, CalendarDays, Timer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import DetalheEntregaModal from './DetalheEntregaModal';
+import { AbastecimentoModal } from './AbastecimentoModal';
+
 
 
 // ─── Detecta mobile ───────────────────────────────────────────────────────────
@@ -92,6 +94,34 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; ico
     cancelada:  { label: 'Cancelada',   color: 'text-red-700',    bg: 'bg-red-100',     icon: AlertCircle },
 };
 
+// ─── Cronômetro Dinâmico ──────────────────────────────────────────────────────
+const Cronometro: React.FC<{ dataSaida?: string }> = ({ dataSaida }) => {
+    const [tempoRodado, setTempoRodado] = useState<string>('00:00');
+
+    useEffect(() => {
+        if (!dataSaida) return;
+        const start = new Date(dataSaida).getTime();
+        const updateTimer = () => {
+            const diff = Math.floor((Date.now() - start) / 1000); // Em segundos
+            if (diff < 0) return;
+            const m = Math.floor(diff / 60).toString().padStart(2, '0');
+            const s = (diff % 60).toString().padStart(2, '0');
+            setTempoRodado(`${m}:${s}`);
+        };
+        updateTimer();
+        const t = setInterval(updateTimer, 1000);
+        return () => clearInterval(t);
+    }, [dataSaida]);
+
+    if (!dataSaida) return null;
+    return (
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-black animate-pulse">
+            <Timer className="w-3.5 h-3.5" />
+            {tempoRodado}
+        </div>
+    );
+};
+
 // ─── Card de cada entrega ─────────────────────────────────────────────────────
 const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDetalhes: () => void; assumindo?: boolean; meuMotoristaId?: number | null }> = ({ entrega, onRefresh, onClickDetalhes, assumindo = false, meuMotoristaId = null }) => {
     const [loading, setLoading] = useState(false);
@@ -164,10 +194,15 @@ const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDe
                     <p className="text-[10px] font-mono text-gray-400">#{entrega.codigo_rastreamento}</p>
                     <p className="font-bold text-gray-900 dark:text-white text-sm">{entrega.cliente_nome || 'Cliente'}</p>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${cfg.bg} ${cfg.color}`}>
-                    <Icon className="w-3 h-3" />
-                    {cfg.label}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${cfg.bg} ${cfg.color}`}>
+                        <Icon className="w-3 h-3" />
+                        {cfg.label}
+                    </span>
+                    {entrega.status === 'em_rota' && entrega.data_saida && (
+                        <Cronometro dataSaida={entrega.data_saida} />
+                    )}
+                </div>
             </div>
 
             <div className="flex items-start gap-3 px-4 py-3">
@@ -391,15 +426,15 @@ const AberturaTurno: React.FC<{ onTurnoIniciado: () => void, motoristaId: number
     );
 };
 
-// ─── Painel Mobile (operação real em campo) ───────────────────────────────────
 const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     const [entregas, setEntregas] = useState<Entrega[]>([]);
     const [loading, setLoading] = useState(true);
     const [turno, setTurno] = useState<any>(undefined);
     const [finalizando, setFinalizando] = useState(false);
-    const [tab, setTab] = useState<'disponiveis' | 'ativas' | 'concluidas'>('ativas');
+    const [tab, setTab] = useState<'disponiveis' | 'ativas' | 'concluidas' | 'historico'>('ativas');
     const [detalheModalId, setDetalheModalId] = useState<number | null>(null);
     const [meuMotoristaId, setMeuMotoristaId] = useState<number | null>(null);
+    const [abastecimentoModalOpen, setAbastecimentoModalOpen] = useState(false);
 
     useEffect(() => {
         if (user?.nome) {
@@ -432,9 +467,36 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
 
     const disponiveis = entregas.filter(e => (e.status === 'pendente' || e.status === 'em_preparo') && !(e as any).motorista_id);
     const ativas = entregas.filter(e => !['entregue', 'cancelada', 'pendente', 'em_preparo'].includes(e.status) && (e as any).motorista_id === meuMotoristaId);
-    const concluidas = entregas.filter(e => e.status === 'entregue' && (e as any).motorista_id === meuMotoristaId);
     
-    const lista = tab === 'ativas' ? ativas : tab === 'concluidas' ? concluidas : disponiveis;
+    // Filtros de Turno e Histórico
+    const dataTurno = turno?.data_turno ? new Date(turno.data_turno).getTime() : null;
+    const todasConcluidas = entregas.filter(e => e.status === 'entregue' && (e as any).motorista_id === meuMotoristaId);
+    
+    const concluidasTurno = dataTurno 
+        ? todasConcluidas.filter(e => e.data_entrega && new Date(e.data_entrega).getTime() >= dataTurno)
+        : todasConcluidas; // Fallback
+
+    const lista = tab === 'ativas' ? ativas : tab === 'concluidas' ? concluidasTurno : tab === 'historico' ? todasConcluidas : disponiveis;
+
+    // Métricas de Inteligência
+    const kmRodadosTurno = concluidasTurno.reduce((acc, curr) => acc + (curr.km_percorridos || 0), 0);
+    const tempoTotalMinutos = concluidasTurno.reduce((acc, curr) => acc + (curr.tempo_real_minutos || 0), 0);
+    const tempoMedio = concluidasTurno.length > 0 ? (tempoTotalMinutos / concluidasTurno.length).toFixed(0) : 0;
+    
+    // Tenta pegar o consumo padrão do veículo no backend
+    const [consumoMedio, setConsumoMedio] = useState(15.0); // Padrão
+    useEffect(() => {
+        if (turno?.veiculo_id) {
+            deliveryService.getVeiculos().then(res => {
+                const veiculo = (res.veiculos || []).find((v: any) => v.id === turno.veiculo_id);
+                if (veiculo && veiculo.consumo_medio) {
+                    setConsumoMedio(veiculo.consumo_medio);
+                }
+            }).catch(() => {});
+        }
+    }, [turno?.veiculo_id]);
+
+    const kmPorLitroCalculado = consumoMedio > 0 ? consumoMedio.toFixed(1) : "15.0";
 
     const handleFinalizarTurno = async () => {
         const kmFinal = window.prompt("Para finalizar o turno, digite o KM FINAL do painel do veículo:");
@@ -466,72 +528,103 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
             <div className="bg-gradient-to-br from-blue-700 to-indigo-800 px-5 pt-10 pb-5 text-white">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <p className="text-blue-200 text-[10px] font-bold uppercase tracking-widest">Painel do Entregador</p>
-                        <h1 className="text-xl font-black mt-0.5">Olá, {user?.nome?.split(' ')[0] || 'Motorista'}!</h1>
-                        <p className="text-xs text-blue-300 mt-1">KM Início: <b>{turno.km_inicial}</b></p>
+                <div className="flex items-center justify-between z-10 relative">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white backdrop-blur-sm border border-white/10">
+                            <Truck className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-white leading-tight">{user.nome?.split(' ')[0]}</h2>
+                            <p className="text-blue-200 text-xs font-medium">Turno Ativo</p>
+                        </div>
                     </div>
                     <div className="flex gap-2">
+                        {turno && (
+                            <button
+                                onClick={() => setAbastecimentoModalOpen(true)}
+                                className="flex flex-col items-center justify-center bg-emerald-500/80 hover:bg-emerald-500 text-white px-3 py-1 rounded-xl transition-colors backdrop-blur-sm shadow-sm"
+                            >
+                                <Fuel className="w-4 h-4 mb-0.5" />
+                                <span className="text-[9px] font-black uppercase">Posto</span>
+                            </button>
+                        )}
                         <button
                             onClick={handleFinalizarTurno}
-                            disabled={finalizando}
-                            className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-100 text-xs font-bold border border-red-500/30 hover:bg-red-500 hover:text-white transition-all flex items-center gap-1"
+                            disabled={finalizando || ativas.length > 0}
+                            className="bg-white/10 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-white/20 hover:border-transparent"
                         >
-                            {finalizando ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Finalizar Turno'}
-                        </button>
-                        <button
-                            onClick={load}
-                            disabled={loading}
-                            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all shrink-0"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            {finalizando ? 'Fechando...' : 'Encerrar'}
                         </button>
                     </div>
                 </div>
 
+                <div className="grid grid-cols-3 gap-2 mt-6 z-10 relative">
+                    <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10 backdrop-blur-md">
+                        <p className="text-2xl font-black">{ativas.length}</p>
+                        <p className="text-blue-200 text-[10px] font-bold uppercase tracking-wider">Em Aberto</p>
+                    </div>
+                    <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10 backdrop-blur-md">
+                        <p className="text-2xl font-black text-emerald-300">{kmRodadosTurno.toFixed(1)}</p>
+                        <p className="text-blue-200 text-[10px] font-bold uppercase tracking-wider">KM Turno</p>
+                    </div>
+                    <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10 backdrop-blur-md">
+                        <p className="text-2xl font-black text-amber-300">{tempoMedio}'</p>
+                        <p className="text-blue-200 text-[10px] font-bold uppercase tracking-wider">Tempo Médio</p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center justify-between mt-3 px-1">
+                    <span className="text-xs text-blue-100/70 font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Início: {new Date(turno.data_turno).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className="text-xs text-emerald-100/90 font-bold flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30"><Fuel className="w-3 h-3" /> {kmPorLitroCalculado} KM/L</span>
+                </div>
+                
+                <button
+                    onClick={load}
+                    disabled={loading}
+                    className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all shrink-0"
+                >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+
                 {entregaEmRota && (
-                    <div className="mb-3">
+                    <div className="mt-4">
                         <GpsBadge status={gpsStatus} />
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white/10 rounded-2xl p-3 text-center">
-                        <p className="text-2xl font-black">{ativas.length}</p>
-                        <p className="text-blue-200 text-xs">Em Aberto</p>
-                    </div>
-                    <div className="bg-white/10 rounded-2xl p-3 text-center">
-                        <p className="text-2xl font-black text-green-300">{concluidas.length}</p>
-                        <p className="text-blue-200 text-xs">Concluídas</p>
-                    </div>
-                </div>
             </div>
 
-            <div className="bg-blue-800 p-2 sticky top-0 z-10">
-                <div className="grid grid-cols-3 gap-1 bg-blue-900/50 p-1 rounded-xl">
+            <div className="bg-blue-800 p-2 sticky top-0 z-10 shadow-sm border-b border-blue-900/50 overflow-x-auto hide-scrollbar">
+                <div className="flex gap-1 bg-blue-900/50 p-1 rounded-xl min-w-max">
                     <button
                         onClick={() => setTab('disponiveis')}
-                        className={`px-2 py-2 rounded-lg text-[10px] font-bold transition-all relative ${tab === 'disponiveis' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all relative ${tab === 'disponiveis' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
                     >
                         Disponíveis
                         {disponiveis.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white border border-blue-700">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full text-[10px] flex items-center justify-center text-white border-2 border-blue-900">
                                 {disponiveis.length}
                             </span>
                         )}
                     </button>
                     <button
                         onClick={() => setTab('ativas')}
-                        className={`px-2 py-2 rounded-lg text-[10px] font-bold transition-all ${tab === 'ativas' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'ativas' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
                     >
                         Minha Rota
                     </button>
                     <button
                         onClick={() => setTab('concluidas')}
-                        className={`px-2 py-2 rounded-lg text-[10px] font-bold transition-all ${tab === 'concluidas' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'concluidas' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
                     >
-                        Concluídas
+                        Concluídas (Turno)
+                    </button>
+                    <button
+                        onClick={() => setTab('historico')}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'historico' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                    >
+                        <CalendarDays className="w-4 h-4 inline-block mr-1 -mt-0.5" />
+                        Histórico
                     </button>
                 </div>
             </div>
@@ -554,7 +647,11 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                             <p className="font-medium text-center text-sm">
                                 {tab === 'ativas'
                                     ? 'Nenhuma entrega atribuída no momento'
-                                    : 'Nenhuma entrega concluída ainda hoje'}
+                                    : tab === 'concluidas'
+                                    ? 'Nenhuma entrega concluída neste turno'
+                                    : tab === 'historico'
+                                    ? 'Seu histórico está vazio'
+                                    : 'Não há entregas pendentes na loja'}
                             </p>
                         </motion.div>
                     )}
@@ -562,6 +659,17 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
             </div>
             
             <DetalheEntregaModal entregaId={detalheModalId} onClose={() => setDetalheModalId(null)} />
+            {turno && (
+                <AbastecimentoModal 
+                    isOpen={abastecimentoModalOpen}
+                    onClose={() => setAbastecimentoModalOpen(false)}
+                    veiculoId={turno.veiculo_id}
+                    kmAtualVeiculo={turno.km_inicial + kmRodadosTurno} // Estimate based on DB initial + driven
+                    onSuccess={(novoKml) => {
+                        setConsumoMedio(novoKml);
+                    }}
+                />
+            )}
         </div>
     );
 };

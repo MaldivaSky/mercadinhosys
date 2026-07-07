@@ -90,6 +90,11 @@ export interface Entrega {
     endereco_completo: string;
     endereco_bairro: string;
     data_prevista: string;
+    data_saida?: string;
+    data_entrega?: string;
+    km_percorridos?: number;
+    tempo_real_minutos?: number;
+    custo_combustivel?: number;
     taxa_entrega: number;
     motorista_nome?: string;
 }

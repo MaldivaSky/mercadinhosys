@@ -505,3 +505,66 @@ def dashboard_metricas():
         }
     })
 
+@logistica_bp.route('/abastecimento', methods=['POST'])
+@jwt_required()
+def registrar_abastecimento():
+    try:
+        from app.models import AbastecimentoVeiculo, Veiculo, db
+        data = request.json
+        funcionario_id = get_jwt_identity()
+        est_id = _get_est_id()
+        
+        veiculo_id = data.get('veiculo_id')
+        km_atual = Decimal(str(data.get('km_atual', 0)))
+        litros = Decimal(str(data.get('litros', 0)))
+        valor_total = Decimal(str(data.get('valor_total', 0)))
+        
+        if not veiculo_id or litros <= 0 or valor_total <= 0:
+            return jsonify({"success": False, "error": "Dados inválidos"}), 400
+            
+        veiculo = Veiculo.query.filter_by(id=veiculo_id, estabelecimento_id=est_id).first()
+        if not veiculo:
+            return jsonify({"success": False, "error": "Veículo não encontrado"}), 404
+            
+        # Pega o último abastecimento para calcular a diferença
+        ultimo_abastecimento = AbastecimentoVeiculo.query.filter_by(
+            estabelecimento_id=est_id, veiculo_id=veiculo_id
+        ).order_by(AbastecimentoVeiculo.data_abastecimento.desc()).first()
+        
+        km_rodados = None
+        consumo_real = None
+        
+        if ultimo_abastecimento and km_atual > ultimo_abastecimento.km_atual:
+            km_rodados = km_atual - ultimo_abastecimento.km_atual
+            consumo_real = km_rodados / litros
+            
+        preco_litro = valor_total / litros
+        
+        abastecimento = AbastecimentoVeiculo(
+            estabelecimento_id=est_id,
+            veiculo_id=veiculo_id,
+            motorista_id=funcionario_id,
+            km_atual=km_atual,
+            litros=litros,
+            valor_total=valor_total,
+            preco_litro=preco_litro,
+            km_rodados_desde_ultimo=km_rodados,
+            consumo_real_kml=consumo_real
+        )
+        
+        veiculo.km_atual = max(veiculo.km_atual or Decimal(0), km_atual)
+        if consumo_real:
+            # Atualiza o consumo médio do veículo gradativamente
+            veiculo.consumo_medio = (veiculo.consumo_medio + consumo_real) / 2
+        
+        db.session.add(abastecimento)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True, 
+            "abastecimento": abastecimento.to_dict(),
+            "novo_consumo_medio": float(veiculo.consumo_medio)
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
