@@ -175,6 +175,7 @@ def iniciar_turno():
     data = request.json
     km_inicial = data.get('km_inicial')
     veiculo_id = data.get('veiculo_id')
+    motorista_id = data.get('motorista_id')
     tipo_combustivel = data.get('tipo_combustivel', 'gasolina')
     
     if km_inicial is None:
@@ -210,7 +211,7 @@ def iniciar_turno():
         novo_checklist = ChecklistVeiculo(
             estabelecimento_id=est_id,
             veiculo_id=veiculo_id,
-            motorista_id=funcionario_id,
+            motorista_id=motorista_id,
             km_atual=km_inicial,
             itens_json=checklist_itens,
             aprovado=aprovado

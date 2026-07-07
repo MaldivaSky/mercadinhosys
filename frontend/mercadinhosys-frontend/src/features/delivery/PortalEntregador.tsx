@@ -248,7 +248,7 @@ const GpsBadge: React.FC<{ status: string }> = ({ status }) => {
     );
 };
 // ─── Abertura de Turno ───────────────────────────────────────────────────────────
-const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoIniciado }) => {
+const AberturaTurno: React.FC<{ onTurnoIniciado: () => void, motoristaId: number | null }> = ({ onTurnoIniciado, motoristaId }) => {
     const [kmInicial, setKmInicial] = useState('');
     const [veiculos, setVeiculos] = useState<any[]>([]);
     const [veiculoId, setVeiculoId] = useState<number | ''>('');
@@ -283,7 +283,8 @@ const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoInici
                 km_inicial: Number(kmInicial),
                 veiculo_id: veiculoId ? Number(veiculoId) : undefined,
                 tipo_combustivel: combustivel,
-                checklist
+                checklist,
+                motorista_id: motoristaId ? Number(motoristaId) : undefined
             });
             toast.success('Turno iniciado com sucesso!');
             onTurnoIniciado();
@@ -459,7 +460,7 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
 
     // Tela de Iniciar Turno (Trava)
     if (turno === null) {
-        return <AberturaTurno onTurnoIniciado={load} />;
+        return <AberturaTurno onTurnoIniciado={load} motoristaId={meuMotoristaId} />;
     }
 
     return (

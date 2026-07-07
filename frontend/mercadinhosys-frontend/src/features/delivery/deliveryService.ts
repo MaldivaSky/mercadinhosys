@@ -157,7 +157,7 @@ export const deliveryService = {
         return response.data;
     },
 
-    iniciarTurno: async (data: { km_inicial: number, veiculo_id?: number, tipo_combustivel: string, checklist?: any[] }) => {
+    iniciarTurno: async (data: { km_inicial: number, veiculo_id?: number, tipo_combustivel: string, checklist?: any[], motorista_id?: number }) => {
         const response = await apiClient.post('/logistica/turno/iniciar', data);
         return response.data;
     },
