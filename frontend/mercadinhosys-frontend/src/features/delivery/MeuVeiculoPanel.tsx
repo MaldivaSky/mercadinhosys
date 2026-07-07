@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wrench, Plus, CalendarDays, DollarSign, Activity, FileText } from 'lucide-react';
+import { Wrench, Plus, CalendarDays, Activity, FileText } from 'lucide-react';
 import { deliveryService, ManutencaoVeiculo } from './deliveryService';
 import { ManutencaoModal } from './ManutencaoModal';
 
