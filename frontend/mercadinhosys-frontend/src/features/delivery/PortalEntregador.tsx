@@ -5,12 +5,13 @@ import { apiClient } from '../../api/apiClient';
 import {
     Navigation, MapPin, Phone, CheckCircle2, Clock,
     PackageCheck, Truck, AlertCircle, RefreshCw,
-    Smartphone, Package, Radio, WifiOff, Fuel, CalendarDays, Timer
+    Smartphone, Package, Radio, WifiOff, Fuel, CalendarDays, Timer, Wrench
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import DetalheEntregaModal from './DetalheEntregaModal';
 import { AbastecimentoModal } from './AbastecimentoModal';
+import { MeuVeiculoPanel } from './MeuVeiculoPanel';
 
 
 
@@ -431,7 +432,7 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [turno, setTurno] = useState<any>(undefined);
     const [finalizando, setFinalizando] = useState(false);
-    const [tab, setTab] = useState<'disponiveis' | 'ativas' | 'concluidas' | 'historico'>('ativas');
+    const [tab, setTab] = useState<'disponiveis' | 'ativas' | 'concluidas' | 'historico' | 'veiculo'>('ativas');
     const [detalheModalId, setDetalheModalId] = useState<number | null>(null);
     const [meuMotoristaId, setMeuMotoristaId] = useState<number | null>(null);
     const [abastecimentoModalOpen, setAbastecimentoModalOpen] = useState(false);
@@ -626,11 +627,21 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                         <CalendarDays className="w-4 h-4 inline-block mr-1 -mt-0.5" />
                         Histórico
                     </button>
+                    <button
+                        onClick={() => setTab('veiculo')}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'veiculo' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                    >
+                        <Wrench className="w-4 h-4 inline-block mr-1 -mt-0.5" />
+                        Meu Veículo
+                    </button>
                 </div>
             </div>
 
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto pb-8">
-                <AnimatePresence mode='wait'>
+            {tab === 'veiculo' ? (
+                <MeuVeiculoPanel veiculoId={turno.veiculo_id} kmAtual={turno.km_inicial} />
+            ) : (
+                <div className="flex-1 p-4 space-y-3 overflow-y-auto pb-8">
+                    <AnimatePresence mode='wait'>
                     {loading ? (
                         [1, 2].map(i => (
                             <div key={i} className="h-36 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
@@ -657,6 +668,7 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                     )}
                 </AnimatePresence>
             </div>
+            )}
             
             <DetalheEntregaModal entregaId={detalheModalId} onClose={() => setDetalheModalId(null)} />
             {turno && (

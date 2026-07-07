@@ -2550,3 +2550,20 @@ class TurnoEntregador(db.Model):
     custo_manutencao = db.Column(db.Numeric(10, 2), default=0)
     tipo_combustivel = db.Column(db.String(20), default="gasolina")
     status = db.Column(db.String(20), default="aberto") # aberto, fechado
+
+class ManutencaoVeiculo(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
+    __tablename__ = "manutencoes_veiculo"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculos.id'), nullable=False, index=True)
+    motorista_id = db.Column(db.Integer, db.ForeignKey('funcionarios.id'), nullable=True, index=True)
+    despesa_id = db.Column(db.Integer, db.ForeignKey('despesas.id'), nullable=True, index=True)
+    data_manutencao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    tipo_servico = db.Column(db.String(100), nullable=False) # Ex: Oleo, Pneus, Relacao, Eletrica
+    descricao = db.Column(db.Text, nullable=True)
+    km_atual = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_total = db.Column(db.Numeric(19, 4), nullable=False)
+    
+    veiculo = db.relationship('Veiculo', backref=db.backref('manutencoes', lazy=True, cascade='all, delete-orphan'))
+    motorista = db.relationship('Funcionario', backref=db.backref('manutencoes_registradas', lazy=True))
+    despesa = db.relationship('Despesa', backref=db.backref('manutencao_veiculo', uselist=False))

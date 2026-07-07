@@ -569,3 +569,79 @@ def registrar_abastecimento():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
+
+@logistica_bp.route('/manutencao/<int:veiculo_id>', methods=['GET'])
+@jwt_required()
+def listar_manutencoes(veiculo_id):
+    from app.models import ManutencaoVeiculo
+    est_id = _get_est_id()
+    
+    manutencoes = ManutencaoVeiculo.query.filter_by(
+        estabelecimento_id=est_id, veiculo_id=veiculo_id
+    ).order_by(ManutencaoVeiculo.data_manutencao.desc()).all()
+    
+    return jsonify({
+        "success": True,
+        "manutencoes": [m.to_dict() for m in manutencoes]
+    })
+
+@logistica_bp.route('/manutencao', methods=['POST'])
+@jwt_required()
+def registrar_manutencao():
+    try:
+        from app.models import ManutencaoVeiculo, Veiculo, Despesa, db
+        from datetime import date
+        data = request.json
+        funcionario_id = get_jwt_identity()
+        est_id = _get_est_id()
+        
+        veiculo_id = data.get('veiculo_id')
+        km_atual = Decimal(str(data.get('km_atual', 0)))
+        valor_total = Decimal(str(data.get('valor_total', 0)))
+        tipo_servico = data.get('tipo_servico', 'Geral')
+        descricao = data.get('descricao', '')
+        
+        if not veiculo_id or valor_total <= 0:
+            return jsonify({"success": False, "error": "Dados inválidos"}), 400
+            
+        veiculo = Veiculo.query.filter_by(id=veiculo_id, estabelecimento_id=est_id).first()
+        if not veiculo:
+            return jsonify({"success": False, "error": "Veículo não encontrado"}), 404
+            
+        # Lança a despesa automaticamente no sistema
+        nova_despesa = Despesa(
+            estabelecimento_id=est_id,
+            descricao=f"Manutenção Frota ({veiculo.placa}): {tipo_servico}",
+            valor=valor_total,
+            categoria="Logística/Frota",
+            data_vencimento=date.today(),
+            data_pagamento=date.today(),
+            status="pago",
+            conta_origem="Caixa Logística", # ou outro padrão
+            observacoes=descricao
+        )
+        db.session.add(nova_despesa)
+        db.session.flush() # Para pegar o ID da despesa
+        
+        manutencao = ManutencaoVeiculo(
+            estabelecimento_id=est_id,
+            veiculo_id=veiculo_id,
+            motorista_id=funcionario_id,
+            despesa_id=nova_despesa.id,
+            tipo_servico=tipo_servico,
+            descricao=descricao,
+            km_atual=km_atual,
+            valor_total=valor_total
+        )
+        db.session.add(manutencao)
+        
+        veiculo.km_atual = max(veiculo.km_atual or Decimal(0), km_atual)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True, 
+            "manutencao": manutencao.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -259,7 +259,28 @@ export const deliveryService = {
         const response = await apiClient.get<DashboardLogistica>('/delivery/dashboard', { params: filtros });
         return response.data;
     },
+
+    getHistoricoManutencao: async (veiculoId: number) => {
+        const response = await apiClient.get<{success: boolean, manutencoes: ManutencaoVeiculo[]}>(`/logistica/manutencao/${veiculoId}`);
+        return response.data;
+    },
+
+    registrarManutencao: async (data: { veiculo_id: number; km_atual: number; valor_total: number; tipo_servico: string; descricao: string }) => {
+        const response = await apiClient.post('/logistica/manutencao', data);
+        return response.data;
+    }
 };
+
+export interface ManutencaoVeiculo {
+    id: number;
+    veiculo_id: number;
+    motorista_id: number;
+    data_manutencao: string;
+    tipo_servico: string;
+    descricao: string;
+    km_atual: number;
+    valor_total: number;
+}
 
 export interface DashboardFiltros {
     data_inicio?: string;
