@@ -328,34 +328,46 @@ def estimar_taxa_cep():
         return R * c
 
     def get_coords_from_cep(cep):
-        # Limpa CEP
         cep_clean = ''.join(filter(str.isdigit, cep))
-        # Busca no ViaCEP para pegar a cidade e estado
+        
+        # 1. Tenta BrasilAPI v2
         try:
-            viacep = requests.get(f"https://viacep.com.br/ws/{cep_clean}/json/", timeout=5).json()
+            b_api = requests.get(f"https://brasilapi.com.br/api/cep/v2/{cep_clean}", timeout=4).json()
+            coords = b_api.get('location', {}).get('coordinates', {})
+            lat = coords.get('latitude')
+            lon = coords.get('longitude')
+            if lat and lon:
+                return float(lat), float(lon)
+        except:
+            pass
+
+        # 2. Tenta ViaCEP + Nominatim
+        try:
+            viacep = requests.get(f"https://viacep.com.br/ws/{cep_clean}/json/", timeout=4).json()
             if 'erro' in viacep: return None
-            # Busca no Nominatim usando rua, cidade, estado
             logradouro = viacep.get('logradouro', '')
             localidade = viacep.get('localidade', '')
             uf = viacep.get('uf', '')
             query = f"{logradouro}, {localidade}, {uf}, Brasil"
-            headers = {'User-Agent': 'MercadinhoSys/1.0'}
-            nom = requests.get(f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1", headers=headers, timeout=5).json()
+            headers = {'User-Agent': 'MercadinhoSys/1.0 (admin@mercadinhosys.com.br)'}
+            
+            nom = requests.get(f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1", headers=headers, timeout=4).json()
             if nom and len(nom) > 0:
                 return float(nom[0]['lat']), float(nom[0]['lon'])
-            # Tenta só CEP se falhar o detalhado
-            nom_cep = requests.get(f"https://nominatim.openstreetmap.org/search?postalcode={cep_clean}&country=Brazil&format=json", headers=headers, timeout=5).json()
+                
+            nom_cep = requests.get(f"https://nominatim.openstreetmap.org/search?postalcode={cep_clean}&country=Brazil&format=json", headers=headers, timeout=4).json()
             if nom_cep and len(nom_cep) > 0:
                 return float(nom_cep[0]['lat']), float(nom_cep[0]['lon'])
         except:
-            return None
+            pass
+            
         return None
 
     coords_origem = get_coords_from_cep(cep_origem)
     coords_destino = get_coords_from_cep(cep_destino)
 
     if not coords_origem or not coords_destino:
-        return jsonify({"success": False, "error": "Não foi possível calcular a distância pelo CEP."}), 400
+        return jsonify({"success": False, "error": "Não foi possível calcular a distância pelo CEP. Insira manualmente."}), 200
 
     # Distância em linha reta
     dist_reta = haversine(coords_origem[0], coords_origem[1], coords_destino[0], coords_destino[1])

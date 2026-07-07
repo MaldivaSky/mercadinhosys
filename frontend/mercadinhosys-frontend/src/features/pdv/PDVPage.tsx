@@ -11,7 +11,8 @@ import {
     User,
     WifiOff,
     CloudUpload,
-    Truck
+    Truck,
+    MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -608,7 +609,56 @@ const PDVPage: React.FC = () => {
                                                         <p className="text-xs text-orange-600 font-bold">⚠️ Recomendado selecionar o cliente acima para puxar o endereço automaticamente.</p>
                                                     )}
                                                     
-                                                    <div className="grid grid-cols-3 gap-3">
+                                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">CEP Destino</label>
+                                                            <div className="relative flex gap-1">
+                                                                <input
+                                                                    type="text"
+                                                                    value={dadosEntrega?.endereco?.cep || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value.replace(/\D/g, '');
+                                                                        const masked = val.replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
+                                                                        setDadosEntrega({
+                                                                            endereco: { ...(dadosEntrega?.endereco || {}), cep: masked }
+                                                                        });
+                                                                    }}
+                                                                    placeholder="00000-000"
+                                                                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={async () => {
+                                                                        const cep = dadosEntrega?.endereco?.cep;
+                                                                        if (cep && cep.length >= 8 && cep !== '00000-000') {
+                                                                            try {
+                                                                                const res = await apiClient.post('/logistica/estimar-taxa-cep', {
+                                                                                    cep_destino: cep,
+                                                                                    veiculo: dadosEntrega?.veiculo || 'moto'
+                                                                                });
+                                                                                if (res.data?.success) {
+                                                                                    setDadosEntrega({
+                                                                                        distancia_km: res.data.distancia_km,
+                                                                                        taxa_entrega: res.data.taxa_sugerida
+                                                                                    });
+                                                                                    toast.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`);
+                                                                                } else {
+                                                                                    toast.error(res.data?.error || "Erro ao calcular.");
+                                                                                }
+                                                                            } catch (err: any) {
+                                                                                console.warn("Não foi possível estimar a taxa", err);
+                                                                            }
+                                                                        } else {
+                                                                            toast.error("Digite um CEP válido.");
+                                                                        }
+                                                                    }}
+                                                                    className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl px-3 flex items-center justify-center text-slate-500 dark:text-slate-300 transition-all"
+                                                                    title="Calcular Taxa pelo CEP digitado"
+                                                                >
+                                                                    <MapPin className="w-5 h-5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                         <div>
                                                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Distância Estimada (KM)</label>
                                                             <div className="relative">
@@ -623,7 +673,7 @@ const PDVPage: React.FC = () => {
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-1">Taxa de Entrega (R$)</label>
+                                                            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-1">Taxa (R$)</label>
                                                             <input
                                                                 type="number"
                                                                 step="0.01"
@@ -642,10 +692,11 @@ const PDVPage: React.FC = () => {
                                                                 onChange={async (e) => {
                                                                     const veiculo = e.target.value as 'moto' | 'carro';
                                                                     setDadosEntrega({ veiculo });
-                                                                    if (cliente?.cep && cliente.cep !== '00000-000') {
+                                                                    const cep = dadosEntrega?.endereco?.cep;
+                                                                    if (cep && cep !== '00000-000') {
                                                                         try {
                                                                             const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
-                                                                                cep_destino: cliente.cep,
+                                                                                cep_destino: cep,
                                                                                 veiculo
                                                                             });
                                                                             if (res.data?.success) {
