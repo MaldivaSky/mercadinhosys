@@ -1,14 +1,17 @@
 // src/features/expenses/components/BoletosAVencerPanel.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   AlertTriangle,
   Calendar,
-  DollarSign,
   CheckCircle,
   Clock,
   Truck,
   Eye,
-  CreditCard
+  CreditCard,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal
 } from 'lucide-react';
 import { BoletoFornecedor, purchaseOrderService } from '../../products/purchaseOrderService';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
@@ -31,7 +34,12 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
     valor_vence_7_dias: 0
   });
   const [loading, setLoading] = useState(false);
+  
+  // Novos filtros e estados
   const [filtro, setFiltro] = useState<'todos' | 'vencidos' | 'hoje' | '7_dias'>('todos');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandedFornecedores, setExpandedFornecedores] = useState<Record<string, boolean>>({});
+  
   const [showPayModal, setShowPayModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedBoleto, setSelectedBoleto] = useState<BoletoFornecedor | null>(null);
@@ -60,10 +68,10 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
 
   const getStatusBadge = (status: string) => {
     const styles = {
-      vencido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-      vence_hoje: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-      vence_em_breve: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-      normal: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+      vencido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 border border-red-200 dark:border-red-800',
+      vence_hoje: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 border border-orange-200 dark:border-orange-800',
+      vence_em_breve: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800',
+      normal: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border border-green-200 dark:border-green-800'
     };
 
     const icons = {
@@ -84,25 +92,12 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
     const label = labels[status as keyof typeof labels] || 'Normal';
 
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${styles[status as keyof typeof styles] || styles.normal}`}>
+      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${styles[status as keyof typeof styles] || styles.normal}`}>
         <Icon className="w-3 h-3" />
         {label}
       </span>
     );
   };
-
-  const boletosFiltrados = boletos.filter(boleto => {
-    switch (filtro) {
-      case 'vencidos':
-        return boleto.status_vencimento === 'vencido';
-      case 'hoje':
-        return boleto.status_vencimento === 'vence_hoje';
-      case '7_dias':
-        return boleto.status_vencimento === 'vence_em_breve';
-      default:
-        return true;
-    }
-  });
 
   const handlePagar = async (boleto: BoletoFornecedor) => {
     setSelectedBoleto(boleto);
@@ -113,6 +108,53 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
     setSelectedBoleto(boleto);
     setShowDetailModal(true);
   };
+  
+  const toggleFornecedor = (fornecedorNome: string) => {
+    setExpandedFornecedores(prev => ({
+      ...prev,
+      [fornecedorNome]: !prev[fornecedorNome]
+    }));
+  };
+
+  // Filtragem Inteligente e Agrupamento
+  const fornecedoresAgrupados = useMemo(() => {
+    let filtrados = boletos.filter(boleto => {
+      // 1. Filtro de Status (pelos Cards)
+      let matchStatus = true;
+      if (filtro === 'vencidos') matchStatus = boleto.status_vencimento === 'vencido';
+      if (filtro === 'hoje') matchStatus = boleto.status_vencimento === 'vence_hoje';
+      if (filtro === '7_dias') matchStatus = boleto.status_vencimento === 'vence_em_breve';
+
+      // 2. Filtro de Busca (Search)
+      let matchSearch = true;
+      if (searchTerm.trim() !== '') {
+        const term = searchTerm.toLowerCase();
+        const fName = (boleto.fornecedor_nome || '').toLowerCase();
+        const doc = (boleto.numero_documento || '').toLowerCase();
+        const ped = (boleto.pedido_numero || '').toLowerCase();
+        matchSearch = fName.includes(term) || doc.includes(term) || ped.includes(term);
+      }
+
+      return matchStatus && matchSearch;
+    });
+
+    // 3. Agrupar por Fornecedor
+    const grupos: Record<string, { nome: string, boletos: BoletoFornecedor[], total: number, qtd: number }> = {};
+    
+    filtrados.forEach(b => {
+      const nome = b.fornecedor_nome || 'Desconhecido';
+      if (!grupos[nome]) {
+        grupos[nome] = { nome, boletos: [], total: 0, qtd: 0 };
+      }
+      grupos[nome].boletos.push(b);
+      grupos[nome].total += b.valor_atual;
+      grupos[nome].qtd += 1;
+    });
+
+    // Converter para array e ordenar (maiores devedores primeiro)
+    return Object.values(grupos).sort((a, b) => b.total - a.total);
+  }, [boletos, filtro, searchTerm]);
+
 
   if (loading) {
     return (
@@ -128,203 +170,244 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
     <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg ${className}`}>
       {/* Header */}
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-orange-600" />
             <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-              Boletos a Vencer
+              Painel Inteligente de Boletos
             </h2>
           </div>
           <button
             onClick={loadBoletos}
-            className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm transition-colors"
+            className="px-3 py-1 bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 font-semibold text-sm transition-colors"
           >
             Atualizar
           </button>
         </div>
 
-        {/* Resumo */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4">
-          <div className="bg-red-50 dark:bg-red-900 p-3 rounded-lg">
-            <div className="text-sm text-red-600 dark:text-red-300">Vencidos</div>
-            <div className="text-lg font-bold text-red-800 dark:text-red-200">
-              {resumo.vencidos}
-            </div>
-            <div className="text-xs text-red-600 dark:text-red-400">
-              {formatCurrency(resumo.valor_vencidos)}
-            </div>
+        {/* Barra de Busca */}
+        <div className="relative mb-6">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
           </div>
-
-          <div className="bg-orange-50 dark:bg-orange-900 p-3 rounded-lg">
-            <div className="text-sm text-orange-600 dark:text-orange-300">Hoje</div>
-            <div className="text-lg font-bold text-orange-800 dark:text-orange-200">
-              {resumo.vence_hoje}
-            </div>
-            <div className="text-xs text-orange-600 dark:text-orange-400">
-              {formatCurrency(resumo.valor_vence_hoje)}
-            </div>
-          </div>
-
-          <div className="bg-yellow-50 dark:bg-yellow-900 p-3 rounded-lg">
-            <div className="text-sm text-yellow-600 dark:text-yellow-300">7 Dias</div>
-            <div className="text-lg font-bold text-yellow-800 dark:text-yellow-200">
-              {resumo.vence_7_dias}
-            </div>
-            <div className="text-xs text-yellow-600 dark:text-yellow-400">
-              {formatCurrency(resumo.valor_vence_7_dias)}
-            </div>
-          </div>
-
-          <div className="bg-blue-50 dark:bg-blue-900 p-3 rounded-lg">
-            <div className="text-sm text-blue-600 dark:text-blue-300">Total</div>
-            <div className="text-lg font-bold text-blue-800 dark:text-blue-200">
-              {resumo.total_boletos}
-            </div>
-            <div className="text-xs text-blue-600 dark:text-blue-400">
-              {formatCurrency(resumo.total_valor)}
-            </div>
-          </div>
+          <input
+            type="text"
+            className="block w-full pl-10 pr-3 py-3 border border-gray-200 dark:border-gray-700 rounded-xl leading-5 bg-gray-50 dark:bg-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 sm:text-sm transition-all"
+            placeholder="Buscar por fornecedor, documento ou pedido..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        {/* Filtros */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          <button
+        {/* Resumo - Agora Interativo como Filtros */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {/* Card Vencidos */}
+          <button 
+            onClick={() => setFiltro(filtro === 'vencidos' ? 'todos' : 'vencidos')}
+            className={`text-left p-4 rounded-xl transition-all border-2 flex flex-col justify-between ${
+              filtro === 'vencidos' 
+                ? 'border-red-500 bg-red-50 dark:bg-red-900/50 shadow-md scale-[1.02]' 
+                : 'border-transparent bg-red-50/50 hover:bg-red-50 dark:bg-red-900/30 dark:hover:bg-red-900/50'
+            }`}
+          >
+            <div className="text-sm font-semibold text-red-600 dark:text-red-400 mb-1">Vencidos</div>
+            <div className="text-2xl font-black text-red-800 dark:text-red-200 mb-1">
+              {resumo.vencidos}
+            </div>
+            <div className="text-xs font-bold text-red-600/80 dark:text-red-400/80">
+              {formatCurrency(resumo.valor_vencidos)}
+            </div>
+          </button>
+
+          {/* Card Hoje */}
+          <button 
+            onClick={() => setFiltro(filtro === 'hoje' ? 'todos' : 'hoje')}
+            className={`text-left p-4 rounded-xl transition-all border-2 flex flex-col justify-between ${
+              filtro === 'hoje' 
+                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/50 shadow-md scale-[1.02]' 
+                : 'border-transparent bg-orange-50/50 hover:bg-orange-50 dark:bg-orange-900/30 dark:hover:bg-orange-900/50'
+            }`}
+          >
+            <div className="text-sm font-semibold text-orange-600 dark:text-orange-400 mb-1">Vence Hoje</div>
+            <div className="text-2xl font-black text-orange-800 dark:text-orange-200 mb-1">
+              {resumo.vence_hoje}
+            </div>
+            <div className="text-xs font-bold text-orange-600/80 dark:text-orange-400/80">
+              {formatCurrency(resumo.valor_vence_hoje)}
+            </div>
+          </button>
+
+          {/* Card 7 Dias */}
+          <button 
+            onClick={() => setFiltro(filtro === '7_dias' ? 'todos' : '7_dias')}
+            className={`text-left p-4 rounded-xl transition-all border-2 flex flex-col justify-between ${
+              filtro === '7_dias' 
+                ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/50 shadow-md scale-[1.02]' 
+                : 'border-transparent bg-yellow-50/50 hover:bg-yellow-50 dark:bg-yellow-900/30 dark:hover:bg-yellow-900/50'
+            }`}
+          >
+            <div className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">Próx. 7 Dias</div>
+            <div className="text-2xl font-black text-yellow-800 dark:text-yellow-200 mb-1">
+              {resumo.vence_7_dias}
+            </div>
+            <div className="text-xs font-bold text-yellow-600/80 dark:text-yellow-400/80">
+              {formatCurrency(resumo.valor_vence_7_dias)}
+            </div>
+          </button>
+
+          {/* Card Total (Todos) */}
+          <button 
             onClick={() => setFiltro('todos')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'todos'
-              ? 'bg-orange-600 text-white'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
+            className={`text-left p-4 rounded-xl transition-all border-2 flex flex-col justify-between ${
+              filtro === 'todos' 
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/50 shadow-md scale-[1.02]' 
+                : 'border-transparent bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-900/30 dark:hover:bg-blue-900/50'
+            }`}
           >
-            Todos
-          </button>
-          <button
-            onClick={() => setFiltro('vencidos')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'vencidos'
-              ? 'bg-red-600 text-white'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-          >
-            Vencidos ({resumo.vencidos})
-          </button>
-          <button
-            onClick={() => setFiltro('hoje')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'hoje'
-              ? 'bg-orange-600 text-white'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-          >
-            Hoje ({resumo.vence_hoje})
-          </button>
-          <button
-            onClick={() => setFiltro('7_dias')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === '7_dias'
-              ? 'bg-yellow-600 text-white'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-          >
-            7 Dias ({resumo.vence_7_dias})
+            <div className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-1">Total Pendente</div>
+            <div className="text-2xl font-black text-blue-800 dark:text-blue-200 mb-1">
+              {resumo.total_boletos}
+            </div>
+            <div className="text-xs font-bold text-blue-600/80 dark:text-blue-400/80">
+              {formatCurrency(resumo.total_valor)}
+            </div>
           </button>
         </div>
       </div>
 
-      {/* Lista de Boletos */}
-      <div className="p-6">
-        {boletosFiltrados.length === 0 ? (
-          <div className="text-center py-8">
-            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">
-              {filtro === 'todos' ? 'Nenhum boleto encontrado' : 'Nenhum boleto neste filtro'}
+      {/* Accordion de Boletos por Fornecedor */}
+      <div className="p-6 bg-slate-50 dark:bg-gray-800/50 rounded-b-xl">
+        {fornecedoresAgrupados.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
+            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4 opacity-50" />
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">
+              Nenhum boleto encontrado
             </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              {filtro === 'todos'
-                ? 'Não há boletos de fornecedores pendentes no momento'
-                : 'Tente outro filtro para ver mais boletos'
+            <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+              {filtro === 'todos' && searchTerm === ''
+                ? 'Seu fluxo de caixa está limpo! Não há boletos pendentes no momento.'
+                : 'Nenhum resultado corresponde aos filtros aplicados.'
               }
             </p>
+            {(filtro !== 'todos' || searchTerm !== '') && (
+              <button 
+                onClick={() => { setFiltro('todos'); setSearchTerm(''); }}
+                className="mt-4 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-300 transition-colors"
+              >
+                Limpar Filtros
+              </button>
+            )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {boletosFiltrados.map(boleto => (
-              <div
-                key={boleto.id}
-                className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                        {boleto.numero_documento}
-                      </h3>
-                      {getStatusBadge(boleto.status_vencimento)}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-4 h-4" />
-                        <span>{boleto.fornecedor_nome}</span>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center px-2 mb-2">
+              <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">{fornecedoresAgrupados.length} Fornecedores listados</span>
+              <span className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><SlidersHorizontal className="w-4 h-4"/> Agrupado</span>
+            </div>
+            
+            {fornecedoresAgrupados.map(grupo => {
+              const isExpanded = expandedFornecedores[grupo.nome];
+              
+              return (
+                <div key={grupo.nome} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-200">
+                  {/* Cabeçalho do Accordion */}
+                  <button 
+                    onClick={() => toggleFornecedor(grupo.nome)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${isExpanded ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/50 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+                        <Truck className="w-5 h-5" />
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4" />
-                        <span>Vence: {formatDate(boleto.data_vencimento)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        <span className="font-medium text-gray-800 dark:text-white">
-                          {formatCurrency(boleto.valor_atual)}
-                        </span>
+                      <div className="text-left">
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">{grupo.nome}</h3>
+                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                          {grupo.qtd} boleto{grupo.qtd > 1 ? 's' : ''} pendente{grupo.qtd > 1 ? 's' : ''}
+                        </p>
                       </div>
                     </div>
-
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${boleto.origem === 'mercadoria'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                          : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-                        }`}>
-                        {boleto.origem === 'mercadoria' ? 'Mercadoria' : 'Despesa'}
-                      </span>
-                      {boleto.pedido_numero && (
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          Pedido: {boleto.pedido_numero}
-                        </span>
-                      )}
-                      {boleto.origem === 'despesa' && boleto.descricao && (
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {boleto.descricao}
-                        </span>
-                      )}
-                    </div>
-
-                    {boleto.dias_vencimento < 0 && (
-                      <div className="mt-2 text-sm text-red-600 dark:text-red-400 font-medium">
-                        Vencido há {Math.abs(boleto.dias_vencimento)} dias
+                    
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Total devido</p>
+                        <p className="text-lg font-black text-slate-800 dark:text-white">{formatCurrency(grupo.total)}</p>
                       </div>
-                    )}
-                  </div>
+                      <div className="p-1">
+                        {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                      </div>
+                    </div>
+                  </button>
 
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={() => handlePagar(boleto)}
-                      className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-1 text-sm transition-colors"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      Pagar
-                    </button>
+                  {/* Conteúdo Expandido (Lista de Boletos do Fornecedor) */}
+                  {isExpanded && (
+                    <div className="bg-slate-50/50 dark:bg-gray-800/30 p-4 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                      {grupo.boletos.map(boleto => (
+                        <div
+                          key={boleto.id}
+                          className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h4 className="text-md font-bold text-gray-800 dark:text-white">
+                                {boleto.numero_documento}
+                              </h4>
+                              {getStatusBadge(boleto.status_vencimento)}
+                            </div>
 
-                    <button
-                      onClick={() => {
-                        handleVerDetalhes(boleto);
-                      }}
-                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1 text-sm transition-colors"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Ver
-                    </button>
-                  </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-400 font-medium">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-gray-400" />
+                                <span>Vence: <strong className="text-gray-700 dark:text-gray-200">{formatDate(boleto.data_vencimento)}</strong></span>
+                              </div>
+                              
+                              {boleto.pedido_numero && (
+                                <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                                  <span>Ped: <strong>{boleto.pedido_numero}</strong></span>
+                                </div>
+                              )}
+                            </div>
+
+                            {boleto.dias_vencimento < 0 && (
+                              <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                Atrasado há {Math.abs(boleto.dias_vencimento)} dias
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between lg:justify-end gap-4 w-full lg:w-auto border-t lg:border-t-0 border-gray-100 dark:border-gray-600 pt-3 lg:pt-0 mt-2 lg:mt-0">
+                            <div className="text-left lg:text-right">
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Valor Atual</p>
+                              <div className="text-xl font-black text-gray-900 dark:text-white">
+                                {formatCurrency(boleto.valor_atual)}
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col sm:flex-row items-center gap-2">
+                              <button
+                                onClick={() => handleVerDetalhes(boleto)}
+                                className="w-full sm:w-auto px-3 py-2 bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-500 flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Detalhes
+                              </button>
+                              
+                              <button
+                                onClick={() => handlePagar(boleto)}
+                                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors shadow-sm"
+                              >
+                                <CreditCard className="w-4 h-4" />
+                                Pagar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
