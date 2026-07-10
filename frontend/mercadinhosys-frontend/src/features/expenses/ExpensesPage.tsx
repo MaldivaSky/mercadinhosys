@@ -177,8 +177,9 @@ interface KpiCardProps {
     icon: React.ReactNode;
     color?: string;
     loading?: boolean;
+    onClick?: () => void;
 }
-function KpiCard({ label, value, sub, trend, icon, color = "blue", loading }: KpiCardProps) {
+function KpiCard({ label, value, sub, trend, icon, color = "blue", loading, onClick }: KpiCardProps) {
     const colorMap: Record<string, string> = {
         blue: "from-blue-500/10 to-blue-600/5 border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400",
         green: "from-emerald-500/10 to-emerald-600/5 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400",
@@ -187,7 +188,10 @@ function KpiCard({ label, value, sub, trend, icon, color = "blue", loading }: Kp
         purple: "from-purple-500/10 to-purple-600/5 border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-400",
     };
     return (
-        <div className={`relative bg-gradient-to-br ${colorMap[color]} border rounded-2xl p-5 overflow-hidden transition-all hover:scale-[1.01]`}>
+        <div 
+            onClick={onClick}
+            className={`relative bg-gradient-to-br ${colorMap[color]} border rounded-2xl p-5 overflow-hidden transition-all ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md' : 'hover:scale-[1.01]'}`}
+        >
             <div className="flex items-start justify-between mb-3">
                 <div className="p-2.5 rounded-xl bg-white/60 dark:bg-slate-900/60">
                     {icon}
@@ -338,6 +342,11 @@ export default function ExpensesPage() {
     const [despesaSel, setDespesaSel] = useState<Despesa | null>(null);
     const [modoEdicao, setModoEdicao] = useState(false);
 
+    // Modal de Detalhes dos Cards
+    const [detalhesCard, setDetalhesCard] = useState<{ titulo: string; inicio: string; fim: string; recorrente?: string } | null>(null);
+    const [despesasModal, setDespesasModal] = useState<Despesa[]>([]);
+    const [loadingModal, setLoadingModal] = useState(false);
+
     // Gate de PIN para operações sensíveis
     const [pinAction, setPinAction] = useState<{ run: () => void; title: string; description: string } | null>(null);
     const requirePin = (run: () => void, title: string, description: string) =>
@@ -432,6 +441,23 @@ export default function ExpensesPage() {
             forma_pagamento: d.forma_pagamento || "", recorrente: d.recorrente, observacoes: d.observacoes || "",
         });
         setModalAberto(true);
+    }
+
+    async function abrirDetalhes(titulo: string, inicio: string, fim: string, recorrente?: string) {
+        setDetalhesCard({ titulo, inicio, fim, recorrente });
+        setLoadingModal(true);
+        try {
+            const params: any = { inicio, fim }; 
+            if (recorrente) params.recorrente = recorrente;
+            const res = await expensesService.listarUnificado(params);
+            if (res.success) {
+                setDespesasModal(res.data || []);
+            }
+        } catch {
+            showToast.error("Erro ao carregar detalhes");
+        } finally {
+            setLoadingModal(false);
+        }
     }
 
     async function salvar() {
@@ -657,6 +683,7 @@ export default function ExpensesPage() {
                                 icon={<Wallet className="w-5 h-5 text-orange-500" />}
                                 color="amber"
                                 loading={loadingStats}
+                                onClick={() => abrirDetalhes("Despesas Este Mês", firstDayOfMonth(), today())}
                             />
                             <KpiCard
                                 label="Hoje"
@@ -665,6 +692,7 @@ export default function ExpensesPage() {
                                 icon={<Calendar className="w-5 h-5 text-blue-500" />}
                                 color="blue"
                                 loading={loadingStats}
+                                onClick={() => abrirDetalhes("Despesas de Hoje", today(), today())}
                             />
                             <KpiCard
                                 label="Esta semana"
@@ -672,6 +700,7 @@ export default function ExpensesPage() {
                                 icon={<BarChart2 className="w-5 h-5 text-purple-500" />}
                                 color="purple"
                                 loading={loadingStats}
+                                onClick={() => abrirDetalhes("Despesas Esta Semana", daysAgo(6), today())}
                             />
                             <KpiCard
                                 label="Recorrentes"
@@ -680,6 +709,7 @@ export default function ExpensesPage() {
                                 icon={<RefreshCw className="w-5 h-5 text-emerald-500" />}
                                 color="green"
                                 loading={loadingStats}
+                                onClick={() => abrirDetalhes("Despesas Recorrentes (Este Mês)", firstDayOfMonth(), today(), "true")}
                             />
                         </div>
 
@@ -1346,6 +1376,79 @@ export default function ExpensesPage() {
                             >
                                 {saving ? "Salvando..." : modoEdicao ? "Salvar alterações" : "Lançar despesa"}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Modal de Detalhes dos Cards ────────────────────────────── */}
+            {detalhesCard && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setDetalhesCard(null)} />
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col relative z-10 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
+                                    <FileText className="w-6 h-6 text-orange-500" />
+                                    {detalhesCard.titulo}
+                                </h2>
+                                <p className="text-sm text-slate-500 mt-1">Lista detalhada de todas as despesas que compõem este indicador.</p>
+                            </div>
+                            <button onClick={() => setDetalhesCard(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {loadingModal ? (
+                                <div className="space-y-3">
+                                    {[1, 2, 3, 4].map(i => <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />)}
+                                </div>
+                            ) : despesasModal.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400">
+                                    <Wallet className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-700" />
+                                    <p className="font-semibold">Nenhuma despesa encontrada para este filtro.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-3">
+                                    {despesasModal.map(d => (
+                                        <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors gap-3">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <p className="font-bold text-slate-800 dark:text-slate-200">{d.descricao}</p>
+                                                    {d.recorrente && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-bold">RECORRENTE</span>}
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                                    <span className="flex items-center gap-1 font-medium text-slate-600 dark:text-slate-400">
+                                                        <Calendar className="w-3.5 h-3.5" />
+                                                        {fmtDate(d.data_despesa)}
+                                                    </span>
+                                                    <span>•</span>
+                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: COR_POR_CATEGORIA[d.categoria] || "#94a3b8" }}>
+                                                        {d.categoria}
+                                                    </span>
+                                                    {d.forma_pagamento && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span>{d.forma_pagamento}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-lg font-black text-slate-900 dark:text-white">{fmt(d.valor)}</p>
+                                                <p className="text-[10px] uppercase font-bold text-slate-400">{d.tipo === "fixa" ? "Fixa" : "Variável"}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 rounded-b-3xl flex justify-between items-center">
+                            <p className="text-sm text-slate-500 font-semibold">{despesasModal.length} lançamentos listados</p>
+                            <p className="text-lg font-black text-orange-600 dark:text-orange-400">
+                                Total: {fmt(despesasModal.reduce((acc, curr) => acc + curr.valor, 0))}
+                            </p>
                         </div>
                     </div>
                 </div>

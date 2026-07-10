@@ -635,6 +635,110 @@ def obter_estatisticas_despesas():
             500,
         )
 
+@despesas_bp.route("/detalhamento-unificado", methods=["GET"], strict_slashes=False)
+@funcionario_required
+@plan_required('Pro')
+def detalhamento_unificado():
+    from app.utils.query_helpers import get_authorized_establishment_id
+    from app.models import Despesa, ContaPagar
+    from app.services.rh_calculator_service import calcular_custo_folha_detalhado
+    from datetime import datetime
+
+    estabelecimento_id = get_authorized_establishment_id()
+    if not estabelecimento_id:
+        return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
+
+    inicio_str = request.args.get("inicio")
+    fim_str = request.args.get("fim")
+    recorrente = request.args.get("recorrente")
+
+    try:
+        inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date() if inicio_str else datetime.now().date()
+        fim = datetime.strptime(fim_str, "%Y-%m-%d").date() if fim_str else datetime.now().date()
+    except ValueError:
+        return jsonify({"success": False, "error": "Datas inválidas"}), 400
+
+    resultados = []
+
+    # 1. Despesas normais (sem as integradas)
+    q_desp = db.session.query(Despesa).filter(
+        Despesa.data_despesa >= inicio,
+        Despesa.data_despesa <= fim
+    )
+    if estabelecimento_id != 'all':
+        q_desp = q_desp.filter(Despesa.estabelecimento_id == estabelecimento_id)
+    
+    if recorrente is not None:
+        is_rec = str(recorrente).lower() in ["true", "1", "yes"]
+        q_desp = q_desp.filter(Despesa.recorrente == is_rec)
+        
+    q_desp = _sem_categorias_integradas(q_desp)
+    
+    for d in q_desp.all():
+        resultados.append({
+            "id": f"d_{d.id}",
+            "descricao": d.descricao,
+            "valor": float(d.valor),
+            "data_despesa": d.data_despesa.isoformat() if d.data_despesa else None,
+            "categoria": d.categoria,
+            "forma_pagamento": d.forma_pagamento,
+            "tipo": d.tipo,
+            "recorrente": d.recorrente,
+            "origem": "despesa"
+        })
+
+    # 2. Contas a Pagar (Boletos de Mercadoria) - Não possuem flag "recorrente"
+    if recorrente is None or str(recorrente).lower() in ["false", "0", "no"]:
+        q_cp = db.session.query(ContaPagar).filter(
+            ContaPagar.status.in_(['pago', 'parcial']),
+            ContaPagar.data_pagamento >= inicio,
+            ContaPagar.data_pagamento <= fim
+        )
+        if estabelecimento_id != 'all':
+            q_cp = q_cp.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+            
+        for cp in q_cp.all():
+            descricao = f"Boleto NF {cp.nota_fiscal_id}" if getattr(cp, 'nota_fiscal_id', None) else f"Boleto {cp.id}"
+            if cp.fornecedor:
+                descricao = f"Boleto {cp.fornecedor.nome_fantasia or cp.fornecedor.razao_social}"
+            
+            resultados.append({
+                "id": f"cp_{cp.id}",
+                "descricao": descricao,
+                "valor": float(cp.valor_pago or 0),
+                "data_despesa": cp.data_pagamento.isoformat() if cp.data_pagamento else None,
+                "categoria": "Boleto de Mercadoria",
+                "forma_pagamento": "Boleto",
+                "tipo": "variavel",
+                "recorrente": False,
+                "origem": "conta_pagar"
+            })
+
+    # 3. Folha de Pagamento
+    if recorrente is None:
+        try:
+            folha = calcular_custo_folha_detalhado(estabelecimento_id, inicio, fim)
+            custo_folha = float(folha.get("custo_real_total", 0))
+            if custo_folha > 0:
+                resultados.append({
+                    "id": f"f_{inicio.strftime('%Y%m%d')}",
+                    "descricao": "Folha de Pagamento (RH)",
+                    "valor": custo_folha,
+                    "data_despesa": fim.isoformat(),
+                    "categoria": "Folha de Pagamento",
+                    "forma_pagamento": "Transferência",
+                    "tipo": "fixa",
+                    "recorrente": True,
+                    "origem": "folha"
+                })
+        except Exception as e:
+            current_app.logger.error(f"Erro ao calcular folha para detalhamento: {e}")
+
+    # Ordenar por data decrescente
+    resultados.sort(key=lambda x: x["data_despesa"] or "", reverse=True)
+
+    return jsonify({"success": True, "data": resultados})
+
 
 # Os endpoints POST, PUT e DELETE permanecem os mesmos
 @despesas_bp.route("/", methods=["POST"], strict_slashes=False)

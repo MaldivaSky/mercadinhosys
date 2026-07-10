@@ -206,6 +206,11 @@ export const expensesService = {
         return response.data;
     },
 
+    async listarUnificado(filtros: FiltrosDespesas = {}) {
+        const response = await apiClient.get("/despesas/detalhamento-unificado", { params: filtros });
+        return response.data;
+    },
+
     async obterEstatisticas(filtros: { inicio?: string; fim?: string } = {}) {
         const response = await apiClient.get("/despesas/estatisticas", { params: filtros });
         return response.data.estatisticas;
