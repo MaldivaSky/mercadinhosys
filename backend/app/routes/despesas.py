@@ -466,16 +466,29 @@ def obter_estatisticas_despesas():
 
         _D = lambda v: Decimal(str(v or 0))
 
-        despesas_hoje = _D(d.hoje) + _folha(2) + _D(cp.hoje)
-        despesas_ontem = _D(d.ontem) + _folha(3) + _D(cp.ontem)
-        despesas_semana = _D(d.semana) + _folha(4) + _D(cp.semana)
-        despesas_mes_atual = _D(d.mes_atual) + _folha(0) + _D(cp.mes_atual)
+        # Pressão de Caixa Imediata: Boletos Vencidos
+        q_vencidas = db.session.query(func.sum(func.coalesce(ContaPagar.valor_atual, ContaPagar.valor_original))).filter(
+            ContaPagar.status == 'aberto',
+            ContaPagar.data_vencimento < hoje
+        )
+        if estabelecimento_id != 'all':
+            q_vencidas = q_vencidas.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+        boletos_vencidos = _D(q_vencidas.scalar() or 0)
+
+        despesas_hoje = _D(d.hoje) + _folha(2) + _D(cp.hoje) + boletos_vencidos
+        despesas_ontem = _D(d.ontem) + _folha(3) + _D(cp.ontem) + boletos_vencidos
+        despesas_semana = _D(d.semana) + _folha(4) + _D(cp.semana) + boletos_vencidos
+        despesas_mes_atual = _D(d.mes_atual) + _folha(0) + _D(cp.mes_atual) + boletos_vencidos
         despesas_mes_anterior = _D(d.mes_anterior) + _folha(1) + _D(cp.mes_anterior)
 
         folha_periodo = _folha(5)
         contas_periodo_valor = _D(cp.periodo)
         contas_periodo_qtd = int(cp.periodo_qtd or 0)
         soma_periodo = _D(d.periodo) + folha_periodo + contas_periodo_valor
+        
+        # Adiciona a pressão dos boletos vencidos no total do período se o período englobar o dia de hoje
+        if cat_inicio <= hoje <= cat_fim:
+            soma_periodo += boletos_vencidos
 
         total_despesas = int(d.qtd_geral or 0)
         soma_total = _D(d.total_geral) + _D(cp.total_geral)
@@ -570,6 +583,18 @@ def obter_estatisticas_despesas():
                 "total": float(contas_periodo_valor),
                 "quantidade": contas_periodo_qtd,
                 "percentual": float(percentual_contas),
+            })
+            
+        if cat_inicio <= hoje <= cat_fim and boletos_vencidos > 0:
+            percentual_venc = (
+                (boletos_vencidos / soma_periodo * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if soma_periodo > 0 else Decimal('0')
+            )
+            despesas_por_categoria_list.append({
+                "categoria": "Boletos Vencidos (Atraso)",
+                "total": float(boletos_vencidos),
+                "quantidade": 1,
+                "percentual": float(percentual_venc),
             })
             
         # As categorias integradas já foram excluídas no SQL (_sem_categorias_integradas)
@@ -713,6 +738,35 @@ def detalhamento_unificado():
                 "recorrente": False,
                 "origem": "conta_pagar"
             })
+            
+        # 2.1 Boletos Vencidos (Pressão de Caixa)
+        hoje_local = datetime.now().date()
+        if inicio <= hoje_local <= fim:
+            q_vencidos = db.session.query(ContaPagar).filter(
+                ContaPagar.status == 'aberto',
+                ContaPagar.data_vencimento < hoje_local
+            )
+            if estabelecimento_id != 'all':
+                q_vencidos = q_vencidos.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+                
+            for cp in q_vencidos.all():
+                descricao = f"Boleto Vencido NF {cp.nota_fiscal_id}" if getattr(cp, 'nota_fiscal_id', None) else f"Boleto Vencido {cp.id}"
+                if cp.fornecedor:
+                    descricao = f"Boleto Vencido - {cp.fornecedor.nome_fantasia or cp.fornecedor.razao_social}"
+                
+                valor_devido = float(cp.valor_atual if cp.valor_atual else (cp.valor_original or 0))
+                
+                resultados.append({
+                    "id": f"cp_venc_{cp.id}",
+                    "descricao": descricao,
+                    "valor": valor_devido,
+                    "data_despesa": cp.data_vencimento.isoformat() if cp.data_vencimento else hoje_local.isoformat(),
+                    "categoria": "Boletos Vencidos (Atraso)",
+                    "forma_pagamento": "Pressão de Caixa",
+                    "tipo": "variavel",
+                    "recorrente": False,
+                    "origem": "conta_pagar"
+                })
 
     # 3. Folha de Pagamento
     if recorrente is None:
@@ -722,11 +776,11 @@ def detalhamento_unificado():
             if custo_folha > 0:
                 resultados.append({
                     "id": f"f_{inicio.strftime('%Y%m%d')}",
-                    "descricao": "Folha de Pagamento (RH)",
+                    "descricao": "Custo Rateado (Pressão Diária da Folha)",
                     "valor": custo_folha,
                     "data_despesa": fim.isoformat(),
                     "categoria": "Folha de Pagamento",
-                    "forma_pagamento": "Transferência",
+                    "forma_pagamento": "Pressão de Caixa",
                     "tipo": "fixa",
                     "recorrente": True,
                     "origem": "folha"

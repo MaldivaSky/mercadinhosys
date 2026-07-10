@@ -896,7 +896,14 @@ export default function ExpensesPage() {
                                                         {d.tipo === "fixa" ? "Fixa" : "Variável"}
                                                     </span>
                                                     {d.recorrente && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-semibold">RECORRENTE</span>}
-                                                    {d.forma_pagamento && <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded-full">{d.forma_pagamento}</span>}
+                                                    {d.forma_pagamento && (
+                                                        <span className={d.forma_pagamento.includes("Pressão") 
+                                                            ? "text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800" 
+                                                            : "text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded-full"
+                                                        }>
+                                                            {d.forma_pagamento}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex justify-end gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                     <button
@@ -1430,7 +1437,12 @@ export default function ExpensesPage() {
                                                     {d.forma_pagamento && (
                                                         <>
                                                             <span>•</span>
-                                                            <span>{d.forma_pagamento}</span>
+                                                            <span className={d.forma_pagamento.includes("Pressão") 
+                                                                ? "px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800" 
+                                                                : ""
+                                                            }>
+                                                                {d.forma_pagamento}
+                                                            </span>
                                                         </>
                                                     )}
                                                 </div>
