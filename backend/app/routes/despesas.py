@@ -11,8 +11,29 @@ from app.models import Despesa, Funcionario
 from app.dashboard_cientifico.data_layer import DataLayer
 from sqlalchemy import func, or_
 from app.services.rh_calculator_service import calcular_provisoes
-from app.services.rh_calculator_service import calcular_custo_folha_detalhado, calcular_provisoes
+from app.services.rh_calculator_service import (
+    calcular_custo_folha_detalhado,
+    calcular_custo_folha_periodos,
+)
 despesas_bp = Blueprint("despesas", __name__)
+
+# Categorias de Despesa que são ESPELHOS de outros módulos (razão primário):
+# - "Fornecedores"/"Boleto de Mercadoria": criadas automaticamente ao pagar um
+#   boleto (ContaPagar é a fonte da verdade desses valores);
+# - "Folha de Pagamento": lançamentos manuais/seed de salário (a fonte da
+#   verdade é o cálculo de folha do RH).
+# Elas continuam VISÍVEIS na listagem (rastreabilidade), mas ficam FORA de
+# qualquer agregado/indicador — antes eram somadas junto com a fonte primária
+# e o mesmo dinheiro contava duas vezes nos cards, DRE e fluxo de caixa.
+CATEGORIAS_INTEGRADAS = ("fornecedores", "folha de pagamento", "boleto de mercadoria")
+
+
+def _sem_categorias_integradas(query):
+    """Aplica o filtro de exclusão das categorias espelhadas num query de Despesa."""
+    return query.filter(
+        or_(Despesa.categoria.is_(None),
+            func.lower(func.trim(Despesa.categoria)).notin_(CATEGORIAS_INTEGRADAS))
+    )
 
 
 @despesas_bp.route("/", methods=["GET"], strict_slashes=False)
@@ -203,23 +224,15 @@ def listar_despesas():
     try:
         paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
 
-        # Calcular estatísticas para dashboard
-        total_despesas = query.count()
-
-        if total_despesas > 0:
-            # Calcular soma total das despesas filtradas
-            from sqlalchemy import func
-
-            soma_query = db.session.query(func.sum(Despesa.valor))
-            if estabelecimento_id != 'all':
-                soma_query = soma_query.filter(Despesa.estabelecimento_id == estabelecimento_id)
-            soma_despesas = soma_query.scalar() or 0.0
-
-            # Calcular média
-            media_despesas = soma_despesas / total_despesas
-        else:
-            soma_despesas = 0.0
-            media_despesas = 0.0
+        # Estatísticas da LISTA: soma e média respeitando os MESMOS filtros
+        # aplicados acima. Antes a soma era do estabelecimento inteiro
+        # (ignorava período/categoria/busca) e a média dividia essa soma cheia
+        # pela contagem filtrada — número sem significado no dashboard.
+        total_despesas = paginacao.total
+        soma_despesas = (
+            query.order_by(None).with_entities(func.sum(Despesa.valor)).scalar() or 0.0
+        )
+        media_despesas = (float(soma_despesas) / total_despesas) if total_despesas > 0 else 0.0
 
         # Preparar resposta
         resposta = {
@@ -258,12 +271,10 @@ def listar_despesas():
         }
 
         # Adicionar categorias disponíveis para filtro
-        categorias = (
-            db.session.query(Despesa.categoria)
-            .filter(Despesa.estabelecimento_id == estabelecimento_id)
-            .distinct()
-            .all()
-        )
+        q_categorias = db.session.query(Despesa.categoria)
+        if estabelecimento_id != 'all':
+            q_categorias = q_categorias.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        categorias = q_categorias.distinct().all()
 
         resposta["filtros_disponiveis"] = {
             "categorias": [c[0] for c in categorias if c[0]],
@@ -351,10 +362,15 @@ def obter_estatisticas_despesas():
         from datetime import datetime, timedelta
         from decimal import Decimal, ROUND_HALF_UP
 
+        from sqlalchemy import case
+        from app.models import ContaPagar
+
         hoje = datetime.now().date()
         mes_atual_inicio = hoje.replace(day=1)
         mes_anterior_inicio = (mes_atual_inicio - timedelta(days=1)).replace(day=1)
         mes_anterior_fim = mes_atual_inicio - timedelta(days=1)
+        ontem = hoje - timedelta(days=1)
+        semana_inicio = hoje - timedelta(days=6)
 
         # ── Período customizado via query params ─────────────────────────────
         inicio_str = request.args.get("inicio")
@@ -369,71 +385,103 @@ def obter_estatisticas_despesas():
         cat_inicio = filtro_inicio if filtro_inicio else (hoje - timedelta(days=30))
         cat_fim = filtro_fim if filtro_fim else hoje
 
-        def _get_folha(start_date, end_date):
-            if not start_date or not end_date:
-                return Decimal('0')
-            try:
-                dados_folha = calcular_custo_folha_detalhado(estabelecimento_id, start_date, end_date)
-                return Decimal(str(dados_folha.get("custo_folha", {}).get("custo_real_total", 0.0)))
-            except Exception:
-                return Decimal('0')
+        # ── Janelas de evolução (últimos 6 meses, mais antigo primeiro) ──────
+        meses_evolucao = []
+        for i in range(5, -1, -1):
+            mes_data = mes_atual_inicio
+            for _ in range(i):
+                mes_data = (mes_data - timedelta(days=1)).replace(day=1)
+            if mes_data.month == 12:
+                mes_fim = mes_data.replace(year=mes_data.year + 1, month=1, day=1) - timedelta(days=1)
+            else:
+                mes_fim = mes_data.replace(month=mes_data.month + 1, day=1) - timedelta(days=1)
+            meses_evolucao.append((mes_data, mes_fim))
 
-        def _get_contas_pagar(start_date, end_date):
-            if not start_date or not end_date:
-                return Decimal('0'), 0
-            from app.models import ContaPagar
-            q = db.session.query(
-                func.sum(ContaPagar.valor_pago).label("total"),
-                func.count(ContaPagar.id).label("qtd")
-            ).filter(
-                ContaPagar.data_pagamento >= start_date,
-                ContaPagar.data_pagamento <= end_date,
-                ContaPagar.status.in_(['pago', 'parcial'])
-            )
-            if estabelecimento_id != 'all':
-                q = q.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
-            res = q.first()
-            return Decimal(str(res.total or 0)), (res.qtd or 0)
-            
-        def _get_todas_contas_pagas():
-            from app.models import ContaPagar
-            q = db.session.query(func.sum(ContaPagar.valor_pago)).filter(
-                ContaPagar.status.in_(['pago', 'parcial'])
-            )
-            if estabelecimento_id != 'all':
-                q = q.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
-            return Decimal(str(q.scalar() or 0))
+        # ── FOLHA EM LOTE: uma chamada para TODAS as janelas ──────────────────
+        # Antes: 11 chamadas de calcular_custo_folha_detalhado por request, cada
+        # uma com 1 query de configuração POR funcionário — a causa nº 1 da
+        # lentidão desta página.
+        janelas = [
+            (mes_atual_inicio, hoje),            # 0
+            (mes_anterior_inicio, mes_anterior_fim),  # 1
+            (hoje, hoje),                        # 2
+            (ontem, ontem),                      # 3
+            (semana_inicio, hoje),               # 4
+            (cat_inicio, cat_fim),               # 5
+        ] + meses_evolucao                       # 6..11
+        try:
+            folhas = calcular_custo_folha_periodos(estabelecimento_id, janelas)
+        except Exception as e_folha:
+            current_app.logger.error(f"Erro no cálculo batched de folha: {e_folha}")
+            folhas = [{"custo_folha": {"custo_real_total": 0.0}} for _ in janelas]
 
-        # ── Totais gerais (todos os registros do estabelecimento) ─────────────
-        query_total = Despesa.query
+        def _folha(idx):
+            return Decimal(str(folhas[idx]["custo_folha"].get("custo_real_total", 0.0)))
+
+        folha_detalhe_periodo = folhas[5]["custo_folha"]
+
+        # ── DESPESAS: uma única query com buckets por janela ──────────────────
+        # Agregados excluem as categorias integradas (ver CATEGORIAS_INTEGRADAS)
+        # para o mesmo dinheiro não contar duas vezes com folha/boletos.
+        def _bucket(cond):
+            return func.coalesce(func.sum(case((cond, Despesa.valor), else_=0)), 0)
+
+        q_desp = db.session.query(
+            _bucket(Despesa.data_despesa == hoje).label("hoje"),
+            _bucket(Despesa.data_despesa == ontem).label("ontem"),
+            _bucket(and_(Despesa.data_despesa >= semana_inicio, Despesa.data_despesa <= hoje)).label("semana"),
+            _bucket(and_(Despesa.data_despesa >= mes_atual_inicio, Despesa.data_despesa <= hoje)).label("mes_atual"),
+            _bucket(and_(Despesa.data_despesa >= mes_anterior_inicio, Despesa.data_despesa <= mes_anterior_fim)).label("mes_anterior"),
+            _bucket(and_(Despesa.data_despesa >= cat_inicio, Despesa.data_despesa <= cat_fim)).label("periodo"),
+            func.coalesce(func.sum(Despesa.valor), 0).label("total_geral"),
+            func.count(Despesa.id).label("qtd_geral"),
+            func.coalesce(func.sum(case((Despesa.recorrente == True, Despesa.valor), else_=0)), 0).label("recorrentes"),
+        )
         if estabelecimento_id != 'all':
-            query_total = query_total.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        total_despesas = query_total.count()
+            q_desp = q_desp.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        q_desp = _sem_categorias_integradas(q_desp)
+        d = q_desp.first()
 
-        # CRITICAL FIX: convert to Decimal immediately, before any arithmetic
-        query_soma = db.session.query(func.sum(Despesa.valor))
+        # ── CONTAS A PAGAR pagas: uma query com os mesmos buckets ─────────────
+        def _cp_bucket(inicio, fim):
+            return func.coalesce(func.sum(case(
+                (and_(ContaPagar.data_pagamento >= inicio, ContaPagar.data_pagamento <= fim),
+                 ContaPagar.valor_pago), else_=0)), 0)
+
+        q_cp = db.session.query(
+            _cp_bucket(hoje, hoje).label("hoje"),
+            _cp_bucket(ontem, ontem).label("ontem"),
+            _cp_bucket(semana_inicio, hoje).label("semana"),
+            _cp_bucket(mes_atual_inicio, hoje).label("mes_atual"),
+            _cp_bucket(mes_anterior_inicio, mes_anterior_fim).label("mes_anterior"),
+            _cp_bucket(cat_inicio, cat_fim).label("periodo"),
+            func.coalesce(func.sum(case(
+                (and_(ContaPagar.data_pagamento >= cat_inicio, ContaPagar.data_pagamento <= cat_fim), 1),
+                else_=0)), 0).label("periodo_qtd"),
+            func.coalesce(func.sum(ContaPagar.valor_pago), 0).label("total_geral"),
+        ).filter(ContaPagar.status.in_(['pago', 'parcial']))
         if estabelecimento_id != 'all':
-             query_soma = query_soma.filter(Despesa.estabelecimento_id == estabelecimento_id)
-             
-        soma_total = Decimal(str(query_soma.scalar() or 0)) + _get_todas_contas_pagas()
+            q_cp = q_cp.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+        cp = q_cp.first()
 
-        query_atual = db.session.query(func.sum(Despesa.valor)).filter(
-                Despesa.data_despesa >= mes_atual_inicio,
-                Despesa.data_despesa <= hoje,
-            )
-        if estabelecimento_id != 'all':
-            query_atual = query_atual.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_mes_atual = Decimal(str(query_atual.scalar() or 0)) + _get_folha(mes_atual_inicio, hoje) + _get_contas_pagar(mes_atual_inicio, hoje)[0]
+        _D = lambda v: Decimal(str(v or 0))
 
-        query_anterior = db.session.query(func.sum(Despesa.valor)).filter(
-                Despesa.data_despesa >= mes_anterior_inicio,
-                Despesa.data_despesa <= mes_anterior_fim,
-            )
-        if estabelecimento_id != 'all':
-            query_anterior = query_anterior.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_mes_anterior = Decimal(str(query_anterior.scalar() or 0)) + _get_folha(mes_anterior_inicio, mes_anterior_fim) + _get_contas_pagar(mes_anterior_inicio, mes_anterior_fim)[0]
+        despesas_hoje = _D(d.hoje) + _folha(2) + _D(cp.hoje)
+        despesas_ontem = _D(d.ontem) + _folha(3) + _D(cp.ontem)
+        despesas_semana = _D(d.semana) + _folha(4) + _D(cp.semana)
+        despesas_mes_atual = _D(d.mes_atual) + _folha(0) + _D(cp.mes_atual)
+        despesas_mes_anterior = _D(d.mes_anterior) + _folha(1) + _D(cp.mes_anterior)
 
-        # ── Variação — todos os operandos já são Decimal ─────────────────────
+        folha_periodo = _folha(5)
+        contas_periodo_valor = _D(cp.periodo)
+        contas_periodo_qtd = int(cp.periodo_qtd or 0)
+        soma_periodo = _D(d.periodo) + folha_periodo + contas_periodo_valor
+
+        total_despesas = int(d.qtd_geral or 0)
+        soma_total = _D(d.total_geral) + _D(cp.total_geral)
+        despesas_recorrentes = _D(d.recorrentes)
+
+        # ── Variação ──────────────────────────────────────────────────────────
         if despesas_mes_anterior > 0:
             variacao_percentual = (
                 (despesas_mes_atual - despesas_mes_anterior) / despesas_mes_anterior
@@ -441,40 +489,7 @@ def obter_estatisticas_despesas():
         else:
             variacao_percentual = Decimal('100') if despesas_mes_atual > 0 else Decimal('0')
 
-        # ── Hoje / ontem / semana (métricas de curto prazo) ──────────────────
-        ontem = hoje - timedelta(days=1)
-        semana_inicio = hoje - timedelta(days=6)
-
-        query_hoje = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == hoje)
-        if estabelecimento_id != 'all':
-            query_hoje = query_hoje.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_hoje = Decimal(str(query_hoje.scalar() or 0)) + _get_folha(hoje, hoje) + _get_contas_pagar(hoje, hoje)[0]
-
-        query_ontem = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == ontem)
-        if estabelecimento_id != 'all':
-             query_ontem = query_ontem.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_ontem = Decimal(str(query_ontem.scalar() or 0)) + _get_folha(ontem, ontem) + _get_contas_pagar(ontem, ontem)[0]
-
-        query_semana = db.session.query(func.sum(Despesa.valor)).filter(
-                Despesa.data_despesa >= semana_inicio,
-                Despesa.data_despesa <= hoje,
-            )
-        if estabelecimento_id != 'all':
-            query_semana = query_semana.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_semana = Decimal(str(query_semana.scalar() or 0)) + _get_folha(semana_inicio, hoje) + _get_contas_pagar(semana_inicio, hoje)[0]
-
-        # ── Período filtrado: total e por categoria ───────────────────────────
-        query_periodo = db.session.query(func.sum(Despesa.valor)).filter(
-                Despesa.data_despesa >= cat_inicio,
-                Despesa.data_despesa <= cat_fim,
-            )
-        if estabelecimento_id != 'all':
-             query_periodo = query_periodo.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        
-        folha_periodo = _get_folha(cat_inicio, cat_fim)
-        contas_periodo_valor, contas_periodo_qtd = _get_contas_pagar(cat_inicio, cat_fim)
-        soma_periodo = Decimal(str(query_periodo.scalar() or 0)) + folha_periodo + contas_periodo_valor
-
+        # ── Categorias do período (já sem as integradas, via SQL) ─────────────
         query_cats = db.session.query(
                 Despesa.categoria,
                 func.sum(Despesa.valor).label("total"),
@@ -485,51 +500,45 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_cats = query_cats.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        query_cats = _sem_categorias_integradas(query_cats)
         despesas_por_categoria_raw = query_cats.group_by(Despesa.categoria).order_by(func.sum(Despesa.valor).desc()).all()
 
-        # ── Recorrentes ───────────────────────────────────────────────────────
-        query_rec = db.session.query(func.sum(Despesa.valor)).filter(Despesa.recorrente == True)
+        # ── Evolução mensal: 2 group-bys (despesas e contas) + folha batched ──
+        from sqlalchemy import extract
+        evo_inicio, evo_fim = meses_evolucao[0][0], meses_evolucao[-1][1]
+
+        q_evo_desp = db.session.query(
+            extract('year', Despesa.data_despesa).label('ano'),
+            extract('month', Despesa.data_despesa).label('mes'),
+            func.sum(Despesa.valor).label('total'),
+        ).filter(Despesa.data_despesa >= evo_inicio, Despesa.data_despesa <= evo_fim)
         if estabelecimento_id != 'all':
-             query_rec = query_rec.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_recorrentes = Decimal(str(query_rec.scalar() or 0))
+            q_evo_desp = q_evo_desp.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        q_evo_desp = _sem_categorias_integradas(q_evo_desp)
+        evo_desp = {(int(a), int(m)): _D(t) for a, m, t in q_evo_desp.group_by('ano', 'mes').all()}
 
-        # ── Evolução mensal (últimos 6 meses) ─────────────────────────────────
+        q_evo_cp = db.session.query(
+            extract('year', ContaPagar.data_pagamento).label('ano'),
+            extract('month', ContaPagar.data_pagamento).label('mes'),
+            func.sum(ContaPagar.valor_pago).label('total'),
+        ).filter(ContaPagar.status.in_(['pago', 'parcial']),
+                 ContaPagar.data_pagamento >= evo_inicio, ContaPagar.data_pagamento <= evo_fim)
+        if estabelecimento_id != 'all':
+            q_evo_cp = q_evo_cp.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+        evo_cp = {(int(a), int(m)): _D(t) for a, m, t in q_evo_cp.group_by('ano', 'mes').all()}
+
         evolucao_mensal = []
-        for i in range(6):
-            mes_data = hoje.replace(day=1)
-            for _ in range(i):
-                if mes_data.month == 1:
-                    mes_data = mes_data.replace(year=mes_data.year - 1, month=12)
-                else:
-                    mes_data = mes_data.replace(month=mes_data.month - 1)
-
-            if mes_data.month == 12:
-                mes_fim = mes_data.replace(year=mes_data.year + 1, month=1, day=1) - timedelta(days=1)
-            else:
-                mes_fim = mes_data.replace(month=mes_data.month + 1, day=1) - timedelta(days=1)
-
-            try:
-                query_mes = db.session.query(func.sum(Despesa.valor)).filter(
-                        Despesa.data_despesa >= mes_data,
-                        Despesa.data_despesa <= mes_fim,
-                    )
-                if estabelecimento_id != 'all':
-                     query_mes = query_mes.filter(Despesa.estabelecimento_id == estabelecimento_id)
-                total_mes = Decimal(str(query_mes.scalar() or 0)) + _get_folha(mes_data, mes_fim) + _get_contas_pagar(mes_data, mes_fim)[0]
-            except Exception as e_inner:
-                current_app.logger.error(f"Erro ao calcular mês {mes_data}: {e_inner}")
-                total_mes = Decimal('0')
-
+        for idx, (mes_data, _mes_fim) in enumerate(meses_evolucao):
+            chave = (mes_data.year, mes_data.month)
+            total_mes = evo_desp.get(chave, Decimal('0')) + evo_cp.get(chave, Decimal('0')) + _folha(6 + idx)
             evolucao_mensal.append({
                 "mes": mes_data.strftime("%Y-%m"),
                 "total": float(total_mes),
                 "mes_nome": mes_data.strftime("%b/%Y"),
             })
 
-        evolucao_mensal.reverse()
-
-        # ── Médias ────────────────────────────────────────────────────────────
-        media_valor = soma_total / Decimal(str(total_despesas)) if total_despesas > 0 else Decimal('0')
+        # ── Médias (sobre as despesas agregáveis, não misturando boletos) ─────
+        media_valor = (_D(d.total_geral) / Decimal(str(total_despesas))) if total_despesas > 0 else Decimal('0')
 
         # ── Montar lista de categorias com percentual ─────────────────────────
         despesas_por_categoria_list = []
@@ -542,8 +551,13 @@ def obter_estatisticas_despesas():
             despesas_por_categoria_list.append({
                 "categoria": "Folha de Pagamento",
                 "total": float(folha_periodo),
-                "quantidade": 1,
+                "quantidade": folha_detalhe_periodo.get("total_funcionarios_ativos", 0)
+                              + folha_detalhe_periodo.get("total_funcionarios_demitidos_periodo", 0),
                 "percentual": float(percentual_folha),
+                # Abre a caixa-preta do custo de RH para o lojista: salários,
+                # provisões (férias+13º), encargos, benefícios, extras, atrasos
+                # e rescisões — respondendo "o que compõe esse número?".
+                "detalhe": folha_detalhe_periodo,
             })
             
         if contas_periodo_valor > 0:
@@ -558,12 +572,8 @@ def obter_estatisticas_despesas():
                 "percentual": float(percentual_contas),
             })
             
+        # As categorias integradas já foram excluídas no SQL (_sem_categorias_integradas)
         for categoria, total, quantidade in despesas_por_categoria_raw:
-            cat_norm = categoria.strip().lower() if categoria else ""
-            if cat_norm in ["folha de pagamento", "boleto de mercadoria"]:
-                # Ignora manuais para evitar duplicatas com nosso cálculo integrado
-                continue
-                
             total_d = Decimal(str(total)) if total else Decimal('0')
             percentual = (
                 (total_d / soma_periodo * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -600,7 +610,11 @@ def obter_estatisticas_despesas():
                         variacao_percentual.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                     ),
                     "despesas_recorrentes": float(despesas_recorrentes),
-                    "despesas_nao_recorrentes": float(soma_total - despesas_recorrentes),
+                    # Não-recorrentes sobre a MESMA base das recorrentes
+                    # (lançamentos de Despesa) — antes subtraía de um total que
+                    # incluía boletos pagos e o número não fechava com a soma.
+                    "despesas_nao_recorrentes": float(_D(d.total_geral) - despesas_recorrentes),
+                    "folha_detalhe": folha_detalhe_periodo,
                     "despesas_por_categoria": despesas_por_categoria_list,
                     "evolucao_mensal": evolucao_mensal,
                 },
@@ -979,12 +993,19 @@ def resumo_financeiro():
                 "acao": "Reduzir compras ou renegociar prazos com fornecedores",
             })
 
-        # Fluxo de Caixa Real: inclui receita de vendas + suprimentos de caixa (entradas)
-        # e pagamentos de contas + despesas cadastradas + sangrias de caixa (saídas).
-        # (O custo da folha já está embutido em desp['total'] pelo DataLayer)
-        
+        # Fluxo de Caixa REAL (regime de caixa): entradas = o que de fato foi
+        # recebido nas vendas + suprimentos (inclui recebimento de fiado, que
+        # entra como suprimento na data do pagamento); saídas = boletos pagos
+        # no período + despesas desembolsadas + sangrias.
+        # `despesas_caixa` exclui os espelhos de boleto (senão o mesmo boleto
+        # contava aqui E em pago_periodo) e NÃO inclui a folha provisionada
+        # (provisão não é dinheiro que saiu do caixa; os pagamentos manuais de
+        # salário lançados como Despesa continuam contando).
+        despesas_operacionais = desp.get('despesas_operacionais', desp.get('total', 0.0))
+        despesas_caixa = desp.get('despesas_caixa', despesas_operacionais)
+
         entradas_reais = vendas.get("total_recebido", 0.0) + caixa_pdv['suprimentos']
-        saidas_reais = cp['pago_periodo'] + desp['total'] + caixa_pdv['sangrias']
+        saidas_reais = cp['pago_periodo'] + despesas_caixa + caixa_pdv['sangrias']
 
         return jsonify({
             "success": True,
@@ -992,14 +1013,18 @@ def resumo_financeiro():
                 "inicio": dt_inicio.isoformat(),
                 "fim": dt_fim.isoformat()
             },
+            # DRE por competência. Antes `desp['total']` (que JÁ incluía a
+            # folha calculada pelo DataLayer) era somado de novo com
+            # custo_folha_total — a folha aparecia DUAS vezes no total e no
+            # lucro líquido. Agora: operacionais (sem espelhos) + pessoal, uma vez.
             "dre_consolidado": {
                 "receita_bruta": vendas.get("revenue", 0.0),
                 "custo_mercadoria": vendas.get("cogs", 0.0),
                 "lucro_bruto": vendas.get("gross_profit", 0.0),
                 "despesas_pessoal": custo_folha_total,
-                "despesas_operacionais": desp['total'],
-                "total_despesas": desp['total'] + custo_folha_total,
-                "lucro_liquido": vendas.get("gross_profit", 0.0) - desp['total'] - custo_folha_total
+                "despesas_operacionais": despesas_operacionais,
+                "total_despesas": despesas_operacionais + custo_folha_total,
+                "lucro_liquido": vendas.get("gross_profit", 0.0) - despesas_operacionais - custo_folha_total
             },
             "indicadores_gestao": {
                 "indice_comprometimento": indice_comprometimento,
@@ -1025,9 +1050,11 @@ def resumo_financeiro():
                 "qtd_vence_7d": cp['qtd_vence_7d']
             },
             "despesas_mes": {
-                "total": desp['total'],
+                "total": despesas_operacionais + custo_folha_total,
                 "recorrentes": desp['recorrentes'],
-                "variaveis": desp['total'] - desp['recorrentes']
+                # Variáveis sobre a mesma base das recorrentes (lançamentos
+                # operacionais) — antes subtraía de um total que incluía folha.
+                "variaveis": max(0.0, despesas_operacionais - desp['recorrentes'])
             },
             "caixa_pdv": {
                 "sangrias": caixa_pdv['sangrias'],

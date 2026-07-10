@@ -1,7 +1,9 @@
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, jsonify, request, g, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import logging
+import re
 from datetime import datetime
+from decimal import Decimal
 import math
 from app.models import (
     db, StatusPedidoLogistica, AuditoriaQuilometragem,
@@ -12,8 +14,50 @@ logger = logging.getLogger(__name__)
 logistica_bp = Blueprint('logistica', __name__)
 
 def _get_est_id():
-    claims = get_jwt()
-    return int(claims.get("estabelecimento_id") or 1)
+    """Tenant do request, resolvido pelo helper oficial (suporta impersonation).
+
+    Sem fallback silencioso: a versão antiga fazia `int(claims or 1)` — um
+    token sem o claim gravava dados no estabelecimento 1 (vazamento entre
+    tenants) e super admin sem espelhar ('all') estourava 500.
+    """
+    from app.utils.query_helpers import get_authorized_establishment_id
+    est = get_authorized_establishment_id()
+    if est is None:
+        abort(400, description="Estabelecimento não identificado no token")
+    if str(est).lower() == 'all':
+        abort(400, description="Operações de logística exigem um estabelecimento específico (use o espelhamento)")
+    return int(est)
+
+
+def _resolver_motorista_id(est_id, data=None, veiculo=None):
+    """Resolve o registro de Motorista do request.
+
+    Ordem: motorista_id explícito no body → match por CPF do funcionário
+    logado → motorista vinculado ao veículo. O identity do JWT é o id de
+    FUNCIONÁRIO — usá-lo direto como motorista_id (como o abastecimento
+    fazia) apontava a FK de `motoristas` para o registro errado ou violava
+    a constraint.
+    """
+    from app.models import Motorista
+    data = data or {}
+    mid = data.get('motorista_id')
+    if mid:
+        m = Motorista.query.filter_by(id=mid, estabelecimento_id=est_id).first()
+        if m:
+            return m.id
+    try:
+        f = Funcionario.query.get(int(get_jwt_identity()))
+    except (TypeError, ValueError):
+        f = None
+    if f and f.cpf:
+        cpf = re.sub(r"\D", "", f.cpf)
+        if cpf:
+            for m in Motorista.query.filter_by(estabelecimento_id=est_id).all():
+                if re.sub(r"\D", "", m.cpf or "") == cpf:
+                    return m.id
+    if veiculo is not None and getattr(veiculo, 'motorista_id', None):
+        return veiculo.motorista_id
+    return None
 
 @logistica_bp.route('/configuracao', methods=['GET', 'PUT'])
 @jwt_required()
@@ -510,65 +554,95 @@ def dashboard_metricas():
 @jwt_required()
 def registrar_abastecimento():
     try:
-        from app.models import AbastecimentoVeiculo, Veiculo, db
+        from app.models import AbastecimentoVeiculo, Veiculo, Despesa, db
+        from datetime import date
         data = request.json
-        funcionario_id = get_jwt_identity()
         est_id = _get_est_id()
-        
+
         veiculo_id = data.get('veiculo_id')
         km_atual = Decimal(str(data.get('km_atual', 0)))
         litros = Decimal(str(data.get('litros', 0)))
         valor_total = Decimal(str(data.get('valor_total', 0)))
-        
+        tipo_combustivel = data.get('tipo_combustivel', 'gasolina')
+
         if not veiculo_id or litros <= 0 or valor_total <= 0:
             return jsonify({"success": False, "error": "Dados inválidos"}), 400
-            
+
         veiculo = Veiculo.query.filter_by(id=veiculo_id, estabelecimento_id=est_id).first()
         if not veiculo:
             return jsonify({"success": False, "error": "Veículo não encontrado"}), 404
-            
+
+        # FK de abastecimentos aponta para `motoristas` (NOT NULL) — o id do
+        # JWT é de FUNCIONÁRIO; usar direto quebrava a FK ou apontava para o
+        # motorista errado.
+        motorista_id = _resolver_motorista_id(est_id, data, veiculo)
+        if not motorista_id:
+            return jsonify({
+                "success": False,
+                "error": "Nenhum motorista vinculado ao seu usuário ou ao veículo. Cadastre o motorista em Delivery > Motoristas."
+            }), 400
+
         # Pega o último abastecimento para calcular a diferença
         ultimo_abastecimento = AbastecimentoVeiculo.query.filter_by(
             estabelecimento_id=est_id, veiculo_id=veiculo_id
         ).order_by(AbastecimentoVeiculo.data_abastecimento.desc()).first()
-        
+
         km_rodados = None
         consumo_real = None
-        
+
         if ultimo_abastecimento and km_atual > ultimo_abastecimento.km_atual:
             km_rodados = km_atual - ultimo_abastecimento.km_atual
             consumo_real = km_rodados / litros
-            
+
         preco_litro = valor_total / litros
-        
+
         abastecimento = AbastecimentoVeiculo(
             estabelecimento_id=est_id,
             veiculo_id=veiculo_id,
-            motorista_id=funcionario_id,
+            motorista_id=motorista_id,
             km_atual=km_atual,
             litros=litros,
             valor_total=valor_total,
             preco_litro=preco_litro,
+            tipo_combustivel=tipo_combustivel,
             km_rodados_desde_ultimo=km_rodados,
             consumo_real_kml=consumo_real
         )
-        
+
+        # Combustível é DESPESA real da operação — antes o abastecimento só
+        # registrava a telemetria e o gasto ficava fora de todos os
+        # indicadores financeiros (a "despesa embaixo do tapete").
+        despesa_combustivel = Despesa(
+            estabelecimento_id=est_id,
+            descricao=f"Combustível ({veiculo.placa}): {float(litros):.1f}L {tipo_combustivel}",
+            categoria="Logística/Frota",
+            tipo="variavel",
+            valor=valor_total,
+            data_despesa=date.today(),
+            forma_pagamento=(data.get('forma_pagamento') or 'dinheiro'),
+            recorrente=False,
+            observacoes=f"Gerado automaticamente pelo abastecimento do veículo {veiculo.placa} (KM {float(km_atual):.0f})."
+        )
+        db.session.add(despesa_combustivel)
+
         veiculo.km_atual = max(veiculo.km_atual or Decimal(0), km_atual)
         if consumo_real:
             # Atualiza o consumo médio do veículo gradativamente
-            veiculo.consumo_medio = (veiculo.consumo_medio + consumo_real) / 2
-        
+            veiculo.consumo_medio = ((veiculo.consumo_medio or consumo_real) + consumo_real) / 2
+
         db.session.add(abastecimento)
         db.session.commit()
-        
+
         return jsonify({
-            "success": True, 
+            "success": True,
             "abastecimento": abastecimento.to_dict(),
-            "novo_consumo_medio": float(veiculo.consumo_medio)
+            "despesa_id": despesa_combustivel.id,
+            "novo_consumo_medio": float(veiculo.consumo_medio or 0)
         })
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"Erro ao registrar abastecimento: {e}")
+        return jsonify({"success": False, "error": "Erro ao registrar abastecimento"}), 500
 
 @logistica_bp.route('/manutencao/<int:veiculo_id>', methods=['GET'])
 @jwt_required()
@@ -608,17 +682,21 @@ def registrar_manutencao():
         if not veiculo:
             return jsonify({"success": False, "error": "Veículo não encontrado"}), 404
             
-        # Lança a despesa automaticamente no sistema
+        # Lança a despesa automaticamente no sistema.
+        # ATENÇÃO: a versão anterior passava campos que NÃO existem no modelo
+        # Despesa (data_pagamento, status, conta_origem) — TypeError em toda
+        # chamada, ou seja, NENHUMA manutenção era registrada (500 sempre) e o
+        # custo ficava fora dos indicadores.
         nova_despesa = Despesa(
             estabelecimento_id=est_id,
             descricao=f"Manutenção Frota ({veiculo.placa}): {tipo_servico}",
             valor=valor_total,
             categoria="Logística/Frota",
-            data_vencimento=date.today(),
-            data_pagamento=date.today(),
-            status="pago",
-            conta_origem="Caixa Logística", # ou outro padrão
-            observacoes=descricao
+            tipo="variavel",
+            data_despesa=date.today(),
+            forma_pagamento=(data.get('forma_pagamento') or 'dinheiro'),
+            recorrente=False,
+            observacoes=descricao or f"Manutenção do veículo {veiculo.placa}"
         )
         db.session.add(nova_despesa)
         db.session.flush() # Para pegar o ID da despesa

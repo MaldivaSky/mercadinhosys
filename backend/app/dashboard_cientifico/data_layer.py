@@ -1748,7 +1748,8 @@ class DataLayer:
         # Estrutura padrão para evitar 500 se algo falhar
         result = {
             "vendas": {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0, "count": 0, "total_recebido": 0.0},
-            "despesas": {"total": 0.0, "recorrentes": 0.0},
+            "despesas": {"total": 0.0, "recorrentes": 0.0, "despesas_pessoal": 0.0,
+                         "despesas_operacionais": 0.0, "despesas_caixa": 0.0},
             "contas_pagar": {
                 "total_aberto": 0.0, "total_vencido": 0.0, "vence_hoje_valor": 0.0,
                 "qtd_vencidos": 0, "qtd_vence_hoje": 0, "qtd_vence_7d": 0,
@@ -1815,16 +1816,29 @@ class DataLayer:
 
             # 2. DADOS DE DESPESAS
             try:
+                # Categorias espelhadas (ver despesas.CATEGORIAS_INTEGRADAS):
+                # 'Fornecedores'/'Boleto de Mercadoria' duplicam ContaPagar.pago;
+                # 'Folha de Pagamento' (lançamentos manuais) duplica a folha
+                # calculada. Ficam fora dos agregados de competência.
+                _CATS_INTEGRADAS = ("fornecedores", "folha de pagamento", "boleto de mercadoria")
+                _cat_norm = func.lower(func.trim(func.coalesce(Despesa.categoria, '')))
+                _sem_espelho_boleto = _cat_norm.notin_(("fornecedores", "boleto de mercadoria"))
+                _sem_espelho_total = _cat_norm.notin_(_CATS_INTEGRADAS)
+
                 q_desp = db.session.query(
-                    func.sum(Despesa.valor).label('total'),
-                    func.sum(case((Despesa.recorrente == True, Despesa.valor), else_=0)).label('recorrentes')
+                    func.sum(case((_sem_espelho_total, Despesa.valor), else_=0)).label('operacionais'),
+                    func.sum(case((and_(_sem_espelho_total, Despesa.recorrente == True), Despesa.valor), else_=0)).label('recorrentes'),
+                    # Visão CAIXA: tudo que saiu como Despesa exceto os espelhos
+                    # de boleto (cobertos por ContaPagar.pago_periodo) — inclui
+                    # pagamentos manuais de salário, que SÃO desembolso real.
+                    func.sum(case((_sem_espelho_boleto, Despesa.valor), else_=0)).label('caixa'),
                 ).filter(
                     Despesa.data_despesa >= start_dt,
                     Despesa.data_despesa <= end_dt
                 )
                 if estabelecimento_id != 'all': q_desp = q_desp.filter(Despesa.estabelecimento_id == estabelecimento_id)
                 despesas_query = q_desp.first()
-                
+
                 # Buscar o custo da folha de pagamento e somá-lo
                 try:
                     folha_dados = calcular_custo_folha_detalhado(estabelecimento_id, start_dt, end_dt)
@@ -1832,15 +1846,17 @@ class DataLayer:
                 except Exception as e_folha:
                     logger.error(f"Erro calculando folha no DRE: {e_folha}")
                     despesas_pessoal = 0.0
-                
-                total_despesas_operacionais = float(despesas_query.total or 0) if despesas_query else 0.0
+
+                total_despesas_operacionais = float(despesas_query.operacionais or 0) if despesas_query else 0.0
                 total_recorrentes = float(despesas_query.recorrentes or 0) if despesas_query else 0.0
-                
+                despesas_caixa = float(despesas_query.caixa or 0) if despesas_query else 0.0
+
                 result["despesas"] = {
                     "total": total_despesas_operacionais + despesas_pessoal,
                     "recorrentes": total_recorrentes,
                     "despesas_pessoal": despesas_pessoal,
-                    "despesas_operacionais": total_despesas_operacionais
+                    "despesas_operacionais": total_despesas_operacionais,
+                    "despesas_caixa": despesas_caixa,
                 }
             except Exception as e:
                 logger.error(f"Erro processando DESPESAS em get_consolidated_financial_summary: {e}")

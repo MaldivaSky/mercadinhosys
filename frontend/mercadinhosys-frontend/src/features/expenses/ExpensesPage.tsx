@@ -310,6 +310,17 @@ export default function ExpensesPage() {
         por_pagina: 20,
     });
 
+    // Busca com debounce: o input escrevia direto em filtros.busca e cada
+    // tecla disparava uma requisição de listagem — igual ao bug corrigido em
+    // Produtos. O guard de igualdade evita um fetch duplicado no mount.
+    const [buscaLocal, setBuscaLocal] = useState("");
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setFiltros(f => (f.busca === buscaLocal ? f : { ...f, busca: buscaLocal, pagina: 1 }));
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [buscaLocal]);
+
     // ─── Data ─────────────────────────────────────────────────────────────────
     const [despesas, setDespesas] = useState<Despesa[]>([]);
     const [stats, setStats] = useState<Estatisticas | null>(null);
@@ -746,8 +757,8 @@ export default function ExpensesPage() {
                                     <input
                                         type="text"
                                         placeholder="Buscar despesa..."
-                                        value={filtros.busca}
-                                        onChange={e => setFiltros(f => ({ ...f, busca: e.target.value, pagina: 1 }))}
+                                        value={buscaLocal}
+                                        onChange={e => setBuscaLocal(e.target.value)}
                                         className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 ring-orange-400 outline-none"
                                     />
                                 </div>
@@ -791,7 +802,7 @@ export default function ExpensesPage() {
                                 </select>
                                 <div className="flex gap-2 ml-auto">
                                     <button
-                                        onClick={() => setFiltros(f => ({ ...f, busca: "", categoria: "", tipo: "", recorrente: "", forma_pagamento: "", pagina: 1 }))}
+                                        onClick={() => { setBuscaLocal(""); setFiltros(f => ({ ...f, busca: "", categoria: "", tipo: "", recorrente: "", forma_pagamento: "", pagina: 1 })); }}
                                         className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-orange-500 transition-colors"
                                     >Limpar</button>
                                     <button

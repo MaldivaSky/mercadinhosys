@@ -13,7 +13,7 @@ Convenções:
 - Valores monetários usam Decimal e são arredondados a 2 casas (ROUND_HALF_UP).
 """
 from collections import defaultdict
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import calendar
 
@@ -674,97 +674,261 @@ def calcular_provisoes(funcionario, ano_mes: str, regime_tributario: str = None,
                         f"(atual: {regime_tributario or 'não informado'})."),
     }
 
-def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
-    """Calcula o custo real da folha (ativos, demitidos e rescisões) no período"""
-    from app.models import db, Funcionario, Rescisao, FuncionarioBeneficio
+def _fracao_de_meses(inicio: date, fim: date) -> float:
+    """Fração de meses corridos no intervalo [inicio, fim], mês a mês
+    (dias de overlap / dias reais do mês). Substitui o antigo `dias/30`,
+    que superestimava a folha em ~3,3% em meses de 31 dias e a
+    subestimava em fevereiro."""
+    if not inicio or not fim or fim < inicio:
+        return 0.0
+    total = 0.0
+    y, m = inicio.year, inicio.month
+    while (y, m) <= (fim.year, fim.month):
+        dias_mes = calendar.monthrange(y, m)[1]
+        primeiro = date(y, m, 1)
+        ultimo = date(y, m, dias_mes)
+        overlap = (min(fim, ultimo) - max(inicio, primeiro)).days + 1
+        if overlap > 0:
+            total += overlap / dias_mes
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+    return total
+
+
+def _minutos_ponto_por_dia(estabelecimento_id, funcionario_ids, dt_inicio, dt_fim, jornada_min):
+    """UMA query de RegistroPonto do período inteiro, processada com a MESMA
+    regra do espelho (pareamento entrada/saída por dia): retorna
+    {(funcionario_id, data): {"extras": int, "atraso": int}} em minutos.
+    Permite incluir horas extras e atrasos no custo agregado da folha sem
+    N+1 (antes o custo agregado simplesmente IGNORAVA extras/atrasos)."""
+    from app.models import RegistroPonto
+
+    if not funcionario_ids:
+        return {}
+
+    registros = (RegistroPonto.query
+                 .filter(RegistroPonto.funcionario_id.in_(funcionario_ids),
+                         RegistroPonto.data >= dt_inicio,
+                         RegistroPonto.data <= dt_fim)
+                 .order_by(RegistroPonto.data, RegistroPonto.hora)
+                 .all())
+
+    por_dia = defaultdict(list)
+    for r in registros:
+        por_dia[(r.funcionario_id, r.data)].append(r)
+
+    resultado = {}
+    for chave, regs in por_dia.items():
+        entrada = saida = ii = iff = None
+        atraso = 0
+        for r in regs:
+            if r.tipo_registro == "entrada":
+                entrada = r.hora
+                atraso += r.minutos_atraso or 0
+            elif r.tipo_registro == "saida_almoco":
+                ii = r.hora
+                atraso += r.minutos_atraso or 0
+            elif r.tipo_registro == "retorno_almoco":
+                iff = r.hora
+                atraso += r.minutos_atraso or 0
+            elif r.tipo_registro == "saida":
+                saida = r.hora
+        extras = 0
+        if entrada and saida:
+            trabalhado = (datetime.combine(date.min, saida) - datetime.combine(date.min, entrada)).total_seconds() / 60
+            if ii and iff:
+                trabalhado -= (datetime.combine(date.min, iff) - datetime.combine(date.min, ii)).total_seconds() / 60
+            extras = max(0, int(trabalhado - jornada_min))
+        resultado[chave] = {"extras": extras, "atraso": atraso}
+    return resultado
+
+
+def calcular_custo_folha_periodos(estabelecimento_id, periodos, incluir_ponto=True):
+    """Custo real da folha para VÁRIAS janelas de uma vez (batch).
+
+    Carrega funcionários, ConfiguracaoFolha, benefícios, rescisões e ponto UMA
+    única vez para o range total e fatia por janela em Python. Substitui as 11
+    chamadas independentes que as estatísticas de despesas faziam (cada uma com
+    1 query de ConfiguracaoFolha POR funcionário) — a principal causa de
+    lentidão da página de Despesas.
+
+    periodos: lista de tuplas (dt_inicio: date, dt_fim: date).
+    Retorna lista de dicts no mesmo formato de calcular_custo_folha_detalhado,
+    na mesma ordem dos períodos.
+    """
+    from app.models import db, Funcionario, Rescisao, FuncionarioBeneficio, ConfiguracaoHorario
     from sqlalchemy import func, or_
-    from datetime import datetime, date
-    
-    if hasattr(dt_inicio, 'date') and isinstance(dt_inicio, datetime): dt_inicio = dt_inicio.date()
-    if hasattr(dt_fim, 'date') and isinstance(dt_fim, datetime): dt_fim = dt_fim.date()
-    
-    dias_periodo = (dt_fim - dt_inicio).days + 1
-    if dias_periodo <= 0:
-        return {"custo_folha": {"custo_real_total": 0.0}, "funcionarios": []}
-    
+
+    def _as_date(v):
+        return v.date() if isinstance(v, datetime) else v
+
+    periodos = [(_as_date(i), _as_date(f)) for i, f in periodos]
+    validos = [(i, f) for i, f in periodos if i and f and f >= i]
+    vazio = {"custo_folha": {"total_salarios": 0.0, "total_beneficios": 0.0, "total_provisoes": 0.0,
+                             "total_encargos": 0.0, "total_rescisoes": 0.0, "total_horas_extras": 0.0,
+                             "total_descontos_atraso": 0.0, "custo_real_total": 0.0,
+                             "total_funcionarios_ativos": 0, "total_funcionarios_demitidos_periodo": 0},
+             "funcionarios": []}
+    if not validos:
+        return [dict(vazio) for _ in periodos]
+
+    range_inicio = min(i for i, _ in validos)
+    range_fim = max(f for _, f in validos)
+
+    # ── Cargas únicas para o range inteiro ─────────────────────────────────
     query_func = db.session.query(Funcionario).filter(
-        Funcionario.data_admissao <= dt_fim,
-        or_(Funcionario.data_demissao == None, Funcionario.data_demissao >= dt_inicio)
+        Funcionario.data_admissao <= range_fim,
+        or_(Funcionario.data_demissao == None, Funcionario.data_demissao >= range_inicio)
     )
     if str(estabelecimento_id).lower() != 'all':
         query_func = query_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
-        
     funcionarios = query_func.all()
-    mes_ref = dt_fim.strftime("%Y-%m")
-    
-    total_custo_real = 0.0
-    total_salarios = 0.0
-    total_provisoes = 0.0
-    total_encargos = 0.0
-    total_beneficios_geral = 0.0
-    
-    # Busca benefícios ativos mapeados por funcionário
+
+    config_folha = None
+    jornada_min = JORNADA_PADRAO_MIN
+    if funcionarios and str(estabelecimento_id).lower() != 'all':
+        config_folha = obter_config_folha(estabelecimento_id)
+        cfg_horario = ConfiguracaoHorario.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+        if cfg_horario and cfg_horario.jornada_diaria_minutos:
+            jornada_min = cfg_horario.jornada_diaria_minutos
+
     query_ben = db.session.query(
         FuncionarioBeneficio.funcionario_id,
         func.sum(FuncionarioBeneficio.valor)
-    ).filter(FuncionarioBeneficio.ativo == True).group_by(FuncionarioBeneficio.funcionario_id)
-    beneficios_map = dict(query_ben.all())
-    
-    lista_funcs = []
-    
-    for f in funcionarios:
-        prov = calcular_provisoes(f, mes_ref)
-        salario = float(prov.get("salario_base", 0))
-        provisoes = float(prov.get("valor_ferias", 0)) + float(prov.get("valor_decimo_terceiro", 0))
-        encargos = float(prov.get("encargos_provisionados", 0))
-        beneficio_mensal = float(beneficios_map.get(f.id, 0.0))
-        
-        custo_mensal = salario + provisoes + encargos + beneficio_mensal
-        
-        admissao = f.data_admissao.date() if hasattr(f.data_admissao, 'date') and isinstance(f.data_admissao, datetime) else f.data_admissao
-        demissao = f.data_demissao.date() if hasattr(f.data_demissao, 'date') and isinstance(f.data_demissao, datetime) else f.data_demissao
-        
-        inicio_trab = max(dt_inicio, admissao) if admissao else dt_inicio
-        fim_trab = min(dt_fim, demissao) if demissao else dt_fim
-        dias_trab = (fim_trab - inicio_trab).days + 1
-        
-        if dias_trab > 0:
-            prop = dias_trab / 30.0
-            
-            total_custo_real += (custo_mensal * prop)
-            total_salarios += (salario * prop)
-            total_provisoes += (provisoes * prop)
-            total_encargos += (encargos * prop)
-            total_beneficios_geral += (beneficio_mensal * prop)
-            
-            lista_funcs.append({
-                "id": f.id,
-                "nome": f.nome,
-                "cargo": f.cargo,
-                "dias_trabalhados": dias_trab,
-                "custo_real_proporcional": round(custo_mensal * prop, 2)
-            })
-            
-    query_resc = db.session.query(func.sum(Rescisao.total_liquido)).filter(
-        Rescisao.data_demissao >= dt_inicio,
-        Rescisao.data_demissao <= dt_fim
+    ).filter(FuncionarioBeneficio.ativo == True,
+             FuncionarioBeneficio.funcionario_id.in_([f.id for f in funcionarios]) if funcionarios else False
+             ).group_by(FuncionarioBeneficio.funcionario_id)
+    beneficios_map = dict(query_ben.all()) if funcionarios else {}
+
+    query_resc = db.session.query(Rescisao.data_demissao, Rescisao.total_liquido).filter(
+        Rescisao.data_demissao >= range_inicio,
+        Rescisao.data_demissao <= range_fim
     )
     if str(estabelecimento_id).lower() != 'all':
         query_resc = query_resc.filter(Rescisao.estabelecimento_id == estabelecimento_id)
-        
-    total_rescisao = float(query_resc.scalar() or 0.0)
-    total_custo_real += total_rescisao
-    
-    return {
-        "custo_folha": {
-            "total_salarios": round(total_salarios, 2),
-            "total_beneficios": round(total_beneficios_geral, 2),
-            "total_provisoes": round(total_provisoes, 2),
-            "total_encargos": round(total_encargos, 2),
-            "total_rescisoes": round(total_rescisao, 2),
-            "custo_real_total": round(total_custo_real, 2),
-            "total_funcionarios_ativos": len([f for f in funcionarios if not f.data_demissao]),
-            "total_funcionarios_demitidos_periodo": len([f for f in funcionarios if f.data_demissao])
-        },
-        "funcionarios": lista_funcs
-    }
+    rescisoes = query_resc.all()
+
+    # Ponto (extras/atrasos) do range inteiro — 1 query. Ranges muito longos
+    # (> ~14 meses) pulam o ponto para não carregar dezenas de milhares de
+    # batidas; nesses casos o custo fica no accrual puro (comportamento antigo).
+    ponto_por_dia = {}
+    if incluir_ponto and funcionarios and (range_fim - range_inicio).days <= 430:
+        try:
+            ponto_por_dia = _minutos_ponto_por_dia(
+                estabelecimento_id, [f.id for f in funcionarios], range_inicio, range_fim, jornada_min
+            )
+        except Exception:
+            ponto_por_dia = {}
+
+    # Pré-cálculo por funcionário (custo mensal e valor-hora) — 0 queries
+    dados_func = []
+    divisor = Decimal(getattr(config_folha, "divisor_horas_mensais", None) or 220)
+    pct_he = _D(getattr(config_folha, "percentual_hora_extra", None) or 50)
+    for f in funcionarios:
+        prov = calcular_provisoes(f, range_fim.strftime("%Y-%m"), config_folha=config_folha) if config_folha \
+            else calcular_provisoes(f, range_fim.strftime("%Y-%m"))
+        salario = float(prov.get("salario_base", 0))
+        valor_hora = (Decimal(str(salario)) / divisor) if divisor else Decimal(0)
+        dados_func.append({
+            "f": f,
+            "salario": salario,
+            "provisoes": float(prov.get("valor_ferias", 0)) + float(prov.get("valor_decimo_terceiro", 0)),
+            "encargos": float(prov.get("encargos_provisionados", 0)),
+            "beneficio": float(beneficios_map.get(f.id, 0.0)),
+            "valor_hora": float(valor_hora),
+            "valor_hora_extra": float(valor_hora * (Decimal(1) + pct_he / Decimal(100))),
+            "admissao": _as_date(f.data_admissao),
+            "demissao": _as_date(f.data_demissao),
+        })
+
+    # ── Fatiamento por janela ──────────────────────────────────────────────
+    resultados = []
+    for dt_inicio, dt_fim in periodos:
+        if not dt_inicio or not dt_fim or dt_fim < dt_inicio:
+            resultados.append(dict(vazio))
+            continue
+
+        total_salarios = total_provisoes = total_encargos = total_beneficios = 0.0
+        total_he_valor = total_atraso_valor = 0.0
+        lista_funcs = []
+        ativos = demitidos = 0
+
+        for d in dados_func:
+            adm, dem = d["admissao"], d["demissao"]
+            if adm and adm > dt_fim:
+                continue
+            if dem and dem < dt_inicio:
+                continue
+            inicio_trab = max(dt_inicio, adm) if adm else dt_inicio
+            fim_trab = min(dt_fim, dem) if dem else dt_fim
+            if fim_trab < inicio_trab:
+                continue
+
+            prop = _fracao_de_meses(inicio_trab, fim_trab)
+            custo_mensal = d["salario"] + d["provisoes"] + d["encargos"] + d["beneficio"]
+
+            # Extras e atrasos REAIS do ponto na janela (regra do holerite)
+            min_extras = min_atraso = 0
+            if ponto_por_dia:
+                fid = d["f"].id
+                dia = inicio_trab
+                while dia <= fim_trab:
+                    p = ponto_por_dia.get((fid, dia))
+                    if p:
+                        min_extras += p["extras"]
+                        min_atraso += p["atraso"]
+                    dia += timedelta(days=1)
+            he_valor = (min_extras / 60.0) * d["valor_hora_extra"]
+            atraso_valor = (min_atraso / 60.0) * d["valor_hora"]
+
+            total_salarios += d["salario"] * prop
+            total_provisoes += d["provisoes"] * prop
+            total_encargos += d["encargos"] * prop
+            total_beneficios += d["beneficio"] * prop
+            total_he_valor += he_valor
+            total_atraso_valor += atraso_valor
+
+            if dem:
+                demitidos += 1
+            else:
+                ativos += 1
+            lista_funcs.append({
+                "id": d["f"].id,
+                "nome": d["f"].nome,
+                "cargo": d["f"].cargo,
+                "dias_trabalhados": (fim_trab - inicio_trab).days + 1,
+                "custo_real_proporcional": round(custo_mensal * prop + he_valor - atraso_valor, 2),
+            })
+
+        total_rescisao = float(sum(
+            float(v or 0) for dd, v in rescisoes if dd and dt_inicio <= _as_date(dd) <= dt_fim
+        ))
+
+        custo_total = (total_salarios + total_provisoes + total_encargos + total_beneficios
+                       + total_he_valor - total_atraso_valor + total_rescisao)
+
+        resultados.append({
+            "custo_folha": {
+                "total_salarios": round(total_salarios, 2),
+                "total_beneficios": round(total_beneficios, 2),
+                "total_provisoes": round(total_provisoes, 2),
+                "total_encargos": round(total_encargos, 2),
+                "total_rescisoes": round(total_rescisao, 2),
+                "total_horas_extras": round(total_he_valor, 2),
+                "total_descontos_atraso": round(total_atraso_valor, 2),
+                "custo_real_total": round(custo_total, 2),
+                "total_funcionarios_ativos": ativos,
+                "total_funcionarios_demitidos_periodo": demitidos,
+            },
+            "funcionarios": lista_funcs,
+        })
+
+    return resultados
+
+
+def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
+    """Custo real da folha no período (salários + provisões + encargos +
+    benefícios + horas extras − atrasos + rescisões). Wrapper de janela única
+    sobre a versão batched — mesma matemática em todos os consumidores."""
+    return calcular_custo_folha_periodos(estabelecimento_id, [(dt_inicio, dt_fim)])[0]
