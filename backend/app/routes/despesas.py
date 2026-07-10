@@ -718,7 +718,7 @@ def detalhamento_unificado():
     if recorrente is None:
         try:
             folha = calcular_custo_folha_detalhado(estabelecimento_id, inicio, fim)
-            custo_folha = float(folha.get("custo_real_total", 0))
+            custo_folha = float(folha.get("custo_folha", {}).get("custo_real_total", 0.0))
             if custo_folha > 0:
                 resultados.append({
                     "id": f"f_{inicio.strftime('%Y%m%d')}",
