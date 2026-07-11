@@ -21,6 +21,7 @@ import {
 import BoletosAVencerPanel from "./components/BoletosAVencerPanel";
 import ResumoFinanceiroPanel from "./components/ResumoFinanceiroPanel";
 import PinDialog from "../../components/modals/PinDialog";
+import { InsightCard as ConsultorInsightCard } from "../../components/consultor/InsightCard";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, PointElement,
     LineElement, ArcElement, Tooltip, Legend, Filler);
@@ -664,6 +665,8 @@ export default function ExpensesPage() {
                 ════════════════════════════════════════════════════════════ */}
                 {activeTab === "visao_geral" && (
                     <div className="space-y-6">
+                        <ConsultorInsightCard especialista="financeiro" titulo="Consultor IA - Inteligência Financeira" className="mb-2" />
+
                         {/* Insights inteligentes no topo da Visão Geral */}
                         {historico && historico.insights && historico.insights.length > 0 && (
                             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/50">

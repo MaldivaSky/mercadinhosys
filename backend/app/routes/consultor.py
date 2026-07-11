@@ -1,0 +1,201 @@
+import time
+from flask import Blueprint, jsonify, request, current_app
+from flask_jwt_extended import get_jwt
+from app import db
+from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.plan_guards import plan_required
+from app.utils.query_helpers import get_authorized_establishment_id
+from app.services.consultor.quota import verificar_quota_consultor, verificar_quota_insight
+from app.services.consultor.contextos import obter_contexto
+from app.utils.llm_client import gerar_resposta, llm_disponivel
+from app.models import ConsultorInteracao
+
+# Importando os builders
+from app.services.consultor.contextos import financeiro, vendas, estoque, rh, compras, geral
+
+consultor_bp = Blueprint("consultor", __name__)
+
+BUILDERS = {
+    "financeiro": financeiro.montar_contexto,
+    "vendas": vendas.montar_contexto,
+    "estoque": estoque.montar_contexto,
+    "rh": rh.montar_contexto,
+    "compras": compras.montar_contexto,
+    "geral": geral.montar_contexto,
+}
+
+SYSTEM_PROMPTS = {
+    "financeiro": "Você é o Consultor M-IA Financeiro do MercadinhoSys. Fale com o dono da loja de forma EXTREMAMENTE resumida, humana e informal. Vá direto aos números do fluxo de caixa e DRE. PROIBIDO usar 'Além disso', 'Em resumo', 'É importante notar'. Use tópicos curtos e práticos.",
+    "vendas": "Você é o Consultor M-IA de Vendas do MercadinhoSys. Seja super direto, curto e humano. Mostre o faturamento e ticket médio sem firulas. PROIBIDO usar frases de IA como 'No entanto' ou 'É importante'. Sugira uma ação prática e rápida baseada nos números.",
+    "estoque": "Você é o Consultor M-IA de Estoque do MercadinhoSys. Avise sobre rupturas e produtos parados como um parceiro de negócio de forma super rápida e fácil de ler. PROIBIDO jargões e enrolação. Seja objetivo, em poucas linhas.",
+    "rh": "Você é o Consultor M-IA de RH do MercadinhoSys. Mostre os custos com funcionários de forma ultrarresumida e direta. Haja como um colega humano, sem frases feitas. Vá direto ao ponto.",
+    "compras": "Você é o Consultor M-IA de Compras do MercadinhoSys. Avalie fornecedores e pedidos de forma informal, curta e precisa. PROIBIDO ser repetitivo ou enfadonho.",
+    "geral": "Você é o Consultor M-IA Master do MercadinhoSys. REGRAS CRÍTICAS: 1. NUNCA seja enfadonho ou repetitivo. 2. PROIBIDO usar clichês de IA (ex: 'Além disso', 'É importante notar que', 'Em resumo'). 3. Fale como um parceiro de negócios informal e humano. 4. Vá DIRETO aos números cruciais e dê no máximo 3 insights rápidos e práticos em tópicos curtos."
+}
+
+def formatar_contexto_para_prompt(context_dict: dict) -> str:
+    import json
+    return json.dumps(context_dict, indent=2, ensure_ascii=False)
+
+
+@consultor_bp.route("/chat", methods=["POST"], strict_slashes=False)
+@funcionario_required
+@plan_required('Elite')
+def chat_consultor():
+    """Recebe mensagem do usuário, injeta contexto determinístico e responde usando LLM."""
+    if not llm_disponivel():
+        return jsonify({"success": False, "error": "Serviço de IA não configurado."}), 503
+
+    estabelecimento_id = get_authorized_establishment_id()
+    if not estabelecimento_id:
+        return jsonify({"success": False, "error": "Estabelecimento inválido."}), 400
+
+    if not verificar_quota_consultor(estabelecimento_id):
+        return jsonify({"success": False, "error": "Limite diário de interações no chat excedido. Faça upgrade do seu plano."}), 429
+
+    dados = request.get_json() or {}
+    especialista = dados.get("especialista", "geral")
+    mensagem = dados.get("mensagem")
+    provider_solicitado = dados.get("provider", "gemini")
+
+    if not mensagem:
+        return jsonify({"success": False, "error": "Mensagem é obrigatória."}), 400
+
+    if especialista not in BUILDERS:
+        return jsonify({"success": False, "error": "Especialista desconhecido."}), 400
+
+    # RBAC: Verificação de Cargo (Role)
+    claims = get_jwt()
+    role = claims.get("role", "").lower()
+    allowed_admin_roles = ["admin", "administrador", "proprietario", "dono", "master", "gerente"]
+    is_manager = role in allowed_admin_roles
+
+    if not is_manager:
+        if especialista in ['geral', 'financeiro', 'compras']:
+            return jsonify({"success": False, "error": f"Acesso negado. O cargo '{role}' não possui permissão para acessar o painel estratégico '{especialista}'."}), 403
+        
+        if role == 'rh' and especialista != 'rh':
+            return jsonify({"success": False, "error": "Acesso negado. Seu perfil tem permissão apenas para o painel de RH."}), 403
+            
+        if role in ['caixa', 'estoque', 'repositor', 'operador'] and especialista not in ['estoque', 'vendas']:
+            return jsonify({"success": False, "error": "Acesso negado. Seu perfil tem permissão apenas para Estoque ou Vendas."}), 403
+
+    start_time = time.time()
+    
+    # 1. Obter contexto cacheado (passando is_manager para o cache e builder)
+    context_data = obter_contexto(especialista, estabelecimento_id, is_manager, BUILDERS[especialista])
+    
+    # 2. Montar prompt
+    sys_prompt = SYSTEM_PROMPTS[especialista]
+    context_str = formatar_contexto_para_prompt(context_data)
+    
+    full_system_prompt = f"{sys_prompt}\n\nCONTEXTO EXATO (NÃO INVENTE DADOS):\n{context_str}"
+    
+    mensagens = [
+        {"role": "system", "content": full_system_prompt},
+        {"role": "user", "content": str(mensagem)}
+    ]
+    
+    # 3. Chamar LLM
+    resposta_texto = gerar_resposta(mensagens, provider=provider_solicitado)
+    duracao_ms = int((time.time() - start_time) * 1000)
+    
+    if not resposta_texto:
+        return jsonify({"success": False, "error": "Falha ao gerar resposta da IA (provedores indisponíveis)."}), 500
+        
+    # 4. Salvar Interação
+    # Para salvar quem fez a requisição, pegamos do request (caso esteja na flag)
+    # A depender do jwt, `request.funcionario_id` estaria preenchido. Assumindo request.user.
+    funcionario_id = getattr(request, 'funcionario_id', None) 
+    
+    interacao = ConsultorInteracao(
+        estabelecimento_id=estabelecimento_id,
+        funcionario_id=funcionario_id,
+        especialista=especialista,
+        pergunta=str(mensagem),
+        resposta=resposta_texto,
+        provider=provider_solicitado,
+        duracao_ms=duracao_ms
+    )
+    db.session.add(interacao)
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "resposta": resposta_texto,
+        "interacao_id": interacao.id,
+        "duracao_ms": duracao_ms
+    }), 200
+
+
+@consultor_bp.route("/insights", methods=["POST"], strict_slashes=False)
+@funcionario_required
+@plan_required('Elite')
+def gerar_insights():
+    """Gera 3 pontos curtos de insight baseados unicamente no contexto atual do especialista."""
+    if not llm_disponivel():
+        # Fallback suave (sem 500) para cards de insight
+        return jsonify({"success": True, "insights": None, "aviso": "IA não configurada"}), 200
+
+    estabelecimento_id = get_authorized_establishment_id()
+    if not estabelecimento_id:
+        return jsonify({"success": False, "error": "Estabelecimento inválido."}), 400
+
+    if not verificar_quota_insight(estabelecimento_id):
+        return jsonify({"success": False, "error": "Limite diário de atualizações de insight excedido."}), 429
+
+    dados = request.get_json() or {}
+    especialista = dados.get("especialista", "geral")
+    provider_solicitado = dados.get("provider", "gemini")
+
+    if especialista not in BUILDERS:
+        return jsonify({"success": False, "error": "Especialista desconhecido."}), 400
+
+    start_time = time.time()
+    
+    # 1. Obter contexto cacheado
+    context_data = obter_contexto(especialista, estabelecimento_id, BUILDERS[especialista])
+    
+    # 2. Montar prompt para insight estruturado
+    sys_prompt = SYSTEM_PROMPTS[especialista]
+    context_str = formatar_contexto_para_prompt(context_data)
+    
+    full_system_prompt = (
+        f"{sys_prompt}\n\nCONTEXTO ATUAL:\n{context_str}\n\n"
+        "Com base nos dados acima, forneça exatamente 3 bullet points curtos focados no essencial:\n"
+        "1. O que está bom ou em destaque positivo.\n"
+        "2. Ponto de atenção (onde a loja está perdendo dinheiro ou correndo risco).\n"
+        "3. Ação imediata recomendada.\n"
+        "Seja direto e prático. Use no máximo 2 frases por ponto."
+    )
+    
+    mensagens = [
+        {"role": "system", "content": full_system_prompt},
+        {"role": "user", "content": "Gere os insights agora."}
+    ]
+    
+    resposta_texto = gerar_resposta(mensagens, provider=provider_solicitado)
+    duracao_ms = int((time.time() - start_time) * 1000)
+    
+    if not resposta_texto:
+        return jsonify({"success": True, "insights": None, "aviso": "Falha na resposta do LLM."}), 200
+        
+    # Registro de auditoria do insight gerado (Marcamos especialista como insight_...)
+    funcionario_id = getattr(request, 'funcionario_id', None)
+    interacao = ConsultorInteracao(
+        estabelecimento_id=estabelecimento_id,
+        funcionario_id=funcionario_id,
+        especialista=f"insight_{especialista}",
+        pergunta="Gere os insights agora.",
+        resposta=resposta_texto,
+        provider=provider_solicitado,
+        duracao_ms=duracao_ms
+    )
+    db.session.add(interacao)
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "insights": resposta_texto,
+        "duracao_ms": duracao_ms
+    }), 200

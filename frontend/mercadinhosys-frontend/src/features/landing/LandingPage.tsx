@@ -20,7 +20,8 @@ import {
     Lock,
     MapPin,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Package
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { showToast } from '../../utils/toast';
@@ -254,7 +255,7 @@ const LandingPage: React.FC = () => {
                 'Emissão NFe/NFCe Automática',
                 'Gestão Financeira e DRE',
                 'Auditoria e Controle de Acesso',
-                'Dashboard com IA (Curva ABC)',
+                'Consultor M-IA (Gestor Inteligente)',
                 'Suporte VIP Prioritário'
             ],
             cta: 'Assinar Plano Premium',
@@ -304,10 +305,9 @@ const LandingPage: React.FC = () => {
                 {showSplash && <SplashIntro onComplete={() => setShowSplash(false)} />}
             </AnimatePresence>
 
-            {/* Top Announcement Bar */}
-            <div className="bg-gradient-to-r from-[#1D4ED8] to-[#2E9BFF] text-white py-2 px-4 text-center text-sm font-bold tracking-wide z-[60] relative shadow-md">
-                <span className="inline-block animate-pulse mr-2">🌟</span> 
-                O ERP DEFINITIVO: DO PEQUENO VAREJO AO GRANDE ATACADISTA. SOLUÇÃO COMPLETA.
+            <div className="bg-gradient-to-r from-red-600 to-red-500 text-white py-2 px-4 text-center text-sm font-bold tracking-wide z-[60] relative shadow-md">
+                <span className="inline-block animate-pulse mr-2">⚠️</span> 
+                ATENÇÃO: O SEU CONCORRENTE JÁ ESTÁ DIGITALIZADO. PARE DE PERDER DINHEIRO COM SISTEMAS OBSOLETOS.
             </div>
 
             {/* WhatsApp Floating Button */}
@@ -383,19 +383,18 @@ const LandingPage: React.FC = () => {
                         transition={{ duration: 0.8, ease: "easeOut" }}
                         className="text-center max-w-4xl flex flex-col items-center"
                     >
-                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#101C31]/80 backdrop-blur-sm border border-[#2E9BFF]/30 text-[#6FCBFF] rounded-full text-xs font-bold tracking-widest uppercase mb-6 shadow-[0_0_15px_rgba(46,155,255,0.2)]">
-                            <Building2 className="w-4 h-4" /> Solução Corporativa Escalável
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 backdrop-blur-sm border border-red-500/30 text-red-400 rounded-full text-xs font-bold tracking-widest uppercase mb-6 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                            <Activity className="w-4 h-4 animate-pulse" /> Tecnologia de Sobrevivência Empresarial
                         </div>
                         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] lg:leading-[1.05] mb-8 text-white">
-                            O poder dos gigantes, <br className="hidden sm:block" />
-                            <span className="bg-gradient-to-r from-[#2E9BFF] to-[#6FCBFF] bg-clip-text text-transparent">agora na sua empresa.</span>
+                            O fim do achismo. <br className="hidden sm:block" />
+                            <span className="bg-gradient-to-r from-red-500 to-[#FF6A5C] bg-clip-text text-transparent">Gestão para quem não pode falhar.</span>
                         </h1>
                         <p className="text-xl lg:text-2xl text-[#8FA3C0] leading-relaxed mb-6 font-medium max-w-3xl">
-                            Esqueça sistemas engessados e caros. O <span className="text-white font-bold">MercadinhoSys</span> é o ERP definitivo que atende 
-                            <span className="text-[#FF6A5C] font-bold"> do pequeno varejista ao grande atacadista e distribuidor</span>.
+                            A tecnologia que as gigantes usam, agora acessível para o <span className="text-white font-bold">Pequeno, Médio e Grande Varejo</span>. Um sistema 100% fluído, de alta velocidade, e que <span className="text-red-400 font-bold uppercase underline">não trava</span>.
                         </p>
                         <p className="text-lg text-[#8FA3C0] mb-10 max-w-3xl">
-                            PDV offline, Força de Vendas (SFA), RH real com holerite, controle de ponto com GPS e gestão financeira avançada em uma única plataforma.
+                            O <strong>MercadinhoSys</strong> é a arma definitiva para blindar o seu caixa. PDV imune a quedas de internet, Inteligência Artificial rastreando cada centavo e emissão fiscal em milissegundos. Não perca clientes na fila por causa de um sistema lento.
                         </p>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
@@ -403,18 +402,18 @@ const LandingPage: React.FC = () => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
-                                className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-[#2E9BFF] to-[#1D4ED8] text-white rounded-[10px] font-bold text-xl hover:brightness-110 transition-all flex items-center justify-center shadow-[0_0_28px_rgba(46,155,255,0.45)]"
+                                className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-[10px] font-bold text-xl hover:brightness-110 transition-all flex items-center justify-center shadow-[0_0_30px_rgba(220,38,38,0.5)] border border-red-500 uppercase"
                             >
-                                ASSINAR AGORA
+                                BLINDAR MEU CAIXA AGORA
                             </motion.button>
 
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={handleDemoAccess}
-                                className="w-full sm:w-auto px-10 py-5 bg-[#101C31] text-[#DCE8F7] border border-[#24344F] rounded-[10px] font-bold text-xl hover:bg-[#24344F] transition-all text-center flex items-center justify-center gap-3"
+                                className="w-full sm:w-auto px-10 py-5 bg-[#101C31] text-[#DCE8F7] border border-red-500/50 rounded-[10px] font-bold text-xl hover:bg-red-500/10 transition-all text-center flex items-center justify-center gap-3 uppercase"
                             >
-                                VER DEMONSTRAÇÃO
+                                VER O SISTEMA POR DENTRO
                             </motion.button>
                         </div>
                     </motion.div>
@@ -467,19 +466,41 @@ const LandingPage: React.FC = () => {
             <section id="erp-features" className="py-24 bg-[#101C31] relative overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-4xl mx-auto mb-20">
-                        <h2 className="text-[#8FA3C0] font-bold tracking-[1.5px] text-xs uppercase mb-4">Por que o MercadinhoSys?</h2>
+                        <h2 className="text-red-500 font-bold tracking-[2px] text-xs uppercase mb-4 animate-pulse">Chega de Travar no Horário de Pico</h2>
                         <h3 className="text-4xl lg:text-5xl font-bold text-white leading-tight mb-6">
-                            Não vendemos apenas um PDV. <br/>
-                            <span className="bg-gradient-to-r from-[#2E9BFF] to-[#1D4ED8] bg-clip-text text-transparent">Entregamos um ERP Profissional.</span>
+                            Sistema Lento = <br/>
+                            <span className="bg-gradient-to-r from-red-500 to-[#FF6A5C] bg-clip-text text-transparent">Cliente na Concorrência.</span>
                         </h3>
                         <p className="text-xl text-[#8FA3C0]">
-                            Compare com as gigantes do mercado (SAP, TOTVS, Sankhya) e descubra que você pode ter a mesma tecnologia, com mais facilidade e sem pagar fortunas por implantação.
+                            Nós entendemos a dor de ter uma fila gigante e o sistema "pensando". O MercadinhoSys foi construído com arquitetura de alta performance. Venda rápida, fluída e sem gargalos. Compare com os dinossauros do mercado e sinta a diferença.
                         </p>
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        {/* HIGH CONVERSION AI CARD */}
+                        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-gradient-to-b from-[#0A1220] to-[#101C31] p-8 rounded-[20px] border-2 border-emerald-500/50 hover:border-emerald-400 hover:shadow-[0_0_40px_rgba(16,185,129,0.2)] transition-all group relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all"></div>
+                            
+                            <div className="absolute top-4 right-4 bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-[10px] font-black uppercase tracking-widest py-1 px-3 rounded-full shadow-lg shadow-emerald-500/30 animate-pulse">
+                                Exclusividade
+                            </div>
+                            
+                            <div className="w-14 h-14 bg-[#101C31] border border-emerald-500/30 rounded-2xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform">
+                                <MessageCircle className="w-7 h-7 text-emerald-400" />
+                            </div>
+                            
+                            <h4 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                                Diretor M-IA 360°
+                            </h4>
+                            <p className="text-[#8FA3C0] leading-relaxed mb-4 text-sm">
+                                O fim dos prejuízos invisíveis. Nossa Inteligência Artificial audita suas <strong>margens de lucro, estoque e folha de pagamento 24h por dia</strong>. Receba alertas precisos de vazamento de caixa antes do mês fechar. 
+                                <br/><br/>
+                                <span className="text-emerald-400 font-bold">Gerencie com a frieza dos dados, não com a intuição.</span>
+                            </p>
+                        </motion.div>
+
                         {/* Feature 1 */}
-                        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-[#0A1220] p-8 rounded-[20px] border border-[#24344F] hover:border-[#2E9BFF] transition-all group">
+                        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-[#0A1220] p-8 rounded-[20px] border border-[#24344F] hover:border-[#2E9BFF] transition-all group">
                             <div className="w-14 h-14 bg-[#101C31] rounded-2xl flex items-center justify-center mb-6 border border-[#24344F] group-hover:bg-[#2E9BFF]/10 group-hover:border-[#2E9BFF]/30 transition-all">
                                 <Briefcase className="w-7 h-7 text-[#2E9BFF]" />
                             </div>
@@ -540,7 +561,7 @@ const LandingPage: React.FC = () => {
                             <p className="text-[#8FA3C0] leading-relaxed mb-4">Gestão completa de entregas, roteirização e controle de motoboys. Seus clientes pedem, o sistema separa no estoque e o entregador já sabe a rota.</p>
                         </motion.div>
 
-                        {/* Feature 8 */}
+                        {/* Feature 7 - Replaced with 8 to fit grid since we added Consultor IA at the top */}
                         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.7 }} className="bg-[#0A1220] p-8 rounded-[20px] border border-[#24344F] hover:border-cyan-500 transition-all group">
                             <div className="w-14 h-14 bg-[#101C31] rounded-2xl flex items-center justify-center mb-6 border border-[#24344F] group-hover:bg-cyan-500/10 group-hover:border-cyan-500/30 transition-all">
                                 <Star className="w-7 h-7 text-cyan-500" />
@@ -552,18 +573,122 @@ const LandingPage: React.FC = () => {
                 </div>
             </section>
 
-            {/* HOW IT WORKS SECTION */}
+            {/* SCREENSHOTS / SYSTEM PREVIEW SECTION */}
+            <section className="py-24 bg-[#0c1627] border-y border-[#24344F] relative overflow-hidden">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center max-w-4xl mx-auto mb-20">
+                        <h2 className="text-red-500 font-bold tracking-[2px] text-xs uppercase mb-4">Por dentro da Máquina</h2>
+                        <h3 className="text-4xl lg:text-5xl font-bold text-white leading-tight mb-6">
+                            Não vendemos promessas. <br/>
+                            Entregamos <span className="bg-gradient-to-r from-red-500 to-[#FF6A5C] bg-clip-text text-transparent">Poder de Controle.</span>
+                        </h3>
+                        <p className="text-xl text-[#8FA3C0]">
+                            Dê uma olhada no motor do MercadinhoSys. Um painel de comando desenvolvido para quem precisa de dados rápidos, precisos e sem complicação. O seu negócio na palma da sua mão.
+                        </p>
+                    </div>
+
+                    <div className="space-y-32">
+                        {/* Dashboard Screenshot */}
+                        <div className="flex flex-col lg:flex-row items-center gap-12">
+                            <div className="lg:w-1/2">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/30 text-red-400 rounded-full text-xs font-bold uppercase mb-4">
+                                    <Activity className="w-4 h-4" /> Visão 360 Graus
+                                </div>
+                                <h4 className="text-3xl font-bold text-white mb-4">Dashboard Financeiro em Tempo Real</h4>
+                                <p className="text-[#8FA3C0] text-lg leading-relaxed mb-6">
+                                    Acabe com a cegueira financeira. Acompanhe seu faturamento, despesas e DRE (Demonstração do Resultado do Exercício) ao vivo. Saiba exatamente qual é o seu lucro líquido diário. Sem surpresas no fim do mês.
+                                </p>
+                                <ul className="space-y-3 text-[#DCE8F7]">
+                                    <li className="flex items-center gap-3"><Check className="text-red-500 w-5 h-5"/> Fluxo de Caixa Diário</li>
+                                    <li className="flex items-center gap-3"><Check className="text-red-500 w-5 h-5"/> Gráficos de Receitas vs Despesas</li>
+                                    <li className="flex items-center gap-3"><Check className="text-red-500 w-5 h-5"/> Alertas automáticos do Gestor M-IA</li>
+                                </ul>
+                            </div>
+                            <div className="lg:w-1/2 relative group w-full">
+                                <div className="absolute inset-0 bg-red-500/10 blur-[80px] rounded-full group-hover:bg-red-500/20 transition-all duration-700"></div>
+                                <div className="relative rounded-2xl border border-[#24344F] overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.8)] group-hover:border-red-500/50 transition-colors">
+                                    <div className="h-8 bg-[#101C31] border-b border-[#24344F] flex items-center px-4 gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+                                    </div>
+                                    <img src="/screenshots/dashboard.png" alt="Dashboard do Sistema" className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PDV Screenshot */}
+                        <div className="flex flex-col lg:flex-row-reverse items-center gap-12">
+                            <div className="lg:w-1/2">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-xs font-bold uppercase mb-4">
+                                    <ShoppingCart className="w-4 h-4" /> Frente de Caixa Imparável
+                                </div>
+                                <h4 className="text-3xl font-bold text-white mb-4">PDV Offline-First de Alta Velocidade</h4>
+                                <p className="text-[#8FA3C0] text-lg leading-relaxed mb-6">
+                                    A internet caiu? A sua loja não para. Nosso PDV continua operando, vendendo e emitindo cupons normalmente. Assim que a rede voltar, o sistema sincroniza tudo com a nuvem em segundos. Venda mais, sem filas e sem stress.
+                                </p>
+                                <ul className="space-y-3 text-[#DCE8F7]">
+                                    <li className="flex items-center gap-3"><Check className="text-emerald-500 w-5 h-5"/> Emissão de NFCe em 8 Segundos</li>
+                                    <li className="flex items-center gap-3"><Check className="text-emerald-500 w-5 h-5"/> Sincronização em Nuvem (Offline-First)</li>
+                                    <li className="flex items-center gap-3"><Check className="text-emerald-500 w-5 h-5"/> Integração com Balança e Leitor de Código</li>
+                                </ul>
+                            </div>
+                            <div className="lg:w-1/2 relative group w-full">
+                                <div className="absolute inset-0 bg-emerald-500/10 blur-[80px] rounded-full group-hover:bg-emerald-500/20 transition-all duration-700"></div>
+                                <div className="relative rounded-2xl border border-[#24344F] overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.8)] group-hover:border-emerald-500/50 transition-colors">
+                                    <div className="h-8 bg-[#101C31] border-b border-[#24344F] flex items-center px-4 gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+                                    </div>
+                                    <img src="/screenshots/pdv.png" alt="PDV Offline" className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Produtos Screenshot */}
+                        <div className="flex flex-col lg:flex-row items-center gap-12">
+                            <div className="lg:w-1/2">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full text-xs font-bold uppercase mb-4">
+                                    <Package className="w-4 h-4" /> Gestão Total
+                                </div>
+                                <h4 className="text-3xl font-bold text-white mb-4">Estoque Milimetricamente Rastreado</h4>
+                                <p className="text-[#8FA3C0] text-lg leading-relaxed mb-6">
+                                    Gerencie milhares de produtos sem perder um único item. Acompanhe movimentações, custos e saiba exatamente quando repor o estoque antes que acabe. Receba alertas de produtos parados e sem giro de vendas.
+                                </p>
+                                <ul className="space-y-3 text-[#DCE8F7]">
+                                    <li className="flex items-center gap-3"><Check className="text-blue-500 w-5 h-5"/> Tabela de Preço Custo vs Margem</li>
+                                    <li className="flex items-center gap-3"><Check className="text-blue-500 w-5 h-5"/> Alertas de Ruptura de Estoque</li>
+                                    <li className="flex items-center gap-3"><Check className="text-blue-500 w-5 h-5"/> Importação Automática via XML (NFe)</li>
+                                </ul>
+                            </div>
+                            <div className="lg:w-1/2 relative group w-full">
+                                <div className="absolute inset-0 bg-blue-500/10 blur-[80px] rounded-full group-hover:bg-blue-500/20 transition-all duration-700"></div>
+                                <div className="relative rounded-2xl border border-[#24344F] overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.8)] group-hover:border-blue-500/50 transition-colors">
+                                    <div className="h-8 bg-[#101C31] border-b border-[#24344F] flex items-center px-4 gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+                                    </div>
+                                    <img src="/screenshots/products.png" alt="Gestão de Estoque" className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section id="how-it-works" className="py-24 bg-[#0A1220] border-y border-[#24344F]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-20">
-                        <h2 className="text-[#8FA3C0] font-bold tracking-[1.5px] text-xs uppercase mb-4">Processo de Implantação</h2>
-                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">Em operação em tempo recorde.</h3>
-                        <p className="text-xl text-[#8FA3C0]">Esqueça os meses de implantação dos ERPs tradicionais. Nossa arquitetura em nuvem permite que você comece a vender no mesmo dia.</p>
+                        <h2 className="text-red-500 font-bold tracking-[1.5px] text-xs uppercase mb-4">O Relógio está correndo</h2>
+                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">Implantação Expressa. Comece em Minutos.</h3>
+                        <p className="text-xl text-[#8FA3C0]">Sistemas engessados demoram meses e te cobram taxas absurdas de implantação. Nossa nuvem permite que você corte a sangria e comece a lucrar hoje mesmo.</p>
                     </div>
 
                     <div className="grid md:grid-cols-3 gap-8 relative">
                         {/* Connecting Line */}
-                        <div className="hidden md:block absolute top-1/2 left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-[#2E9BFF]/20 via-[#2E9BFF] to-[#2E9BFF]/20 -translate-y-1/2 z-0"></div>
+                        <div className="hidden md:block absolute top-1/2 left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-red-600/20 via-red-500 to-red-600/20 -translate-y-1/2 z-0"></div>
 
                         <div className="relative z-10 bg-[#101C31] p-10 rounded-[20px] border border-[#24344F] text-center shadow-xl">
                             <div className="w-16 h-16 bg-[#2E9BFF] text-white rounded-full flex items-center justify-center text-2xl font-black mx-auto mb-6 shadow-[0_0_20px_rgba(46,155,255,0.4)]">1</div>
@@ -621,13 +746,69 @@ const LandingPage: React.FC = () => {
                 </div>
             </section>
 
+            {/* COMPARISON SECTION */}
+            <section className="py-24 bg-[#101C31] border-y border-[#24344F] relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-500/5 via-[#101C31] to-[#101C31] pointer-events-none"></div>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                    <div className="text-center max-w-4xl mx-auto mb-16">
+                        <h2 className="text-red-500 font-bold tracking-[2px] text-xs uppercase mb-4">A Verdade Inconveniente do Mercado</h2>
+                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">Sankhya, SAP e TOTVS <span className="text-[#8FA3C0] font-normal text-3xl mx-4">VS</span> MercadinhoSys</h3>
+                        <p className="text-xl text-[#8FA3C0]">Por que pagar fortunas por sistemas corporativos engessados dos anos 2000, se você pode ter tecnologia de 2026, com IA nativa?</p>
+                    </div>
+
+                    <div className="overflow-x-auto custom-scrollbar pb-8 px-4">
+                        <div className="min-w-[800px] border border-[#24344F] rounded-[24px] bg-[#0A1220] shadow-2xl overflow-hidden">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr>
+                                        <th className="p-6 border-b border-[#24344F] text-[#8FA3C0] font-bold text-lg w-1/3">Critério Corporativo</th>
+                                        <th className="p-6 border-b border-[#24344F] border-r border-[#24344F] text-[#8FA3C0] font-bold text-lg bg-[#101C31]/50 w-1/3 text-center">Gigantes Tradicionais <br/><span className="text-xs font-normal opacity-70">(Sankhya, SAP, TOTVS)</span></th>
+                                        <th className="p-6 border-b-2 border-red-500 text-white font-black text-xl bg-gradient-to-t from-red-500/10 to-transparent text-center w-1/3">MercadinhoSys</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-[#DCE8F7]">
+                                    <tr className="hover:bg-[#101C31]/30 transition-colors">
+                                        <td className="p-6 border-b border-[#24344F] font-bold text-lg">Custo de Implantação</td>
+                                        <td className="p-6 border-b border-[#24344F] border-r border-[#24344F] text-amber-500 font-bold bg-[#101C31]/50 text-center">R$ 50.000 a R$ 200.000+</td>
+                                        <td className="p-6 border-b border-[#24344F] text-emerald-400 font-black text-xl bg-red-500/5 text-center">R$ 0 (Setup Automático)</td>
+                                    </tr>
+                                    <tr className="hover:bg-[#101C31]/30 transition-colors">
+                                        <td className="p-6 border-b border-[#24344F] font-bold text-lg">Tempo de Treinamento</td>
+                                        <td className="p-6 border-b border-[#24344F] border-r border-[#24344F] text-amber-500 font-bold bg-[#101C31]/50 text-center">3 a 8 Meses</td>
+                                        <td className="p-6 border-b border-[#24344F] text-emerald-400 font-bold bg-red-500/5 text-center text-xl">Minutos (UX Premium)</td>
+                                    </tr>
+                                    <tr className="hover:bg-[#101C31]/30 transition-colors">
+                                        <td className="p-6 border-b border-[#24344F] font-bold text-lg">Gestão Financeira e Auditoria</td>
+                                        <td className="p-6 border-b border-[#24344F] border-r border-[#24344F] text-amber-500 bg-[#101C31]/50 text-center">Relatórios complexos que demandam analistas</td>
+                                        <td className="p-6 border-b border-[#24344F] text-emerald-400 font-bold bg-red-500/5 text-center text-xl flex flex-col items-center gap-2">
+                                            Diretor M-IA Integrado
+                                            <span className="text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full w-max mx-auto">Alertas de vazamento 24h</span>
+                                        </td>
+                                    </tr>
+                                    <tr className="hover:bg-[#101C31]/30 transition-colors">
+                                        <td className="p-6 border-b border-[#24344F] font-bold text-lg">Estabilidade em Operação de Caixa</td>
+                                        <td className="p-6 border-b border-[#24344F] border-r border-[#24344F] text-red-500 font-bold bg-[#101C31]/50 text-center">Dependência de servidores ou redes perfeitas</td>
+                                        <td className="p-6 border-b border-[#24344F] text-emerald-400 font-black text-xl bg-red-500/5 text-center">PDV 100% Offline-First</td>
+                                    </tr>
+                                    <tr className="hover:bg-[#101C31]/30 transition-colors">
+                                        <td className="p-6 font-bold text-lg">Contrato e Fidelidade</td>
+                                        <td className="p-6 border-r border-[#24344F] text-red-500 font-bold bg-[#101C31]/50 text-center">1 a 3 anos de amarrações e multas</td>
+                                        <td className="p-6 text-emerald-400 font-black text-xl bg-red-500/5 text-center">SaaS Livre (Cancele Quando Quiser)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* PRICING SECTION */}
             <section id="pricing" className="py-24 bg-[#0A1220] border-t border-[#24344F]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-[#8FA3C0] font-bold tracking-[1.5px] text-xs uppercase mb-4">Planos</h2>
-                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">Tecnologia corporativa por um preço que faz sentido.</h3>
-                        <p className="text-xl text-[#8FA3C0]">Sério, justo e transparente. Cancele quando quiser, sem taxas escondidas.</p>
+                        <h2 className="text-red-500 font-bold tracking-[1.5px] text-xs uppercase mb-4">Decisão de Sobrevivência</h2>
+                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">O preço da ignorância é a falência.</h3>
+                        <p className="text-xl text-[#8FA3C0]">Quanto custa não saber para onde vai o seu dinheiro? Escolha o plano que vai salvar o seu negócio hoje. Sem taxas escondidas. Cancele quando quiser.</p>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">

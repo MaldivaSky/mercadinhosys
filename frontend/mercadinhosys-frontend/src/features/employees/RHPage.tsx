@@ -13,6 +13,7 @@ import RetrospectivaGestao from './components/RetrospectivaGestao';
 import MeuRH from './components/MeuRH';
 import { authService } from '../auth/authService';
 import { getNivel } from '../../utils/permissions';
+import { InsightCard as ConsultorInsightCard } from '../../components/consultor/InsightCard';
 
 type TabType = 'dashboard' | 'historico' | 'espelho' | 'banco-horas' | 'justificativas' | 'beneficios' | 'folha' | 'rescisao' | 'parametros' | 'retrospectiva';
 
@@ -61,6 +62,8 @@ export default function RHPage() {
             </p>
           </div>
         </div>
+
+        <ConsultorInsightCard especialista="rh" titulo="Consultor IA - Pessoas & Equipe" className="mb-6" />
 
         {/* Tabs - Glassmorphism UI */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-2 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">

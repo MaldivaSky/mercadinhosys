@@ -22,6 +22,7 @@ import ProductFormModal from './components/ProductFormModal';
 import PinDialog from '../../components/modals/PinDialog';
 import { ProductsTable } from './components/ProductsTable';
 import LotesDisponiveisModal from './components/LotesDisponiveisModal';
+import { InsightCard as ConsultorInsightCard } from '../../components/consultor/InsightCard';
 import ExpiringProductsModal from './components/ExpiringProductsModal';
 import ProductImportModal from './components/ProductImportModal';
 import ProdutoDetalhesModal from './components/ProdutoDetalhesModal';
@@ -596,6 +597,8 @@ const ProductsPage: React.FC = () => {
         onToggleFilters={() => setShowFilters(!showFilters)}
         showFilters={showFilters}
       />
+
+      <ConsultorInsightCard especialista="estoque" titulo="Consultor IA - Inteligência de Estoque" className="mb-2" />
 
       <ProductAnalyticsDashboard 
         produtos={produtos} 

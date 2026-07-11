@@ -2573,3 +2573,34 @@ class ManutencaoVeiculo(db.Model, MultiTenantMixin, SerializableMixin, AuditMixi
     veiculo = db.relationship('Veiculo', backref=db.backref('manutencoes', lazy=True, cascade='all, delete-orphan'))
     motorista = db.relationship('Funcionario', backref=db.backref('manutencoes_registradas', lazy=True))
     despesa = db.relationship('Despesa', backref=db.backref('manutencao_veiculo', uselist=False))
+
+
+# ==========================================
+# Módulo: Consultor IA
+# ==========================================
+
+class ConsultorInteracao(db.Model, MultiTenantMixin):
+    """Interações e logs de uso do consultor inteligente."""
+    __tablename__ = "consultor_interacoes"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionarios.id'), nullable=True, index=True)
+    especialista = db.Column(db.String(40), nullable=False)
+    pergunta = db.Column(db.Text, nullable=False)
+    resposta = db.Column(db.Text)
+    provider = db.Column(db.String(10), nullable=False)
+    duracao_ms = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=utcnow)
+
+    funcionario = db.relationship('Funcionario', backref=db.backref('interacoes_ia', lazy=True))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "especialista": self.especialista,
+            "pergunta": self.pergunta,
+            "resposta": self.resposta,
+            "provider": self.provider,
+            "duracao_ms": self.duracao_ms,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

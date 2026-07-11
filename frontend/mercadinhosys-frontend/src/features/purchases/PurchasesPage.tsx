@@ -16,6 +16,7 @@ import { apiClient } from '../../api/apiClient';
 import PurchaseOrderModal from '../products/components/PurchaseOrderModal';
 import ReceivePurchaseModal from '../products/components/ReceivePurchaseModal';
 import PurchaseOrderDetailsModal from '../products/components/PurchaseOrderDetailsModal';
+import { InsightCard as ConsultorInsightCard } from '../../components/consultor/InsightCard';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
 interface DashboardStats {
@@ -406,6 +407,8 @@ const PurchasesPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <ConsultorInsightCard especialista="compras" titulo="Consultor IA - Compras & Abastecimento" className="mb-2" />
 
         {/* ── KPIs ──────────────────────────────────────────────────── */}
         {/* Mobile: scroll horizontal com largura fixa por card

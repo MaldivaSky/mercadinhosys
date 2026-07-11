@@ -44,7 +44,8 @@ export type Modulo =
     | 'dashboard' | 'pdv' | 'gestao_caixa' | 'vendas' | 'produtos'
     | 'fornecedores' | 'clientes' | 'sfa' | 'sfa_gestao' | 'delivery'
     | 'despesas' | 'fiscal' | 'auditoria' | 'funcionarios' | 'rh'
-    | 'rh_gestao' | 'ponto' | 'relatorios' | 'configuracoes' | 'compras';
+    | 'rh_gestao' | 'ponto' | 'relatorios' | 'configuracoes' | 'compras'
+    | 'consultor';
 
 /** Níveis com acesso a cada módulo (Regras de Acesso do produto). */
 export const MODULOS_POR_NIVEL: Record<Modulo, number[]> = {
@@ -72,6 +73,7 @@ export const MODULOS_POR_NIVEL: Record<Modulo, number[]> = {
     relatorios:    [1, 2],
     // Página aberta a todos; as ABAS são filtradas por nível (getSettingsTabs).
     configuracoes: [1, 2, 3, 4, 5, 6],
+    consultor:     [1, 2, 3], // Limitar chat completo para cargos de gerência
 };
 
 /** Módulos incluídos no Plano Grátis. */
@@ -118,6 +120,7 @@ export const ROTA_MODULO: Record<string, Modulo> = {
     '/ponto': 'ponto',
     '/reports': 'relatorios',
     '/settings': 'configuracoes',
+    '/consultor': 'consultor',
 };
 
 export function canAccessRoute(rota: string, user?: UsuarioLogado | null): boolean {

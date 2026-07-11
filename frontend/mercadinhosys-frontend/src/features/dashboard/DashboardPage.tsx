@@ -9,6 +9,7 @@ import FinancialTab from './components/tabs/FinancialTab';
 import RHTab from './components/tabs/RHTab';
 import { authService } from '../auth/authService';
 import { isPlanoGratis } from '../../utils/permissions';
+import { InsightCard } from '../../components/consultor/InsightCard';
 
 export default function DashboardPageV2() {
   const [activeTab, setActiveTab] = useState('executive');
@@ -114,6 +115,8 @@ export default function DashboardPageV2() {
            )}
         </div>
       </div>
+
+      <InsightCard especialista="geral" titulo="Consultor M-IA - Inteligência do Negócio" className="mb-6" />
 
       {/* Tabs Navigation — no mobile vira uma faixa de "pílulas" com rolagem horizontal
           (snap + sangria até as bordas) para nunca cortar/embaralhar os rótulos. */}

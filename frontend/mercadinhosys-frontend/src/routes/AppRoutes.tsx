@@ -36,6 +36,7 @@ const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/Est
 const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
 const FiscalPage = lazy(() => import('../features/fiscal/FiscalPage'));
 const MonitorPage = lazy(() => import('../features/monitor/MonitorPage'));
+const ConsultorPage = lazy(() => import('../pages/ConsultorPage').then(module => ({ default: module.ConsultorPage })));
 
 // Páginas públicas institucionais (legais / ajuda)
 const TermosPage = lazy(() => import('../features/legal/TermosPage'));
@@ -110,6 +111,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="ponto-relatorios" element={<ModuleGuard modulo="rh_gestao"><RelatoriosPontoPage /></ModuleGuard>} />
                     <Route path="ponto-diagnostico" element={<ModuleGuard modulo="rh_gestao"><DiagnosticoFotos /></ModuleGuard>} />
                     <Route path="reports" element={<ModuleGuard modulo="relatorios"><ReportsPage /></ModuleGuard>} />
+                    <Route path="consultor" element={<ModuleGuard modulo="consultor"><ConsultorPage /></ModuleGuard>} />
 
                     <Route path="estabelecimentos" element={<SuperAdminRoute><EstabelecimentosPage /></SuperAdminRoute>} />
                     <Route path="monitor" element={<SuperAdminRoute><SystemMonitorPage /></SuperAdminRoute>} />

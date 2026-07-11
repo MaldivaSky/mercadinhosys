@@ -798,6 +798,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar pedidos_compra: {e}")
 
+    # Consultor IA
+    try:
+        from app.routes.consultor import consultor_bp
+        app.register_blueprint(consultor_bp, url_prefix="/api/consultor")
+        logger.info("✅ Blueprint consultor registrado em /api/consultor")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar consultor: {e}")
+
     # Logística (App Entregador)
     try:
         from app.routes.logistica import logistica_bp

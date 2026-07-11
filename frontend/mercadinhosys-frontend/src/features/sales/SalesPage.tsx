@@ -13,6 +13,7 @@ import { apiClient } from "../../api/apiClient";
 import { showToast } from "../../utils/toast";
 import { fiscalService } from "../fiscal/fiscalService";
 import SFAPedidosTab from "./SFAPedidosTab";
+import { InsightCard as ConsultorInsightCard } from "../../components/consultor/InsightCard";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -391,6 +392,8 @@ export default function SalesPage() {
                         <Download className="w-4 h-4" /> Exportar
                     </button>
                 </div>
+
+                <ConsultorInsightCard especialista="vendas" titulo="Consultor IA - Inteligência de Vendas" className="mb-2" />
 
             {/* KPIs */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

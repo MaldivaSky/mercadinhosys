@@ -14,6 +14,7 @@ import { buscarCep, formatCep, formatPhone } from '../../utils/cepUtils';
 import PageContainer from '../../components/layout/PageContainer';
 import PageHeader from '../../components/layout/PageHeader';
 import PinDialog from '../../components/modals/PinDialog';
+import { InsightCard as ConsultorInsightCard } from '../../components/consultor/InsightCard';
 
 // Tipos atualizados - todas as propriedades do Fornecedor estão disponíveis
 
@@ -539,6 +540,8 @@ const SuppliersPage: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            <ConsultorInsightCard especialista="fornecedores" titulo="Consultor IA - Relação e Parcerias" className="mb-6 mt-4" />
 
             {/* Dashboard de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
