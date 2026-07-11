@@ -66,9 +66,17 @@ def chat_consultor():
 
     # RBAC: Verificação de Cargo (Role)
     claims = get_jwt()
-    role = claims.get("role", "").lower()
-    allowed_admin_roles = ["admin", "administrador", "proprietario", "dono", "master", "gerente"]
-    is_manager = role in allowed_admin_roles
+    # Pega a role e garante que esteja em lowercase para validação
+    role = str(claims.get('role', 'caixa')).lower()
+    
+    # Validação de Perfil (RBAC base)
+    allowed_roles = ['admin', 'gerente', 'caixa', 'estoquista', 'funcionario']
+    
+    if role not in allowed_roles:
+        return jsonify({"error": "Acesso negado: Perfil não autorizado"}), 403
+
+    # Define se é gestor
+    is_manager = role in ['admin', 'gerente']
 
     if not is_manager:
         if especialista in ['geral', 'financeiro', 'compras']:
@@ -77,7 +85,7 @@ def chat_consultor():
         if role == 'rh' and especialista != 'rh':
             return jsonify({"success": False, "error": "Acesso negado. Seu perfil tem permissão apenas para o painel de RH."}), 403
             
-        if role in ['caixa', 'estoque', 'repositor', 'operador'] and especialista not in ['estoque', 'vendas']:
+        if role in ['caixa', 'estoquista', 'repositor', 'operador', 'funcionario'] and especialista not in ['estoque', 'vendas']:
             return jsonify({"success": False, "error": "Acesso negado. Seu perfil tem permissão apenas para Estoque ou Vendas."}), 403
 
     start_time = time.time()

@@ -383,18 +383,18 @@ const LandingPage: React.FC = () => {
                         transition={{ duration: 0.8, ease: "easeOut" }}
                         className="text-center max-w-4xl flex flex-col items-center"
                     >
-                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 backdrop-blur-sm border border-red-500/30 text-red-400 rounded-full text-xs font-bold tracking-widest uppercase mb-6 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                            <Activity className="w-4 h-4 animate-pulse" /> Tecnologia de Sobrevivência Empresarial
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#2E9BFF]/10 backdrop-blur-sm border border-[#2E9BFF]/30 text-[#6FCBFF] rounded-full text-xs font-bold tracking-widest uppercase mb-6 shadow-[0_0_15px_rgba(46,155,255,0.2)]">
+                            <Activity className="w-4 h-4" /> Gestão de Alta Performance
                         </div>
                         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] lg:leading-[1.05] mb-8 text-white">
-                            O fim do achismo. <br className="hidden sm:block" />
-                            <span className="bg-gradient-to-r from-red-500 to-[#FF6A5C] bg-clip-text text-transparent">Gestão para quem não pode falhar.</span>
+                            O controle absoluto da sua operação. <br className="hidden sm:block" />
+                            <span className="bg-gradient-to-r from-[#2E9BFF] to-[#6FCBFF] bg-clip-text text-transparent">Desempenho máximo para o varejo.</span>
                         </h1>
                         <p className="text-xl lg:text-2xl text-[#8FA3C0] leading-relaxed mb-6 font-medium max-w-3xl">
-                            A tecnologia que as gigantes usam, agora acessível para o <span className="text-white font-bold">Pequeno, Médio e Grande Varejo</span>. Um sistema 100% fluído, de alta velocidade, e que <span className="text-red-400 font-bold uppercase underline">não trava</span>.
+                            A tecnologia que as gigantes usam, agora acessível para o <span className="text-white font-bold">Pequeno, Médio e Grande Varejo</span>. Um sistema 100% fluído, veloz, e altamente robusto.
                         </p>
                         <p className="text-lg text-[#8FA3C0] mb-10 max-w-3xl">
-                            O <strong>MercadinhoSys</strong> é a arma definitiva para blindar o seu caixa. PDV imune a quedas de internet, Inteligência Artificial rastreando cada centavo e emissão fiscal em milissegundos. Não perca clientes na fila por causa de um sistema lento.
+                            O <strong>MercadinhoSys</strong> centraliza e otimiza a sua empresa. PDV ágil e confiável, Gestor de IA para inteligência financeira, e controle de estoque impecável. Eleve a maturidade do seu negócio.
                         </p>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
@@ -402,18 +402,18 @@ const LandingPage: React.FC = () => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
-                                className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-[10px] font-bold text-xl hover:brightness-110 transition-all flex items-center justify-center shadow-[0_0_30px_rgba(220,38,38,0.5)] border border-red-500 uppercase"
+                                className="w-full sm:w-auto px-10 py-4 bg-[#2E9BFF] text-[#0A1220] rounded-[10px] font-bold text-xl hover:bg-[#6FCBFF] transition-all flex items-center justify-center shadow-[0_0_30px_rgba(46,155,255,0.4)] border border-[#2E9BFF]"
                             >
-                                BLINDAR MEU CAIXA AGORA
+                                Conhecer Planos
                             </motion.button>
 
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={handleDemoAccess}
-                                className="w-full sm:w-auto px-10 py-5 bg-[#101C31] text-[#DCE8F7] border border-red-500/50 rounded-[10px] font-bold text-xl hover:bg-red-500/10 transition-all text-center flex items-center justify-center gap-3 uppercase"
+                                className="w-full sm:w-auto px-10 py-4 bg-[#101C31] text-[#DCE8F7] border border-[#24344F] rounded-[10px] font-bold text-xl hover:bg-[#1A2C4D] transition-all text-center flex items-center justify-center gap-3"
                             >
-                                VER O SISTEMA POR DENTRO
+                                Acessar Demonstração
                             </motion.button>
                         </div>
                     </motion.div>
