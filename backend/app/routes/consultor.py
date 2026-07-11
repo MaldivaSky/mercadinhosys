@@ -159,10 +159,15 @@ def gerar_insights():
     if especialista not in BUILDERS:
         return jsonify({"success": False, "error": "Especialista desconhecido."}), 400
 
+    # Extrai claims para obter is_manager
+    claims = get_jwt()
+    role = str(claims.get('role', 'caixa')).lower()
+    is_manager = role in ['admin', 'gerente']
+
     start_time = time.time()
     
     # 1. Obter contexto cacheado
-    context_data = obter_contexto(especialista, estabelecimento_id, BUILDERS[especialista])
+    context_data = obter_contexto(especialista, estabelecimento_id, is_manager, BUILDERS[especialista])
     
     # 2. Montar prompt para insight estruturado
     sys_prompt = SYSTEM_PROMPTS[especialista]
