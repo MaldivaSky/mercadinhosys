@@ -6,7 +6,7 @@ from app.models import ConsultorInteracao, db, _tenant_atual
 from app.utils.timezone import to_local
 
 CONSULTOR_LIMITE_DIA = 40 # Limite padrão diário de interações completas via Chat
-INSIGHT_LIMITE_DIA = 5    # Limite padrão de *refreshes manuais* de insights por dia
+INSIGHT_LIMITE_DIA = 20    # Limite padrão de *refreshes manuais* de insights por dia
 
 
 def _contar_interacoes_hoje(estabelecimento_id: int) -> int:
