@@ -313,7 +313,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                   {/* Cabeçalho do Accordion */}
                   <button 
                     onClick={() => toggleFornecedor(grupo.nome)}
-                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
                     <div className="flex items-center gap-4">
                       <div className={`p-2 rounded-lg ${isExpanded ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/50 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>

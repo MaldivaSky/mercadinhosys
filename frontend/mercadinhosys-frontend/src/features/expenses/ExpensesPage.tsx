@@ -12,7 +12,7 @@ import {
     Tag, Search,
     ArrowUpRight, Lightbulb, Receipt, History,
     PieChart, BadgeAlert, CircleDollarSign,
-    BadgeCheck,
+    BadgeCheck, ChevronDown, ChevronUp,
 } from "lucide-react";
 import {
     expensesService, Despesa, Estatisticas, BoletosStatus, BoletoItem,
@@ -299,6 +299,9 @@ export default function ExpensesPage() {
     // ─── Tab ──────────────────────────────────────────────────────────────────
     const [activeTab, setActiveTab] = useState<TabId>("visao_geral");
     const [filtroBoletos, setFiltroBoletos] = useState<"todos" | "vencidos" | "a_vencer" | "pagos">("todos");
+    const [secoesBoletosAbertas, setSecoesBoletosAbertas] = useState({ vencidos: true, a_vencer: true, pagos: false });
+    const toggleSecaoBoletos = (secao: "vencidos" | "a_vencer" | "pagos") =>
+        setSecoesBoletosAbertas(prev => ({ ...prev, [secao]: !prev[secao] }));
 
     // ─── Período / filtros gerais ─────────────────────────────────────────────
     const [periodo, setPeriodo] = useState("mes");
@@ -1034,8 +1037,8 @@ export default function ExpensesPage() {
                             <>
                                 {/* Resumo cards */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div 
-                                        onClick={() => setFiltroBoletos(f => f === "vencidos" ? "todos" : "vencidos")}
+                                    <div
+                                        onClick={() => { setFiltroBoletos(f => f === "vencidos" ? "todos" : "vencidos"); setSecoesBoletosAbertas(prev => ({ ...prev, vencidos: true })); }}
                                         className={`cursor-pointer transition-all hover:scale-[1.02] ${filtroBoletos === "vencidos" ? 'ring-2 ring-red-500 scale-[1.02]' : filtroBoletos !== 'todos' ? 'opacity-50 grayscale' : ''} bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 rounded-2xl p-5`}
                                     >
                                         <div className="flex items-center gap-3 mb-2">
@@ -1045,8 +1048,8 @@ export default function ExpensesPage() {
                                         <p className="text-2xl font-black text-red-700 dark:text-red-300">{fmt(boletos.resumo.total_vencidos)}</p>
                                         <p className="text-xs text-red-500 mt-1">{boletos.resumo.qtd_vencidos} boleto(s) — atenção urgente!</p>
                                     </div>
-                                    <div 
-                                        onClick={() => setFiltroBoletos(f => f === "a_vencer" ? "todos" : "a_vencer")}
+                                    <div
+                                        onClick={() => { setFiltroBoletos(f => f === "a_vencer" ? "todos" : "a_vencer"); setSecoesBoletosAbertas(prev => ({ ...prev, a_vencer: true })); }}
                                         className={`cursor-pointer transition-all hover:scale-[1.02] ${filtroBoletos === "a_vencer" ? 'ring-2 ring-amber-500 scale-[1.02]' : filtroBoletos !== 'todos' ? 'opacity-50 grayscale' : ''} bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-5`}
                                     >
                                         <div className="flex items-center gap-3 mb-2">
@@ -1056,8 +1059,8 @@ export default function ExpensesPage() {
                                         <p className="text-2xl font-black text-amber-700 dark:text-amber-300">{fmt(boletos.resumo.total_a_vencer)}</p>
                                         <p className="text-xs text-amber-500 mt-1">{boletos.resumo.qtd_a_vencer} boleto(s) no horizonte</p>
                                     </div>
-                                    <div 
-                                        onClick={() => setFiltroBoletos(f => f === "pagos" ? "todos" : "pagos")}
+                                    <div
+                                        onClick={() => { setFiltroBoletos(f => f === "pagos" ? "todos" : "pagos"); setSecoesBoletosAbertas(prev => ({ ...prev, pagos: true })); }}
                                         className={`cursor-pointer transition-all hover:scale-[1.02] ${filtroBoletos === "pagos" ? 'ring-2 ring-emerald-500 scale-[1.02]' : filtroBoletos !== 'todos' ? 'opacity-50 grayscale' : ''} bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-5`}
                                     >
                                         <div className="flex items-center gap-3 mb-2">
@@ -1072,39 +1075,69 @@ export default function ExpensesPage() {
                                 {/* Vencidos */}
                                 {(filtroBoletos === "todos" || filtroBoletos === "vencidos") && boletos.vencidos.items.length > 0 && (
                                     <div>
-                                        <h3 className="font-bold text-red-600 dark:text-red-400 flex items-center gap-2 mb-3">
-                                            <BadgeAlert className="w-5 h-5" />
-                                            🔴 Boletos Vencidos ({boletos.vencidos.quantidade})
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {boletos.vencidos.items.map(b => <BoletoCard key={b.id} item={b} variant="vencido" />)}
-                                        </div>
+                                        <button
+                                            onClick={() => toggleSecaoBoletos("vencidos")}
+                                            className="w-full flex items-center justify-between gap-2 mb-3 group"
+                                        >
+                                            <h3 className="font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                                                <BadgeAlert className="w-5 h-5" />
+                                                🔴 Boletos Vencidos ({boletos.vencidos.quantidade})
+                                            </h3>
+                                            {secoesBoletosAbertas.vencidos
+                                                ? <ChevronUp className="w-5 h-5 text-red-400 group-hover:text-red-600" />
+                                                : <ChevronDown className="w-5 h-5 text-red-400 group-hover:text-red-600" />}
+                                        </button>
+                                        {secoesBoletosAbertas.vencidos && (
+                                            <div className="space-y-2">
+                                                {boletos.vencidos.items.map(b => <BoletoCard key={b.id} item={b} variant="vencido" />)}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
                                 {/* A vencer */}
                                 {(filtroBoletos === "todos" || filtroBoletos === "a_vencer") && boletos.a_vencer.items.length > 0 && (
                                     <div>
-                                        <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2 mb-3">
-                                            <Clock className="w-5 h-5" />
-                                            🟡 A Vencer nos próximos 30 dias ({boletos.a_vencer.quantidade})
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {boletos.a_vencer.items.map(b => <BoletoCard key={b.id} item={b} variant="a_vencer" />)}
-                                        </div>
+                                        <button
+                                            onClick={() => toggleSecaoBoletos("a_vencer")}
+                                            className="w-full flex items-center justify-between gap-2 mb-3 group"
+                                        >
+                                            <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                                                <Clock className="w-5 h-5" />
+                                                🟡 A Vencer nos próximos 30 dias ({boletos.a_vencer.quantidade})
+                                            </h3>
+                                            {secoesBoletosAbertas.a_vencer
+                                                ? <ChevronUp className="w-5 h-5 text-amber-400 group-hover:text-amber-600" />
+                                                : <ChevronDown className="w-5 h-5 text-amber-400 group-hover:text-amber-600" />}
+                                        </button>
+                                        {secoesBoletosAbertas.a_vencer && (
+                                            <div className="space-y-2">
+                                                {boletos.a_vencer.items.map(b => <BoletoCard key={b.id} item={b} variant="a_vencer" />)}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
                                 {/* Pagos */}
                                 {(filtroBoletos === "todos" || filtroBoletos === "pagos") && boletos.pagos.items.length > 0 && (
                                     <div>
-                                        <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2 mb-3">
-                                            <BadgeCheck className="w-5 h-5" />
-                                            🟢 Pagos no Período ({boletos.pagos.quantidade})
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {boletos.pagos.items.map(b => <BoletoCard key={b.id} item={b} variant="pago" />)}
-                                        </div>
+                                        <button
+                                            onClick={() => toggleSecaoBoletos("pagos")}
+                                            className="w-full flex items-center justify-between gap-2 mb-3 group"
+                                        >
+                                            <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                                <BadgeCheck className="w-5 h-5" />
+                                                🟢 Pagos no Período ({boletos.pagos.quantidade})
+                                            </h3>
+                                            {secoesBoletosAbertas.pagos
+                                                ? <ChevronUp className="w-5 h-5 text-emerald-400 group-hover:text-emerald-600" />
+                                                : <ChevronDown className="w-5 h-5 text-emerald-400 group-hover:text-emerald-600" />}
+                                        </button>
+                                        {secoesBoletosAbertas.pagos && (
+                                            <div className="space-y-2">
+                                                {boletos.pagos.items.map(b => <BoletoCard key={b.id} item={b} variant="pago" />)}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
