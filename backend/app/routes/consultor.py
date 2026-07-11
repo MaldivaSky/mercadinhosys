@@ -21,6 +21,7 @@ BUILDERS = {
     "estoque": estoque.montar_contexto,
     "rh": rh.montar_contexto,
     "compras": compras.montar_contexto,
+    "fornecedores": compras.montar_contexto,
     "geral": geral.montar_contexto,
 }
 
@@ -30,6 +31,7 @@ SYSTEM_PROMPTS = {
     "estoque": "Você é o Consultor M-IA de Estoque do MercadinhoSys. Avise sobre rupturas e produtos parados como um parceiro de negócio de forma super rápida e fácil de ler. PROIBIDO jargões e enrolação. Seja objetivo, em poucas linhas.",
     "rh": "Você é o Consultor M-IA de RH do MercadinhoSys. Mostre os custos com funcionários de forma ultrarresumida e direta. Haja como um colega humano, sem frases feitas. Vá direto ao ponto.",
     "compras": "Você é o Consultor M-IA de Compras do MercadinhoSys. Avalie fornecedores e pedidos de forma informal, curta e precisa. PROIBIDO ser repetitivo ou enfadonho.",
+    "fornecedores": "Você é o Consultor M-IA de Fornecedores do MercadinhoSys. Avalie a relação com fornecedores, contas a pagar e prazos de forma informal, curta e precisa. PROIBIDO ser repetitivo ou enfadonho.",
     "geral": "Você é o Consultor M-IA Master do MercadinhoSys. REGRAS CRÍTICAS: 1. NUNCA seja enfadonho ou repetitivo. 2. PROIBIDO usar clichês de IA (ex: 'Além disso', 'É importante notar que', 'Em resumo'). 3. Fale como um parceiro de negócios informal e humano. 4. Vá DIRETO aos números cruciais e dê no máximo 3 insights rápidos e práticos em tópicos curtos."
 }
 
@@ -149,12 +151,25 @@ def gerar_insights():
     if not estabelecimento_id:
         return jsonify({"success": False, "error": "Estabelecimento inválido."}), 400
 
-    if not verificar_quota_insight(estabelecimento_id):
-        return jsonify({"success": False, "error": "Limite diário de atualizações de insight excedido."}), 429
-
     dados = request.get_json() or {}
     especialista = dados.get("especialista", "geral")
     provider_solicitado = dados.get("provider", "gemini")
+
+    if not verificar_quota_insight(estabelecimento_id):
+        # Tenta buscar a última resposta gerada
+        ultima = ConsultorInteracao.query.filter_by(
+            estabelecimento_id=estabelecimento_id, 
+            especialista=f"insight_{especialista}"
+        ).order_by(ConsultorInteracao.data_criacao.desc()).first()
+        
+        if ultima:
+            return jsonify({
+                "success": True, 
+                "insights": ultima.resposta, 
+                "aviso": "Limite diário de atualizações atingido. Mostrando última análise."
+            }), 200
+            
+        return jsonify({"success": False, "error": "Limite diário de atualizações de insight excedido."}), 429
 
     if especialista not in BUILDERS:
         return jsonify({"success": False, "error": "Especialista desconhecido."}), 400

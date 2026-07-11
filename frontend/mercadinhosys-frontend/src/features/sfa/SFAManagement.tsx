@@ -153,10 +153,10 @@ export default function SFAManagement() {
                 {/* ABA DE METAS */}
                 {activeTab === 'metas' && (
                 <div className="space-y-6">
-                    <Card className="border-none shadow-lg bg-white/70 backdrop-blur-xl">
+                    <Card className="border-none shadow-lg bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl">
                         <CardHeader>
-                            <CardTitle>Definir Nova Meta</CardTitle>
-                            <CardDescription>Estabeleça as metas de faturamento e positivação para o mês.</CardDescription>
+                            <CardTitle className="text-slate-900 dark:text-white">Definir Nova Meta</CardTitle>
+                            <CardDescription className="text-slate-500 dark:text-slate-400">Estabeleça as metas de faturamento e positivação para o mês.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSaveMeta} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
@@ -203,25 +203,25 @@ export default function SFAManagement() {
                         {metas.map((m) => {
                             const vend = funcionarios.find(f => f.id === m.vendedor_id);
                             return (
-                                <Card key={m.id} className="border-l-4 border-l-blue-500 shadow-md">
+                                <Card key={m.id} className="border-l-4 border-l-blue-500 shadow-md bg-white dark:bg-slate-800">
                                     <CardContent className="pt-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <h3 className="font-bold text-lg">{vend ? vend.nome : `Vendedor ID: ${m.vendedor_id}`}</h3>
-                                                <p className="text-sm text-gray-500">Mês {m.mes}/{m.ano}</p>
+                                                <h3 className="font-bold text-lg text-slate-900 dark:text-white">{vend ? vend.nome : `Vendedor ID: ${m.vendedor_id}`}</h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Mês {m.mes}/{m.ano}</p>
                                             </div>
-                                            <div className="bg-blue-100 text-blue-800 p-2 rounded-full">
+                                            <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 p-2 rounded-full">
                                                 <Users className="w-5 h-5" />
                                             </div>
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex justify-between">
-                                                <span className="text-gray-600">Faturamento:</span>
-                                                <span className="font-semibold">{formatCurrency(m.meta_faturamento)}</span>
+                                                <span className="text-gray-600 dark:text-gray-400">Faturamento:</span>
+                                                <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(m.meta_faturamento)}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-gray-600">Positivação:</span>
-                                                <span className="font-semibold">{m.meta_positivacao} clientes</span>
+                                                <span className="text-gray-600 dark:text-gray-400">Positivação:</span>
+                                                <span className="font-semibold text-slate-900 dark:text-white">{m.meta_positivacao} clientes</span>
                                             </div>
                                         </div>
                                     </CardContent>
@@ -235,10 +235,10 @@ export default function SFAManagement() {
                 {/* ABA PRODUTO FOCO */}
                 {activeTab === 'foco' && (
                 <div className="space-y-6">
-                    <Card className="border-none shadow-lg bg-white/70 backdrop-blur-xl">
+                    <Card className="border-none shadow-lg bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl">
                         <CardHeader>
-                            <CardTitle>Novo Produto Foco</CardTitle>
-                            <CardDescription>Destaque produtos no aplicativo do vendedor para impulsionar as vendas.</CardDescription>
+                            <CardTitle className="text-slate-900 dark:text-white">Novo Produto Foco</CardTitle>
+                            <CardDescription className="text-slate-500 dark:text-slate-400">Destaque produtos no aplicativo do vendedor para impulsionar as vendas.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSaveFoco} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
@@ -279,22 +279,22 @@ export default function SFAManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {focos.map((f) => (
-                            <Card key={f.id} className="border-l-4 border-l-indigo-500 shadow-md">
+                            <Card key={f.id} className="border-l-4 border-l-indigo-500 shadow-md bg-white dark:bg-slate-800">
                                 <CardContent className="pt-6">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <h3 className="font-bold text-lg text-indigo-900">{f.produto_nome}</h3>
-                                            <p className="text-xs text-gray-500">Validade: {new Date(f.data_inicio).toLocaleDateString()} a {new Date(f.data_fim).toLocaleDateString()}</p>
+                                            <h3 className="font-bold text-lg text-indigo-900 dark:text-indigo-300">{f.produto_nome}</h3>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Validade: {new Date(f.data_inicio).toLocaleDateString()} a {new Date(f.data_fim).toLocaleDateString()}</p>
                                         </div>
-                                        <div className="bg-indigo-100 text-indigo-800 p-2 rounded-full cursor-pointer hover:bg-red-100 hover:text-red-600 transition-colors" onClick={() => handleDeleteFoco(f.id)}>
+                                        <div className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400 p-2 rounded-full cursor-pointer hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors" onClick={() => handleDeleteFoco(f.id)}>
                                             <Trash2 className="w-5 h-5" />
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center mt-4 bg-gray-50 p-2 rounded">
-                                        <span className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                                    <div className="flex justify-between items-center mt-4 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
+                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-2">
                                             <PackageOpen className="w-4 h-4" /> Meta: {f.meta_quantidade || 'N/A'} unid.
                                         </span>
-                                        <span className={`text-xs px-2 py-1 rounded-full ${f.ativo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${f.ativo ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-400'}`}>
                                             {f.ativo ? 'Ativo' : 'Inativo'}
                                         </span>
                                     </div>
@@ -308,10 +308,10 @@ export default function SFAManagement() {
                 {/* ABA ROTAS */}
                 {activeTab === 'rotas' && (
                 <div className="space-y-6">
-                    <Card className="border-none shadow-lg bg-white/70 backdrop-blur-xl">
+                    <Card className="border-none shadow-lg bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl">
                         <CardHeader>
-                            <CardTitle>Criar Nova Rota</CardTitle>
-                            <CardDescription>Defina rotas de visitação e atribua aos vendedores.</CardDescription>
+                            <CardTitle className="text-slate-900 dark:text-white">Criar Nova Rota</CardTitle>
+                            <CardDescription className="text-slate-500 dark:text-slate-400">Defina rotas de visitação e atribua aos vendedores.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSaveRota} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
@@ -363,25 +363,25 @@ export default function SFAManagement() {
                             const vend = funcionarios.find(f => f.id === r.vendedor_id);
                             const dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
                             return (
-                                <Card key={r.id} className="border-l-4 border-l-emerald-500 shadow-md">
+                                <Card key={r.id} className="border-l-4 border-l-emerald-500 shadow-md bg-white dark:bg-slate-800">
                                     <CardContent className="pt-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <h3 className="font-bold text-lg text-emerald-900 flex items-center gap-2">
+                                                <h3 className="font-bold text-lg text-emerald-900 dark:text-emerald-400 flex items-center gap-2">
                                                     <MapPin className="w-5 h-5 text-emerald-500" />
                                                     {r.nome}
                                                 </h3>
-                                                <p className="text-sm text-gray-500">{vend ? vend.nome : 'Sem Vendedor'}</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">{vend ? vend.nome : 'Sem Vendedor'}</p>
                                             </div>
-                                            <div className="bg-red-50 text-red-600 p-2 rounded-full cursor-pointer hover:bg-red-100 transition-colors" onClick={() => handleDeleteRota(r.id)}>
+                                            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 p-2 rounded-full cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors" onClick={() => handleDeleteRota(r.id)}>
                                                 <Trash2 className="w-5 h-5" />
                                             </div>
                                         </div>
-                                        <div className="flex justify-between items-center mt-4 bg-gray-50 p-2 rounded">
-                                            <span className="text-sm font-medium text-gray-600">
+                                        <div className="flex justify-between items-center mt-4 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
+                                            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                                                 Dia: {dias[r.dia_semana] || r.dia_semana}
                                             </span>
-                                            <span className={`text-xs px-2 py-1 rounded-full ${r.ativa ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'}`}>
+                                            <span className={`text-xs px-2 py-1 rounded-full ${r.ativa ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-400'}`}>
                                                 {r.ativa ? 'Ativa' : 'Inativa'}
                                             </span>
                                         </div>

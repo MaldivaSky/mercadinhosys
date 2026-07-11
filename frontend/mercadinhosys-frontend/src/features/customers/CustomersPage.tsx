@@ -48,6 +48,7 @@ import CustomerTable from './components/CustomerTable';
 import CustomersCommandToolbar from './components/CustomersCommandToolbar';
 import CustomersAdvancedFiltersModal, { StatusFilter, SegmentFilter } from './components/CustomersAdvancedFiltersModal';
 import PinDialog from '../../components/modals/PinDialog';
+import { InsightCard } from '../../components/consultor/InsightCard';
 
 type CRMTab = 'overview' | 'recovery' | 'campaigns' | 'portfolio';
 type CampaignKey = 'reactivation' | 'vip' | 'debt' | 'promotion';
@@ -949,6 +950,8 @@ const CustomersPage: React.FC = () => {
                     </Box>
                 </Box>
             </section>
+
+            <InsightCard especialista="vendas" titulo="Consultor IA - Gestão de Clientes" className="mb-2" />
 
             <div className="flex overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 snap-x snap-mandatory hide-scrollbar">
                 <div className="min-w-[260px] sm:min-w-0 snap-start">

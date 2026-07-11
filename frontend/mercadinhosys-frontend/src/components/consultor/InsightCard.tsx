@@ -42,7 +42,11 @@ export const InsightCard: React.FC<InsightCardProps> = ({ especialista, titulo =
       const response = await consultorService.obterInsights(especialista);
       if (response.success && response.insights) {
         setInsights(response.insights);
-        if (isManual) toast.success('Insights atualizados com sucesso!');
+        if (response.aviso) {
+           if (isManual) toast.error(response.aviso);
+        } else {
+           if (isManual) toast.success('Insights atualizados com sucesso!');
+        }
       } else if (response.error) {
         if (response.error.includes('Limite')) {
            setError('Limite diário de atualizações atingido.');
