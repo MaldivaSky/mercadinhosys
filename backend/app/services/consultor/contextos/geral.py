@@ -3,6 +3,8 @@ from app.services.consultor.contextos.vendas import montar_contexto as montar_ve
 from app.services.consultor.contextos.estoque import montar_contexto as montar_estoque
 from app.services.consultor.contextos.rh import montar_contexto as montar_rh
 from app.services.consultor.contextos.compras import montar_contexto as montar_compras
+from app.services.consultor.contextos.clientes import montar_contexto as montar_clientes
+from app.services.consultor.contextos.auditoria import montar_contexto as montar_auditoria
 
 def montar_contexto(estabelecimento_id: int, is_manager: bool = True) -> dict:
     """Monta o contexto Geral compilando resumos dos outros módulos.
@@ -13,6 +15,8 @@ def montar_contexto(estabelecimento_id: int, is_manager: bool = True) -> dict:
     estoque = montar_estoque(estabelecimento_id, is_manager)
     rh = montar_rh(estabelecimento_id, is_manager)
     compras = montar_compras(estabelecimento_id, is_manager)
+    clientes = montar_clientes(estabelecimento_id, is_manager)
+    auditoria = montar_auditoria(estabelecimento_id, is_manager)
     
     # Montamos um resumo enxuto para não estourar tokens
     return {
@@ -45,5 +49,13 @@ def montar_contexto(estabelecimento_id: int, is_manager: bool = True) -> dict:
             "boletos_por_fornecedor": compras.get("boletos_abertos_por_fornecedor", []),
             "alertas_compras": compras.get("itens_abaixo_minimo_para_comprar", []),
             "prazo_medio_entrega": compras.get("prazo_medio_entrega_dias", 0.0),
+        },
+        "clientes": {
+            "total_ativos": clientes.get("total_clientes_ativos"),
+            "top_3_historico": clientes.get("top_clientes_historico", [])[:3],
+            "top_3_devedores": clientes.get("maiores_devedores", [])[:3],
+        },
+        "auditoria": {
+            "ultimos_5_logs": auditoria.get("ultimos_logs", [])[:5]
         }
     }

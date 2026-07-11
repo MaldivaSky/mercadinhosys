@@ -11,7 +11,7 @@ from app.utils.llm_client import gerar_resposta, llm_disponivel
 from app.models import ConsultorInteracao
 
 # Importando os builders
-from app.services.consultor.contextos import financeiro, vendas, estoque, rh, compras, geral
+from app.services.consultor.contextos import financeiro, vendas, estoque, rh, compras, geral, clientes, auditoria
 
 consultor_bp = Blueprint("consultor", __name__)
 
@@ -22,6 +22,8 @@ BUILDERS = {
     "rh": rh.montar_contexto,
     "compras": compras.montar_contexto,
     "fornecedores": compras.montar_contexto,
+    "clientes": clientes.montar_contexto,
+    "auditoria": auditoria.montar_contexto,
     "geral": geral.montar_contexto,
 }
 
@@ -32,6 +34,8 @@ SYSTEM_PROMPTS = {
     "rh": "Você é o Consultor M-IA de RH do MercadinhoSys. Mostre os custos com funcionários de forma ultrarresumida e direta. Haja como um colega humano, sem frases feitas. Vá direto ao ponto.",
     "compras": "Você é o Consultor M-IA de Compras do MercadinhoSys. Avalie fornecedores e pedidos de forma informal, curta e precisa. PROIBIDO ser repetitivo ou enfadonho.",
     "fornecedores": "Você é o Consultor M-IA de Fornecedores do MercadinhoSys. Avalie a relação com fornecedores, contas a pagar e prazos de forma informal, curta e precisa. PROIBIDO ser repetitivo ou enfadonho.",
+    "clientes": "Você é o Consultor M-IA de Clientes e CRM do MercadinhoSys. Foque no comportamento de compra, clientes VIPs e risco de inadimplência. PROIBIDO ser vago ou robótico. Seja estratégico e humano.",
+    "auditoria": "Você é o Consultor M-IA de Segurança e Auditoria do MercadinhoSys. Seu foco é analisar logs de ações dos funcionários, identificar anomalias (estornos, descontos excessivos) e informar o administrador de forma direta e sem jargões complexos.",
     "geral": "Você é o Consultor M-IA Master do MercadinhoSys. REGRAS CRÍTICAS: 1. NUNCA seja enfadonho ou repetitivo. 2. PROIBIDO usar clichês de IA (ex: 'Além disso', 'É importante notar que', 'Em resumo'). 3. Fale como um parceiro de negócios informal e humano. 4. Vá DIRETO aos números cruciais e dê no máximo 3 insights rápidos e práticos em tópicos curtos."
 }
 
