@@ -390,3 +390,70 @@ def analise_detalhada(tipo: str):
 @jwt_required()
 def dashboard_status():
     return jsonify({"status": "operational"})
+
+@dashboard_bp.route("/alertas", methods=["GET"])
+@jwt_required()
+def dashboard_alertas():
+    try:
+        from datetime import date, timedelta
+        from sqlalchemy import or_, and_
+        from app.models import Produto
+        
+        estabelecimento_id = get_establishment_id()
+        hoje = date.today()
+        limite_validade = hoje + timedelta(days=30)
+        
+        query = Produto.query.filter_by(ativo=True)
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
+            
+        produtos = query.filter(
+            or_(
+                Produto.quantidade <= Produto.quantidade_minima,
+                and_(Produto.controlar_validade == True, Produto.data_validade.isnot(None), Produto.data_validade <= limite_validade)
+            )
+        ).all()
+        
+        alertas = []
+        for p in produtos:
+            # Garante valores padrão em caso nulo
+            qtd = p.quantidade if p.quantidade is not None else 0
+            qtd_min = p.quantidade_minima if p.quantidade_minima is not None else 0
+            
+            if qtd <= qtd_min:
+                alertas.append({
+                    "id": f"r_{p.id}",
+                    "tipo": "ruptura",
+                    "produto_nome": p.nome,
+                    "quantidade": float(qtd),
+                    "estoque_minimo": float(qtd_min)
+                })
+            
+            if p.controlar_validade and p.data_validade:
+                if p.data_validade < hoje:
+                    alertas.append({
+                        "id": f"v_{p.id}",
+                        "tipo": "vencido",
+                        "produto_nome": p.nome,
+                        "data_validade": p.data_validade.isoformat()
+                    })
+                elif p.data_validade <= limite_validade:
+                    alertas.append({
+                        "id": f"vp_{p.id}",
+                        "tipo": "vencimento",
+                        "produto_nome": p.nome,
+                        "data_validade": p.data_validade.isoformat()
+                    })
+                    
+        def get_priority(a):
+            if a["tipo"] == "vencido": return 0
+            if a["tipo"] == "ruptura": return 1
+            return 2
+            
+        alertas.sort(key=lambda x: get_priority(x))
+        
+        return jsonify({"success": True, "alertas": alertas[:50]})
+    except Exception as e:
+        logger.error(f"Erro ao buscar alertas operacionais: {e}")
+        return jsonify({"success": False, "alertas": []}), 500
+

@@ -10,6 +10,7 @@ import RHTab from './components/tabs/RHTab';
 import { authService } from '../auth/authService';
 import { isPlanoGratis } from '../../utils/permissions';
 import { InsightCard } from '../../components/consultor/InsightCard';
+import AlertsPanel from './components/AlertsPanel';
 
 export default function DashboardPageV2() {
   const [activeTab, setActiveTab] = useState('executive');
@@ -117,6 +118,10 @@ export default function DashboardPageV2() {
       </div>
 
       <InsightCard especialista="geral" titulo="Consultor M-IA - Inteligência do Negócio" className="mb-6" />
+      
+      <div className="mb-6">
+        <AlertsPanel />
+      </div>
 
       {/* Tabs Navigation — no mobile vira uma faixa de "pílulas" com rolagem horizontal
           (snap + sangria até as bordas) para nunca cortar/embaralhar os rótulos. */}
