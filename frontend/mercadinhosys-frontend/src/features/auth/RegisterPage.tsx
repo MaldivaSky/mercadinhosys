@@ -10,6 +10,8 @@ import {
     Container,
     useTheme,
     Divider,
+    Checkbox,
+    FormControlLabel,
 } from '@mui/material';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from './authService';
@@ -33,6 +35,7 @@ export function RegisterPage() {
         username: '',
     });
 
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -86,7 +89,8 @@ export function RegisterPage() {
         formData.cnpj &&
         formData.nome_admin &&
         formData.email_loja &&
-        formData.username;
+        formData.username &&
+        termsAccepted;
 
     return (
         <Container maxWidth={false} sx={{ minHeight: '100vh', p: 0 }}>
@@ -198,6 +202,26 @@ export function RegisterPage() {
                             <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
                                 Por medidas de segurança, o sistema gerará uma senha inicial forte e a enviará para o e-mail cadastrado acima.
                             </Alert>
+
+                            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            checked={termsAccepted}
+                                            onChange={(e) => setTermsAccepted(e.target.checked)}
+                                            color="primary"
+                                        />
+                                    }
+                                    label={
+                                        <Typography variant="body2" color="text.secondary">
+                                            Li, compreendi e aceito os{' '}
+                                            <a href="/termos" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 'bold' }}>Termos de Uso</a>
+                                            {' '}e a{' '}
+                                            <a href="/privacidade" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 'bold' }}>Política de Privacidade</a>.
+                                        </Typography>
+                                    }
+                                />
+                            </Box>
 
                             <Box sx={{ mt: 4 }}>
                                 <Button

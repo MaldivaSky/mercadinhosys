@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import Sidebar from './Sidebar';
 import HeaderProfessional from './HeaderProfessional';
 import FootPage from './FootPage';
-import WelcomeTour from '../WelcomeTour';
 import BottomNavigation from './BottomNavigation';
 import GlobalShortcuts from '../../shortcuts/GlobalShortcuts';
 import TrialNotice from '../../features/trial/TrialNotice';
@@ -12,6 +11,7 @@ import usePullToRefresh from '../../hooks/usePullToRefresh';
 import { useSuperAdmin } from '../../contexts/SuperAdminContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye } from 'lucide-react';
+import OnboardingWizard from '../../features/onboarding/OnboardingWizard';
 
 const MirrorReadOnlyBanner: React.FC = () => {
     const { user } = useAuth();
@@ -37,6 +37,23 @@ const MirrorReadOnlyBanner: React.FC = () => {
 const MainLayout: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
     const mainRef = React.useRef<HTMLElement>(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const { isAuthenticated } = useAuth();
+    
+    useEffect(() => {
+        if (isAuthenticated) {
+            const hasSeen = localStorage.getItem('mercadinhosys_onboarding_done');
+            if (!hasSeen) {
+                setShowOnboarding(true);
+            }
+        }
+    }, [isAuthenticated]);
+
+    const handleOnboardingComplete = () => {
+        localStorage.setItem('mercadinhosys_onboarding_done', 'true');
+        setShowOnboarding(false);
+    };
+
     // PWA standalone não tem "puxar p/ atualizar" nativo — implementamos aqui.
     const { distance, refreshing, threshold } = usePullToRefresh(
         mainRef,
@@ -48,7 +65,9 @@ const MainLayout: React.FC = () => {
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
             <GlobalShortcuts />
             <TrialNotice />
-            <WelcomeTour />
+            
+            {showOnboarding && <OnboardingWizard onComplete={handleOnboardingComplete} />}
+            
             <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
             <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 min-w-0 min-h-0">
                 <HeaderProfessional />

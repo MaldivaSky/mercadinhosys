@@ -113,6 +113,7 @@ const LandingPage: React.FC = () => {
     const [onboardingWhatsApp, setOnboardingWhatsApp] = useState('');
     const [onboardingStoreName, setOnboardingStoreName] = useState('');
     const [loadingCheckout, setLoadingCheckout] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(false);
     
     // FAQ state
     const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -167,6 +168,10 @@ const LandingPage: React.FC = () => {
 
     const handleCheckout = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!termsAccepted) {
+            showToast.error('Você precisa aceitar os Termos de Uso e Política de Privacidade para prosseguir.');
+            return;
+        }
         setLoadingCheckout(true);
         try {
             const response = await fetch(`${API_CONFIG.BASE_URL}/billing/public-checkout`, {
@@ -246,8 +251,8 @@ const LandingPage: React.FC = () => {
         {
             name: 'Pro ERP',
             price: 'R$ 99,90',
-            period: '/mês (Oferta Especial)',
-            description: 'Tecnologia de ponta para empresas que querem escalar sem limites.',
+            period: '/mês (Oferta de Lançamento)',
+            description: 'Tecnologia de ponta acessível para você destruir a concorrência.',
             features: [
                 'Terminais PDV Ilimitados',
                 'Módulo SFA (Força de Vendas)',
@@ -980,6 +985,7 @@ const LandingPage: React.FC = () => {
                             <a href="#erp-features" className="hover:text-[#2E9BFF]">Tecnologia</a>
                             <a href="#testimonials" className="hover:text-[#2E9BFF]">Clientes</a>
                             <a href="#pricing" className="hover:text-[#2E9BFF]">Planos</a>
+                            <a href="/ajuda" className="hover:text-[#2E9BFF]">Ajuda / Base de Conhecimento</a>
                             <a href="/termos" className="hover:text-[#2E9BFF]">Termos de Uso</a>
                             <a href="/privacidade" className="hover:text-[#2E9BFF]">Privacidade</a>
                             <a href="/login" className="hover:text-white bg-[#101C31] px-3 py-1 rounded-full border border-[#24344F]">Acesso Cliente</a>
@@ -1061,7 +1067,19 @@ const LandingPage: React.FC = () => {
                                         />
                                     </div>
                                 </div>
-                                <button type="submit" disabled={loadingCheckout} className="w-full py-4 mt-8 bg-gradient-to-r from-[#2E9BFF] to-[#1D4ED8] text-white rounded-[12px] font-black text-lg hover:shadow-[0_0_25px_rgba(46,155,255,0.4)] hover:scale-[1.02] transition-all flex items-center justify-center">
+                                <div className="mt-4 flex items-start gap-3 bg-[#0A1220]/50 p-4 rounded-xl border border-[#24344F]">
+                                    <input 
+                                        type="checkbox" 
+                                        id="terms" 
+                                        checked={termsAccepted}
+                                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                                        className="mt-1 w-5 h-5 bg-[#0A1220] border-[#4F6A8F] rounded text-[#2E9BFF] focus:ring-[#2E9BFF] focus:ring-offset-[#101C31] cursor-pointer"
+                                    />
+                                    <label htmlFor="terms" className="text-[#8FA3C0] text-sm leading-relaxed cursor-pointer">
+                                        Li, compreendi e aceito os <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-[#2E9BFF] hover:underline font-bold">Termos de Uso</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-[#2E9BFF] hover:underline font-bold">Política de Privacidade</a>.
+                                    </label>
+                                </div>
+                                <button type="submit" disabled={loadingCheckout || !termsAccepted} className={`w-full py-4 mt-8 text-white rounded-[12px] font-black text-lg transition-all flex items-center justify-center ${termsAccepted ? 'bg-gradient-to-r from-[#2E9BFF] to-[#1D4ED8] hover:shadow-[0_0_25px_rgba(46,155,255,0.4)] hover:scale-[1.02]' : 'bg-[#24344F] text-[#8FA3C0] cursor-not-allowed'}`}>
                                     {loadingCheckout ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'IR PARA O PAGAMENTO SEGURO'}
                                 </button>
                                 <p className="text-center text-[#4F6A8F] text-xs font-medium mt-4 flex items-center justify-center gap-1">

@@ -2,131 +2,96 @@ import React from 'react';
 import LegalLayout, { SecaoTitulo } from './LegalLayout';
 import { legalInfo } from './legalInfo';
 
-/**
- * Política de Privacidade (LGPD - Lei 13.709/2018).
- * Conteúdo-base profissional. Revise com apoio jurídico antes do lançamento comercial.
- */
 const PrivacidadePage: React.FC = () => {
     return (
         <LegalLayout
-            titulo="Política de Privacidade"
-            subtitulo="Como o MercadinhoSys trata dados pessoais, em conformidade com a LGPD (Lei nº 13.709/2018)."
+            titulo="Política de Privacidade e Proteção de Dados (LGPD)"
+            subtitulo={`Como nós da ${legalInfo.produto} tratamos e protegemos os seus dados.`}
         >
             <p>
-                Esta Política explica como coletamos, usamos, armazenamos e protegemos dados pessoais ao
-                fornecer o {legalInfo.produto}. Ela vale para o lojista assinante, seus usuários e os titulares
-                cujos dados são tratados na plataforma.
+                A <strong>{legalInfo.razaoSocial}</strong>, inscrita no CNPJ sob o nº {legalInfo.cnpj} 
+                (doravante "Nós" ou "Licenciante"), valoriza a sua privacidade e estabelece a presente 
+                Política de Privacidade para demonstrar o nosso compromisso com a conformidade frente à 
+                Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).
             </p>
 
-            <SecaoTitulo numero={1}>Papéis: controlador e operador</SecaoTitulo>
+            <SecaoTitulo numero={1}>A Nossa Posição Legal (Operador vs. Controlador)</SecaoTitulo>
             <p>
-                A LGPD distingue quem decide sobre o tratamento (controlador) de quem trata em nome de outro
-                (operador):
+                No ecossistema do <strong>{legalInfo.produto}</strong>, desempenhamos dois papéis distintos, 
+                dependendo de quem é o titular dos dados:
             </p>
-            <ul className="list-disc pl-5 space-y-1">
+            <ul className="list-disc pl-5 space-y-2">
                 <li>
-                    <strong>Dados da conta do lojista</strong> (cadastro do assinante e seus usuários): atuamos
-                    como <strong>controladores</strong>, pois decidimos sobre esse tratamento para prestar o serviço.
+                    <strong>Como Controlador:</strong> Quando o Lojista (Dono do Mercado) contrata nosso sistema, 
+                    nós coletamos e controlamos os dados cadastrais e financeiros dessa pessoa (ou empresa) 
+                    para faturamento, suporte e comunicação direta.
                 </li>
                 <li>
-                    <strong>Dados inseridos pelo lojista</strong> (clientes finais, funcionários, fornecedores): o
-                    <strong> lojista é o controlador</strong> e nós atuamos como <strong>operadores</strong>,
-                    tratando esses dados apenas conforme as instruções dele e esta Política.
+                    <strong>Como Operador:</strong> Todos os dados que o Lojista insere dentro do sistema — como 
+                    informações de seus Funcionários (RH/Ponto), Fornecedores e de seus Clientes Finais (Fiado/CRM) — 
+                    são de controle exclusivo do Lojista. Nós apenas <em>processamos</em> e <em>armazenamos</em> 
+                    esses dados a mando do Lojista, fornecendo a infraestrutura técnica (SaaS).
                 </li>
             </ul>
+            <p className="font-bold text-slate-800 bg-blue-50 p-3 rounded border border-blue-100 mt-2">
+                O Lojista, na figura de Controlador, é integralmente responsável por obter o consentimento 
+                ou a base legal necessária de seus clientes e funcionários antes de lançar seus dados no sistema.
+            </p>
 
-            <SecaoTitulo numero={2}>Dados que tratamos</SecaoTitulo>
-            <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Cadastrais:</strong> nome, e-mail, telefone, CPF/CNPJ, dados do estabelecimento.</li>
-                <li><strong>De clientes finais do lojista:</strong> nome, contato, CPF, histórico de compras e fiado.</li>
-                <li><strong>De funcionários do lojista:</strong> dados cadastrais, jornada e registros de ponto.</li>
-                <li>
-                    <strong>Dados sensíveis e biométricos:</strong> quando o lojista utiliza o registro de ponto
-                    por foto, pode haver tratamento de imagem facial, considerada dado pessoal sensível. Esse uso
-                    é configurado e instruído pelo lojista, a quem cabe obter a base legal adequada perante seus
-                    funcionários.
-                </li>
-                <li><strong>De uso:</strong> registros de acesso, logs de auditoria, endereço IP e dados técnicos para segurança.</li>
+            <SecaoTitulo numero={2}>Quais Dados Coletamos do Lojista</SecaoTitulo>
+            <p>Para fornecer os serviços contratados, coletamos os seguintes dados do titular da conta principal (Lojista):</p>
+            <ul className="list-disc pl-5 space-y-2">
+                <li><strong>Dados Cadastrais:</strong> Nome completo, CPF/CNPJ, e-mail, telefone e endereço (CEP).</li>
+                <li><strong>Dados de Acesso e Telemetria:</strong> Endereços IP, datas e horas de acesso, tipo de dispositivo (para fins de auditoria, segurança e prevenção a fraudes).</li>
+                <li><strong>Dados de Faturamento:</strong> Histórico de pagamentos da assinatura (os dados de cartão de crédito não são armazenados em nossos servidores, mas sim diretamente nos Gateways de Pagamento parceiros).</li>
             </ul>
 
-            <SecaoTitulo numero={3}>Para que usamos</SecaoTitulo>
-            <ul className="list-disc pl-5 space-y-1">
-                <li>Operar as funcionalidades contratadas (vendas, estoque, fiscal, financeiro, RH/ponto).</li>
-                <li>Autenticar usuários e garantir a segurança e a rastreabilidade (auditoria).</li>
-                <li>Emitir e importar documentos fiscais quando solicitado.</li>
-                <li>Prestar suporte e comunicar avisos importantes sobre o serviço.</li>
-                <li>Cumprir obrigações legais e regulatórias.</li>
+            <SecaoTitulo numero={3}>Para Que Usamos os Seus Dados</SecaoTitulo>
+            <p>
+                Os dados coletados são tratados sob as seguintes bases legais (Art. 7º da LGPD):
+            </p>
+            <ul className="list-disc pl-5 space-y-2">
+                <li><strong>Execução de Contrato:</strong> Para criar e manter a sua conta ativa, emitir a fatura da mensalidade e fornecer o suporte técnico necessário para manter o ERP funcionando.</li>
+                <li><strong>Legítimo Interesse:</strong> Para avaliar métricas de uso e aprimorar o desempenho das telas do sistema.</li>
+                <li><strong>Obrigação Legal:</strong> Guarda de logs de conexão exigida pelo Marco Civil da Internet (Lei nº 12.965/2014) pelo prazo de 6 (seis) meses.</li>
             </ul>
 
-            <SecaoTitulo numero={4}>Bases legais</SecaoTitulo>
+            <SecaoTitulo numero={4}>Compartilhamento com Terceiros</SecaoTitulo>
             <p>
-                O tratamento se apoia, conforme o caso, na <strong>execução de contrato</strong> (art. 7º, V),
-                no <strong>cumprimento de obrigação legal/regulatória</strong> (art. 7º, II — ex.: fiscal e
-                trabalhista), no <strong>legítimo interesse</strong> (art. 7º, IX — ex.: segurança e prevenção a
-                fraudes) e no <strong>consentimento</strong> quando exigido, especialmente para dados sensíveis.
+                Nós <strong>não vendemos</strong> seus dados em hipótese alguma. O compartilhamento ocorre estritamente
+                com parceiros técnicos necessários para a viabilidade do Software, sob rigorosos contratos de sigilo:
             </p>
-
-            <SecaoTitulo numero={5}>Compartilhamento</SecaoTitulo>
-            <p>Não vendemos dados pessoais. Podemos compartilhá-los apenas com:</p>
-            <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Provedores de infraestrutura</strong> (hospedagem e banco de dados em nuvem) que processam dados sob contrato.</li>
-                <li><strong>Gateways fiscais</strong> (ex.: para emissão de NFC-e/NF-e), estritamente para emitir os documentos solicitados.</li>
-                <li><strong>Autoridades públicas</strong>, quando exigido por lei ou ordem judicial.</li>
+            <ul className="list-disc pl-5 space-y-2">
+                <li><strong>Infraestrutura e Nuvem:</strong> Provedores de banco de dados e hospedagem (Ex: Aiven, Vercel, AWS).</li>
+                <li><strong>Emissão Fiscal:</strong> Gateways homologados (FocusNFe/PlugNotas), apenas quando o Lojista opta por transmitir Notas Fiscais para a SEFAZ.</li>
+                <li><strong>Processamento de Pagamento:</strong> Empresas de faturamento recorrente para a cobrança da assinatura mensal do sistema.</li>
             </ul>
 
-            <SecaoTitulo numero={6}>Armazenamento e segurança</SecaoTitulo>
+            <SecaoTitulo numero={5}>Como Protegemos os Dados</SecaoTitulo>
             <p>
-                Os dados são armazenados em servidores em nuvem com controles de acesso, criptografia em
-                trânsito, backups e registros de auditoria. Adotamos medidas técnicas e organizacionais
-                razoáveis para proteger os dados contra acessos não autorizados, perda ou alteração indevida.
-                Nenhum sistema é 100% imune; em caso de incidente relevante, seguiremos os procedimentos da LGPD.
+                Utilizamos as melhores práticas de mercado, incluindo:
             </p>
-
-            <SecaoTitulo numero={7}>Retenção</SecaoTitulo>
-            <p>
-                Mantemos os dados pelo tempo necessário às finalidades acima e ao cumprimento de obrigações
-                legais (por exemplo, prazos fiscais e trabalhistas). Encerrada a conta, os dados podem ser
-                eliminados ou anonimizados, ressalvadas as hipóteses de guarda obrigatória previstas em lei.
-            </p>
-
-            <SecaoTitulo numero={8}>Direitos do titular</SecaoTitulo>
-            <p>Nos termos da LGPD, o titular pode solicitar:</p>
-            <ul className="list-disc pl-5 space-y-1">
-                <li>confirmação da existência de tratamento e acesso aos dados;</li>
-                <li>correção de dados incompletos, inexatos ou desatualizados;</li>
-                <li>anonimização, bloqueio ou eliminação de dados desnecessários ou excessivos;</li>
-                <li>portabilidade e informação sobre compartilhamentos;</li>
-                <li>revogação do consentimento.</li>
+            <ul className="list-disc pl-5 space-y-2">
+                <li>Isolamento Lógico (Multi-Tenant) no Banco de Dados: Um Lojista nunca tem acesso aos clientes ou funcionários de outro Lojista.</li>
+                <li>Criptografia ponta a ponta (SSL/TLS) na transmissão entre o navegador (PDV) e o servidor.</li>
+                <li>Hashing seguro (BCrypt/Argon2) irreversível para o armazenamento de todas as senhas de usuários e PINs de estorno.</li>
             </ul>
-            <p>
-                Quando atuamos como operadores (dados de clientes/funcionários do lojista), os pedidos devem ser
-                direcionados ao lojista (controlador); nós o apoiamos no atendimento.
-            </p>
 
-            <SecaoTitulo numero={9}>Cookies</SecaoTitulo>
+            <SecaoTitulo numero={6}>Seus Direitos como Titular</SecaoTitulo>
             <p>
-                Utilizamos cookies e tecnologias semelhantes essenciais para autenticação e funcionamento do
-                sistema (por exemplo, manter a sessão iniciada). Você pode gerenciar cookies no navegador, mas
-                desativá-los pode afetar o uso da plataforma.
+                O Lojista (Contratante) tem o direito de solicitar a qualquer momento:
             </p>
-
-            <SecaoTitulo numero={10}>Encarregado (DPO) e contato</SecaoTitulo>
-            <p>
-                Para exercer direitos ou esclarecer dúvidas sobre privacidade, fale com nosso encarregado pelo
-                tratamento de dados:{' '}
-                <a href={`mailto:${legalInfo.emailPrivacidade}`} className="text-blue-600 font-semibold underline">
+            <ul className="list-disc pl-5 space-y-2">
+                <li>A confirmação da existência de tratamento de seus dados.</li>
+                <li>O acesso e a correção de dados incompletos, inexatos ou desatualizados.</li>
+                <li>A exclusão ou portabilidade de seus dados, no momento do encerramento da assinatura.</li>
+            </ul>
+            <p className="mt-4">
+                Para o exercício destes direitos ou qualquer dúvida sobre privacidade, entre em contato diretamente 
+                com o nosso Encarregado de Proteção de Dados (DPO) através do e-mail:{' '}
+                <a href={`mailto:${legalInfo.emailPrivacidade}`} className="font-bold text-blue-600 hover:underline">
                     {legalInfo.emailPrivacidade}
                 </a>.
-            </p>
-
-            <SecaoTitulo numero={11}>Alterações</SecaoTitulo>
-            <p>
-                Esta Política pode ser atualizada. Mudanças relevantes serão comunicadas pelos canais da
-                plataforma, com indicação da nova data de atualização.
-            </p>
-
-            <p className="text-xs text-slate-400 pt-4 border-t border-slate-100">
-                Vigente desde {legalInfo.vigenciaDesde}. Em conformidade com a Lei nº 13.709/2018 (LGPD).
             </p>
         </LegalLayout>
     );

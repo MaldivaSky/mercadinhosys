@@ -42,7 +42,7 @@ export async function buscarOffline(termo: string, limite = 20): Promise<Produto
   // e o catálogo não costuma ter milhões de itens (são alguns milhares), podemos fazer em memória.
   const todos = await db.produtos.toArray();
   return todos
-    .filter((p) =>
+    .filter((p: ProdutoCatalogo) =>
       p.nome.toLowerCase().includes(t) ||
       (p.codigo_barras || '').toLowerCase().includes(t) ||
       (p.codigo_interno || '').toLowerCase().includes(t)

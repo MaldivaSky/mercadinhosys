@@ -1,96 +1,136 @@
 import React, { useState } from 'react';
 import {
-    ShoppingCart, Package, Users, BarChart3, FileText, Wallet, Clock, WifiOff,
-    ChevronDown, Mail, MessageCircle, LogIn,
+    ShoppingCart, ShieldAlert, Wallet, Clock, WifiOff,
+    ChevronDown, Mail, MessageCircle, Truck, Activity
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import LegalLayout from './LegalLayout';
+import LegalLayout, { SecaoTitulo } from './LegalLayout';
 import { legalInfo, whatsappLink } from './legalInfo';
 
-const recursos = [
-    { Icon: ShoppingCart, titulo: 'Frente de caixa (PDV)', desc: 'Venda rápida por código de barras, múltiplas formas de pagamento e cupom.' },
-    { Icon: WifiOff, titulo: 'Funciona offline', desc: 'Continue vendendo sem internet; o sistema sincroniza sozinho quando a conexão volta.' },
-    { Icon: Package, titulo: 'Estoque e produtos', desc: 'Controle de estoque, custo médio, lotes, validade e curva ABC.' },
-    { Icon: Users, titulo: 'Clientes e fiado', desc: 'Cadastro de clientes, histórico de compras e controle de fiado.' },
-    { Icon: FileText, titulo: 'Fiscal (NFC-e / NF-e)', desc: 'Importe o XML de compra (cadastra fornecedor e produto) e emita NFC-e.' },
-    { Icon: Wallet, titulo: 'Financeiro', desc: 'Contas a pagar, despesas e visão do caixa do dia.' },
-    { Icon: Clock, titulo: 'Funcionários e ponto', desc: 'Cadastro de equipe e registro de ponto.' },
-    { Icon: BarChart3, titulo: 'Relatórios e painel', desc: 'Dashboard com vendas, lucro e os produtos que mais (e menos) vendem.' },
+const secoesManuais = [
+    {
+        Icon: ShoppingCart, titulo: 'Frente de Caixa e PDV',
+        desc: 'Operação de caixa, leitura de códigos de barras, múltiplos pagamentos e abertura/fechamento.'
+    },
+    {
+        Icon: WifiOff, titulo: 'Modo Offline (SyncQueue)',
+        desc: 'O que acontece quando a internet cai e como o sistema sincroniza os dados automaticamente.'
+    },
+    {
+        Icon: Wallet, titulo: 'Gestão Financeira e Fluxo',
+        desc: 'Contas a Pagar, Despesas, cálculo de pressão de caixa e gestão de fiado (crediário).'
+    },
+    {
+        Icon: Clock, titulo: 'Recursos Humanos e Ponto',
+        desc: 'Controle de funcionários, folha de pagamento, ponto por geolocalização e provisões.'
+    },
+    {
+        Icon: Truck, titulo: 'Logística e Frota',
+        desc: 'Gestão de veículos, manutenção, abastecimentos, rotas de entrega e checklist de saída.'
+    },
+    {
+        Icon: ShieldAlert, titulo: 'Auditoria e Segurança',
+        desc: 'Logs de acessos, estornos no caixa, permissões de usuários e limites de crédito.'
+    },
 ];
 
-const faq = [
+const metricasGerenciais = [
     {
-        q: 'Preciso de internet para usar?',
-        a: 'O caixa (PDV) funciona mesmo sem internet: você continua vendendo normalmente e o sistema sincroniza automaticamente quando a conexão volta. Os relatórios e o painel precisam de conexão para carregar os dados mais recentes.',
+        q: 'Pressão de Caixa Diária (O Custo Invisível)',
+        a: 'A Pressão de Caixa é o valor EXATO que sua loja precisa vender no dia atual para não fechar no vermelho. Ela não soma apenas os boletos do dia. A fórmula inclui:\n\n1. Boletos vencendo hoje (Contas a Pagar).\n2. Rateio diário das Despesas Fixas (Aluguel, Luz, Internet ÷ 30).\n3. Custo Diário do RH (Salário Bruto + Encargos + Provisão de 1/12 de Férias e 13º ÷ 30).\n\nSe a Pressão de Caixa está em R$ 1.500,00 e você vendeu R$ 1.200,00, a loja deu prejuízo operacional naquele dia.',
     },
     {
-        q: 'O sistema emite nota fiscal (NFC-e)?',
-        a: 'Sim. O sistema importa o XML das notas de compra (cadastrando fornecedor e produto automaticamente) e emite NFC-e. Para emitir com valor fiscal, o estabelecimento precisa de CNPJ ativo, certificado digital próprio e parâmetros tributários validados pelo contador. Há um modo de homologação/teste, sem valor fiscal, para conferência.',
+        q: 'DRE (Demonstrativo do Resultado do Exercício)',
+        a: 'O DRE Gerencial do MercadinhoSys mostra se a empresa deu lucro ou prejuízo no mês. Ele pega o Faturamento Bruto, subtrai as Devoluções e o Custo da Mercadoria Vendida (CMV), resultando no Lucro Bruto. Desse valor, ele desconta as Despesas Operacionais e Folha de Pagamento para chegar ao Lucro Líquido Real.',
     },
     {
-        q: 'Meus dados ficam seguros?',
-        a: 'Os dados ficam em servidores em nuvem com controle de acesso, criptografia em trânsito e backups. Tratamos os dados conforme a LGPD — veja a Política de Privacidade.',
+        q: 'CRM e Algoritmo RFM (Limite de Crédito Fiado)',
+        a: 'Para blindar sua loja contra calotes, nosso motor avalia cada cliente do crediário com base no RFM:\n\n- Recência (Quantos dias desde a última compra)\n- Frequência (Quantas vezes compra no mês)\n- Valor Monetário (Quanto gasta em média)\n\nClientes com atraso superior aos dias de tolerância têm seu "Score" rebaixado para Risco Alto e o PDV bloqueia novas vendas na caderneta (fiado) automaticamente.',
     },
     {
-        q: 'Consigo acessar pelo celular?',
-        a: 'Sim. O sistema é uma aplicação web responsiva (PWA), que funciona no computador, no tablet e no celular pelo navegador.',
+        q: 'Curva ABC de Estoque',
+        a: 'O sistema classifica seus produtos automaticamente em A, B e C com base no impacto no faturamento e na frequência de saída. Produtos "A" (representam 80% do seu lucro) não podem faltar em hipótese alguma. O sistema gera alertas de ressuprimento antes que eles acabem, evitando ruptura de prateleira.',
     },
     {
-        q: 'Como começo a usar?',
-        a: 'Você cria a conta do seu estabelecimento, cadastra (ou importa) seus produtos e já pode abrir o caixa e vender. Nossa equipe ajuda na configuração inicial e no treinamento.',
+        q: 'Cálculo de KM/L e Fraudes de Frota',
+        a: 'No módulo de Logística, o sistema cruza o hodômetro (KM atual) com os litros abastecidos. Se um caminhão faz em média 10km/L e subitamente a média cai para 5km/L, o sistema dispara um alerta de "Consumo Anômalo", indicando possível desvio (roubo) de combustível ou falha mecânica grave.',
+    }
+];
+
+const baseDeConhecimento = [
+    {
+        q: 'Como o PDV funciona sem internet (Modo Offline)?',
+        a: 'O MercadinhoSys possui um banco de dados embutido no seu navegador. Se a internet cair, o caixa continua operando normalmente: lendo produtos, gerando cupons e finalizando vendas. Assim que a conexão for restabelecida, uma fila oculta (SyncQueue) enviará todas as transações pendentes para o servidor de forma segura e sem duplicidade.',
     },
     {
-        q: 'Posso cancelar quando quiser?',
-        a: 'Sim. A assinatura pode ser cancelada a qualquer momento; o cancelamento encerra as renovações futuras. Detalhes nos Termos de Uso.',
+        q: 'Onde configuro o TEF ou maquininha de cartão?',
+        a: 'Atualmente o MercadinhoSys opera como um ERP de conciliação administrativa. O caixa deve passar o cartão na maquininha física (PagSeguro, Cielo, etc.) e registrar no sistema a forma de pagamento (Crédito, Débito) e o status (Aprovado). O dinheiro vai diretamente para a conta bancária atrelada à sua maquininha.',
+    },
+    {
+        q: 'Como emitir NFC-e ou NF-e?',
+        a: 'É necessário possuir um CNPJ ativo e um Certificado Digital A1. O sistema se integra a gateways homologados (FocusNFe/PlugNotas) para assinar digitalmente e transmitir a nota à SEFAZ. Consulte o suporte técnico para solicitar a ativação da emissão fiscal no seu tenant.',
     },
 ];
 
 const AjudaPage: React.FC = () => {
-    const [aberta, setAberta] = useState<number | null>(0);
-    const wa = whatsappLink('Olá! Preciso de ajuda com o MercadinhoSys.');
+    const [abertaFAQ, setAbertaFAQ] = useState<number | null>(0);
+    const [abertaMetrica, setAbertaMetrica] = useState<number | null>(0);
+    const wa = whatsappLink('Olá, preciso de suporte técnico com o MercadinhoSys.');
 
     return (
         <LegalLayout
-            titulo="Central de Ajuda"
-            subtitulo={`Tudo o que o ${legalInfo.produto} faz e respostas para as dúvidas mais comuns.`}
+            titulo="Central de Suporte"
+            subtitulo={`Base de conhecimento oficial e manuais de operação do ERP ${legalInfo.produto}.`}
             mostrarData={false}
         >
-            {/* O que o sistema faz */}
-            <section>
-                <h2 className="text-xl font-extrabold text-slate-900 mb-4">O que o sistema faz</h2>
-                <div className="grid sm:grid-cols-2 gap-3">
-                    {recursos.map(({ Icon, titulo, desc }) => (
-                        <div key={titulo} className="flex gap-3 rounded-xl border border-slate-200 p-4 hover:border-blue-300 transition">
-                            <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="text-sm text-slate-500 mb-8 border-b border-slate-200 pb-4">
+                Encontre tutoriais de uso, entenda as regras de negócio ou abra um chamado técnico.
+            </div>
+
+            {/* Manuais por Módulo */}
+            <section className="mb-10">
+                <SecaoTitulo>Documentação por Módulos</SecaoTitulo>
+                <div className="grid sm:grid-cols-2 gap-4 mt-6">
+                    {secoesManuais.map(({ Icon, titulo, desc }) => (
+                        <div key={titulo} className="flex gap-4 items-start p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                            <div className="shrink-0 w-10 h-10 bg-white border border-slate-200 rounded-md flex items-center justify-center text-slate-700 shadow-sm">
                                 <Icon className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="font-bold text-slate-800 text-sm">{titulo}</p>
-                                <p className="text-sm text-slate-500">{desc}</p>
+                                <h3 className="font-bold text-slate-800 text-sm mb-1">{titulo}</h3>
+                                <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
                             </div>
                         </div>
                     ))}
                 </div>
             </section>
 
-            {/* FAQ */}
-            <section>
-                <h2 className="text-xl font-extrabold text-slate-900 mb-4">Perguntas frequentes</h2>
-                <div className="space-y-2">
-                    {faq.map((item, i) => {
-                        const open = aberta === i;
+            {/* Métricas e Indicadores (A Pedido do CEO) */}
+            <section className="mb-10">
+                <div className="flex items-center gap-2 pt-2">
+                    <Activity className="w-6 h-6 text-emerald-600" />
+                    <h2 className="text-xl font-extrabold text-slate-900">Indicadores e Métricas de Alta Gestão</h2>
+                </div>
+                <p className="text-sm text-slate-600 mt-2 mb-6">
+                    Entenda como o MercadinhoSys calcula as métricas vitais para a saúde da sua empresa. 
+                    Nós vamos muito além do simples contas a pagar/receber.
+                </p>
+                <div className="space-y-3">
+                    {metricasGerenciais.map((item, i) => {
+                        const open = abertaMetrica === i;
                         return (
-                            <div key={i} className="rounded-xl border border-slate-200 overflow-hidden">
+                            <div key={i} className="border border-emerald-200 rounded-lg overflow-hidden bg-white shadow-sm">
                                 <button
-                                    onClick={() => setAberta(open ? null : i)}
-                                    className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left font-bold text-slate-800 hover:bg-slate-50 transition"
+                                    onClick={() => setAbertaMetrica(open ? null : i)}
+                                    className="w-full flex items-center justify-between py-3.5 px-4 text-left hover:bg-emerald-50 transition-colors"
                                     aria-expanded={open}
                                 >
-                                    <span>{item.q}</span>
-                                    <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    <span className={`text-[15px] font-bold ${open ? 'text-emerald-700' : 'text-slate-800'}`}>{item.q}</span>
+                                    <ChevronDown className={`w-5 h-5 text-emerald-600 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                                 </button>
                                 {open && (
-                                    <div className="px-4 pb-4 text-sm text-slate-600 leading-relaxed">{item.a}</div>
+                                    <div className="px-4 pb-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap border-t border-emerald-100 pt-3">
+                                        {item.a}
+                                    </div>
                                 )}
                             </div>
                         );
@@ -98,44 +138,60 @@ const AjudaPage: React.FC = () => {
                 </div>
             </section>
 
-            {/* Contato / Suporte */}
+            {/* Base de Conhecimento (FAQ) */}
+            <section className="mb-10">
+                <SecaoTitulo>Dúvidas Frequentes (Knowledge Base)</SecaoTitulo>
+                <div className="mt-6 space-y-2 border-y border-slate-200 py-4">
+                    {baseDeConhecimento.map((item, i) => {
+                        const open = abertaFAQ === i;
+                        return (
+                            <div key={i} className="border-b border-slate-100 last:border-0 pb-2">
+                                <button
+                                    onClick={() => setAbertaFAQ(open ? null : i)}
+                                    className="w-full flex items-center justify-between py-3 text-left hover:bg-slate-50 px-2 rounded-md transition-colors"
+                                    aria-expanded={open}
+                                >
+                                    <span className={`text-[15px] font-semibold ${open ? 'text-blue-700' : 'text-slate-800'}`}>{item.q}</span>
+                                    <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                </button>
+                                {open && (
+                                    <div className="px-2 pb-4 pt-1 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                                        {item.a}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* Abertura de Chamado (Ticketing) */}
             <section>
-                <h2 className="text-xl font-extrabold text-slate-900 mb-4">Fale com o suporte</h2>
-                <div className="grid sm:grid-cols-2 gap-3">
+                <SecaoTitulo>Atendimento Técnico</SecaoTitulo>
+                <p className="text-sm text-slate-600 mb-4 mt-2">
+                    Não encontrou o que precisava? Nossa equipe de engenharia e suporte de Nível 2 está disponível em horário comercial (08:00 às 18:00).
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4">
                     <a
                         href={`mailto:${legalInfo.emailContato}`}
-                        className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 hover:border-blue-300 hover:bg-blue-50/40 transition"
+                        className="flex flex-col gap-2 p-5 border border-slate-200 rounded-lg hover:border-slate-300 hover:bg-slate-50 transition"
                     >
-                        <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center"><Mail className="w-5 h-5" /></div>
-                        <div>
-                            <p className="font-bold text-slate-800 text-sm">E-mail</p>
-                            <p className="text-sm text-slate-500">{legalInfo.emailContato}</p>
-                        </div>
+                        <Mail className="w-6 h-6 text-slate-600 mb-1" />
+                        <h4 className="font-bold text-slate-800 text-sm">Abertura de Ticket (E-mail)</h4>
+                        <p className="text-xs text-slate-500">{legalInfo.emailContato}</p>
                     </a>
                     {wa && (
                         <a
                             href={wa}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 hover:border-emerald-300 hover:bg-emerald-50/40 transition"
+                            className="flex flex-col gap-2 p-5 border border-slate-200 rounded-lg hover:border-slate-300 hover:bg-slate-50 transition"
                         >
-                            <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center"><MessageCircle className="w-5 h-5" /></div>
-                            <div>
-                                <p className="font-bold text-slate-800 text-sm">WhatsApp</p>
-                                <p className="text-sm text-slate-500">Atendimento rápido</p>
-                            </div>
+                            <MessageCircle className="w-6 h-6 text-slate-600 mb-1" />
+                            <h4 className="font-bold text-slate-800 text-sm">Suporte via WhatsApp</h4>
+                            <p className="text-xs text-slate-500">Apenas chat textual. Não recebe ligações.</p>
                         </a>
                     )}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                    <Link to="/login" className="inline-flex items-center gap-1.5 font-semibold text-blue-600 hover:underline">
-                        <LogIn className="w-4 h-4" /> Acessar o sistema
-                    </Link>
-                    <span className="text-slate-300">•</span>
-                    <Link to="/termos" className="font-semibold text-slate-500 hover:text-blue-600">Termos de Uso</Link>
-                    <span className="text-slate-300">•</span>
-                    <Link to="/privacidade" className="font-semibold text-slate-500 hover:text-blue-600">Política de Privacidade</Link>
                 </div>
             </section>
         </LegalLayout>

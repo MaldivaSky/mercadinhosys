@@ -2239,3 +2239,134 @@ def obter_rfm():
     except Exception as e:
         current_app.logger.error(f"Erro ao calcular RFM: {str(e)}")
         return jsonify({"success": False, "message": "Erro ao calcular RFM"}), 500
+
+@clientes_bp.route("/importar", methods=["POST"])
+@funcionario_required
+@permission_required('clientes')
+def importar_clientes_csv():
+    """
+    Importa clientes em massa via CSV.
+    Permissao: ADMIN ou GERENTE (via permission_required).
+    Processa saldo devedor inicial para migração de fiado.
+    """
+    import csv
+    import io
+    from decimal import Decimal
+    
+    try:
+        jwt_data = get_jwt()
+        estabelecimento_id = get_authorized_establishment_id()
+        
+        if 'arquivo' not in request.files:
+            return jsonify({"success": False, "message": "Nenhum arquivo enviado"}), 400
+        
+        file = request.files['arquivo']
+        if file.filename == '' or not file.filename.endswith('.csv'):
+            return jsonify({"success": False, "message": "O arquivo deve ser um CSV"}), 400
+
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        reader = csv.DictReader(stream, delimiter=';')
+        
+        if not reader.fieldnames or len(reader.fieldnames) < 2:
+            stream.seek(0)
+            reader = csv.DictReader(stream, delimiter=',')
+            
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for row_idx, row in enumerate(reader, start=1):
+            try:
+                nome = row.get('nome', '').strip()
+                cpf = row.get('cpf', '').strip()
+                celular = row.get('celular', '').strip()
+                limite_str = row.get('limite_credito', '0').replace(',', '.')
+                saldo_str = row.get('saldo_devedor', '0').replace(',', '.')
+                
+                if not nome:
+                    errors.append(f"Linha {row_idx}: Nome é obrigatório")
+                    error_count += 1
+                    continue
+                
+                cpf_formatado = formatar_cpf(cpf) if cpf else None
+                celular_formatado = formatar_telefone(celular) if celular else None
+                
+                # Check for existing CPF
+                if cpf_formatado:
+                    existente = Cliente.query.filter_by(
+                        estabelecimento_id=estabelecimento_id,
+                        cpf=cpf_formatado
+                    ).first()
+                    
+                    if existente:
+                        errors.append(f"Linha {row_idx}: CPF {cpf_formatado} já cadastrado")
+                        error_count += 1
+                        continue
+
+                limite = Decimal(limite_str) if limite_str.replace('.','',1).isdigit() else Decimal('0')
+                saldo = Decimal(saldo_str) if saldo_str.replace('.','',1).isdigit() else Decimal('0')
+
+                novo_cliente = Cliente(
+                    estabelecimento_id=estabelecimento_id,
+                    nome=nome,
+                    cpf=cpf_formatado,
+                    celular=celular_formatado,
+                    email=row.get('email', '').strip().lower(),
+                    limite_credito=limite,
+                    saldo_devedor=saldo,
+                    total_compras=0,
+                    valor_total_gasto=Decimal('0'),
+                    ativo=True
+                )
+                
+                db.session.add(novo_cliente)
+                db.session.flush() # para pegar o ID
+                
+                # Se tem saldo devedor (fiado antigo), gera o Contas a Receber
+                if saldo > 0:
+                    nova_conta = ContaReceber(
+                        estabelecimento_id=estabelecimento_id,
+                        cliente_id=novo_cliente.id,
+                        descricao=f"Migração de Saldo Inicial - {nome}",
+                        valor_original=saldo,
+                        valor_atual=saldo,
+                        data_vencimento=date.today() + timedelta(days=30),
+                        data_emissao=date.today(),
+                        status='aberto'
+                    )
+                    db.session.add(nova_conta)
+                
+                success_count += 1
+                
+                if success_count % 50 == 0:
+                    db.session.commit()
+                    
+            except Exception as row_err:
+                db.session.rollback()
+                errors.append(f"Linha {row_idx}: Erro inesperado - {str(row_err)}")
+                error_count += 1
+                
+        db.session.commit()
+        
+        # Log Audit
+        from app.models import Auditoria
+        Auditoria.registrar(
+            estabelecimento_id=estabelecimento_id,
+            tipo_evento="cliente_importado",
+            descricao=f"Importação de {success_count} clientes via CSV",
+            valor=Decimal('0'),
+            detalhes={"sucesso": success_count, "erros": error_count, "metodo": "import_bulk"}
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": f"Importação concluída: {success_count} importados, {error_count} erros.",
+            "total_importados": success_count,
+            "total_erros": error_count,
+            "erros": errors[:10]
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro na importação de clientes: {str(e)}")
+        return jsonify({"success": False, "message": f"Erro interno na importação: {str(e)}"}), 500

@@ -1,121 +1,106 @@
 import React from 'react';
 import LegalLayout, { SecaoTitulo } from './LegalLayout';
-import { legalInfo } from './legalInfo';
+import { legalInfo, whatsappLink } from './legalInfo';
 
-/**
- * Termos de Uso do MercadinhoSys.
- * Conteúdo-base profissional. Revise com apoio jurídico antes de cobrar/assinar contrato.
- */
 const TermosPage: React.FC = () => {
     return (
         <LegalLayout
-            titulo="Termos de Uso"
-            subtitulo={`Condições para utilização da plataforma ${legalInfo.produto}.`}
+            titulo="Termos e Condições de Uso"
+            subtitulo={`Termos legais para utilização da plataforma ${legalInfo.produto}.`}
         >
-            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                Ao criar uma conta ou utilizar o {legalInfo.produto}, você declara que leu, entendeu e
-                concorda com estes Termos de Uso e com a nossa{' '}
-                <a href="/privacidade" className="font-bold underline">Política de Privacidade</a>.
-            </div>
-
-            <SecaoTitulo numero={1}>Quem somos</SecaoTitulo>
             <p>
-                O {legalInfo.produto} é um sistema de gestão para comércio varejista (frente de caixa/PDV,
-                controle de estoque, clientes, financeiro e emissão de documentos fiscais), oferecido como
-                serviço por assinatura (SaaS) por {legalInfo.razaoSocial}, inscrita no CNPJ {legalInfo.cnpj},
-                com sede em {legalInfo.cidadeUf} ("nós", "plataforma").
+                Este instrumento contém as condições gerais de uso e de contratação aplicáveis à utilização
+                do sistema <strong>{legalInfo.produto}</strong>, doravante denominado simplesmente "Software",
+                desenvolvido e operado por <strong>{legalInfo.razaoSocial}</strong>, inscrita no CNPJ sob o
+                nº {legalInfo.cnpj}, com sede em {legalInfo.cidadeUf}, doravante denominada "Licenciante".
+            </p>
+            <p>
+                Ao criar uma conta, utilizar, acessar ou navegar pelo Software, você (pessoa física ou jurídica),
+                doravante denominado "Licenciado", concorda expressa e integralmente com os presentes Termos de Uso.
             </p>
 
-            <SecaoTitulo numero={2}>Definições</SecaoTitulo>
-            <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Cliente/Assinante:</strong> a pessoa física ou jurídica (o lojista) que contrata o serviço.</li>
-                <li><strong>Usuário:</strong> cada pessoa autorizada pelo Cliente a acessar o sistema (admin, gerente, caixa etc.).</li>
-                <li><strong>Conta:</strong> o cadastro do estabelecimento e seus usuários na plataforma.</li>
-                <li><strong>Dados do Cliente:</strong> as informações inseridas pelo Cliente (produtos, vendas, clientes finais, funcionários etc.).</li>
+            <SecaoTitulo numero={1}>Do Objeto</SecaoTitulo>
+            <p>
+                A Licenciante concede ao Licenciado uma licença revogável, não exclusiva, intransferível e limitada
+                para uso do Software sob a modalidade de <em>Software as a Service (SaaS)</em>. O acesso é
+                fornecido estritamente via internet (navegador web), não havendo entrega de código-fonte ou
+                instalação local definitiva.
+            </p>
+
+            <SecaoTitulo numero={2}>Das Obrigações do Licenciado</SecaoTitulo>
+            <p>O Licenciado compromete-se a:</p>
+            <ul className="list-disc pl-5 space-y-2">
+                <li>Manter o sigilo de suas credenciais de acesso (login, senhas e PINs de cancelamento).</li>
+                <li>Fornecer dados cadastrais verdadeiros, mantendo-os atualizados na plataforma.</li>
+                <li>
+                    Garantir que a operação do Software por seus funcionários ocorra em conformidade com as leis
+                    trabalhistas, fiscais e comerciais vigentes no país.
+                </li>
+                <li>
+                    Obter consentimento legal de seus próprios clientes finais caso insira seus dados (como CPF,
+                    telefone ou biometria) na base de dados do sistema, conforme exige a LGPD.
+                </li>
             </ul>
 
-            <SecaoTitulo numero={3}>Cadastro e conta</SecaoTitulo>
+            <SecaoTitulo numero={3}>Da Tributação e Emissão Fiscal</SecaoTitulo>
             <p>
-                Para usar a plataforma é necessário criar uma conta com informações verdadeiras e atualizadas.
-                O Cliente é responsável por manter a confidencialidade de suas credenciais e por todas as
-                atividades realizadas pelos Usuários de sua conta. Avise-nos imediatamente em caso de uso não
-                autorizado.
+                O Software atua apenas como facilitador operacional e transmissor de dados. <strong>A Licenciante não
+                assume qualquer responsabilidade sobre o correto enquadramento tributário, cálculo de alíquotas
+                (ICMS, PIS, COFINS, NCM, CFOP) ou obrigações acessórias do Licenciado.</strong>
+            </p>
+            <p>
+                A parametrização tributária e a emissão de documentos fiscais (NF-e, NFC-e) são de inteira
+                responsabilidade do Licenciado e de seu Contador. A Licenciante isenta-se de multas, autuações ou
+                penalidades impostas pela SEFAZ ou Receita Federal decorrentes do uso inadequado da ferramenta.
             </p>
 
-            <SecaoTitulo numero={4}>Planos, pagamento e cancelamento</SecaoTitulo>
-            <ul className="list-disc pl-5 space-y-1">
-                <li>O serviço é oferecido em planos, cujas funcionalidades e preços são informados no momento da contratação.</li>
-                <li>A assinatura é cobrada de forma recorrente (mensal), salvo condição diferente acordada por escrito.</li>
-                <li>O Cliente pode cancelar a qualquer momento; o cancelamento encerra as renovações futuras, sem reembolso de períodos já pagos, salvo quando exigido por lei.</li>
-                <li>Eventuais períodos de teste gratuito ou cortesia são concedidos a nosso critério e podem ser encerrados a qualquer tempo.</li>
+            <SecaoTitulo numero={4}>Nível de Serviço (SLA) e Disponibilidade</SecaoTitulo>
+            <p>
+                A Licenciante emprega os melhores esforços para garantir uma disponibilidade de <strong>99%</strong> em 
+                horário comercial. Contudo, devido à natureza da rede de internet e dos serviços em nuvem, o Software
+                é fornecido no estado em que se encontra (<em>"as is"</em>), sem garantias de que será ininterrupto 
+                ou totalmente livre de falhas temporárias.
+            </p>
+            <p>
+                O Software dispõe de recursos operacionais <strong>Offline (SyncQueue)</strong> para operação de caixa
+                sem internet. É responsabilidade do Licenciado conectar o sistema à internet periodicamente para que
+                a fila de sincronização (SyncQueue) não expire ou seja corrompida pela limpeza do cache local do navegador.
+            </p>
+
+            <SecaoTitulo numero={5}>Limitação de Responsabilidade Civil</SecaoTitulo>
+            <p>
+                A Licenciante não se responsabiliza por:
+            </p>
+            <ul className="list-disc pl-5 space-y-2">
+                <li>Danos indiretos, incidentais ou lucros cessantes oriundos de quedas de conexão ou falhas de provedores em nuvem.</li>
+                <li>Perda de dados armazenados exclusivamente no cache local (IndexedDB) caso o Licenciado formate ou limpe o dispositivo antes da sincronização.</li>
+                <li>Discrepâncias de estoque, caixa ou folha de pagamento derivadas de alimentação manual incorreta ou uso indevido de senhas de gerência.</li>
+                <li>Falhas na comunicação com equipamentos de hardware (maquininhas de cartão, TEF, balanças ou impressoras) que não sejam homologados expressamente pela Licenciante.</li>
             </ul>
-
-            <SecaoTitulo numero={5}>Uso aceitável</SecaoTitulo>
-            <p>O Cliente e os Usuários comprometem-se a não:</p>
-            <ul className="list-disc pl-5 space-y-1">
-                <li>utilizar a plataforma para fins ilícitos ou que violem direitos de terceiros;</li>
-                <li>tentar acessar áreas, dados ou contas de outros estabelecimentos;</li>
-                <li>comprometer a segurança, a integridade ou o desempenho do serviço (ataques, engenharia reversa, automações abusivas);</li>
-                <li>inserir dados que não tenham autorização legal para tratar.</li>
-            </ul>
-
-            <SecaoTitulo numero={6}>Documentos fiscais (NFC-e / NF-e)</SecaoTitulo>
-            <p>
-                A plataforma oferece recursos para emissão e importação de documentos fiscais eletrônicos. A
-                emissão com valor fiscal depende de requisitos sob responsabilidade do Cliente, entre eles:
-                CNPJ ativo e regular, certificado digital próprio, credenciamento na SEFAZ e parâmetros
-                tributários corretos (NCM, CSOSN/CST, CFOP). <strong>A correção tributária e a conformidade
-                fiscal são de responsabilidade do Cliente e de seu contador.</strong> Recursos em ambiente de
-                homologação ou simulado não possuem valor fiscal e destinam-se apenas a testes.
+            <p className="font-bold text-slate-900 mt-4 bg-slate-100 p-4 rounded-md">
+                Em qualquer hipótese, a responsabilidade pecuniária máxima da Licenciante para com o Licenciado 
+                limita-se ao valor das mensalidades pagas pelo uso do Software nos últimos 3 (três) meses.
             </p>
 
-            <SecaoTitulo numero={7}>Dados do Cliente e propriedade</SecaoTitulo>
+            <SecaoTitulo numero={6}>Pagamentos, Inadimplência e Bloqueio</SecaoTitulo>
             <p>
-                Os Dados do Cliente pertencem ao Cliente. Nós os tratamos apenas para operar e melhorar o
-                serviço, conforme a <a href="/privacidade" className="text-blue-600 font-semibold underline">Política de Privacidade</a>.
-                O Cliente pode exportar seus dados enquanto a conta estiver ativa. Toda a propriedade
-                intelectual da plataforma (software, marca, layout) permanece conosco.
+                O uso contínuo do sistema está condicionado ao pagamento regular da mensalidade via assinatura.
+                O atraso superior a <strong>5 (cinco) dias</strong> resultará no bloqueio preventivo (suspensão)
+                do acesso, limitando a visualização apenas para extração de relatórios básicos, sem operação de frente de loja.
             </p>
 
-            <SecaoTitulo numero={8}>Disponibilidade e suporte</SecaoTitulo>
+            <SecaoTitulo numero={7}>Suporte Técnico</SecaoTitulo>
             <p>
-                Empregamos esforços para manter o serviço disponível, mas ele é fornecido "no estado em que se
-                encontra", podendo haver interrupções para manutenção, atualizações ou por fatores externos
-                (provedores de hospedagem, internet, SEFAZ). O suporte é prestado pelos canais informados na
-                página de <a href="/ajuda" className="text-blue-600 font-semibold underline">Ajuda</a>.
+                O suporte será prestado prioritariamente via e-mail (<a href={`mailto:${legalInfo.emailContato}`} className="text-blue-600 hover:underline">{legalInfo.emailContato}</a>)
+                {legalInfo.whatsapp ? (
+                    <span> ou WhatsApp (<a href={whatsappLink()} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Chat</a>)</span>
+                ) : ''} em dias úteis, das 08h00 às 18h00, horário de Brasília.
             </p>
 
-            <SecaoTitulo numero={9}>Limitação de responsabilidade</SecaoTitulo>
+            <SecaoTitulo numero={8}>Foro</SecaoTitulo>
             <p>
-                Na máxima extensão permitida pela lei, não nos responsabilizamos por lucros cessantes, perda de
-                dados decorrente de uso indevido, ou prejuízos indiretos. O Cliente é responsável por manter
-                boas práticas de uso e por conferir as informações fiscais e financeiras geradas. Recomendamos
-                que o Cliente mantenha seus próprios registros e backups quando aplicável.
-            </p>
-
-            <SecaoTitulo numero={10}>Alterações nos Termos</SecaoTitulo>
-            <p>
-                Podemos atualizar estes Termos para refletir melhorias ou exigências legais. Mudanças
-                relevantes serão comunicadas pelos canais da plataforma. O uso continuado após a vigência
-                significa concordância com a versão atualizada.
-            </p>
-
-            <SecaoTitulo numero={11}>Lei aplicável e foro</SecaoTitulo>
-            <p>
-                Estes Termos são regidos pelas leis da República Federativa do Brasil. Fica eleito o foro da
-                comarca de {legalInfo.cidadeUf} para dirimir controvérsias, salvo disposição legal em contrário.
-            </p>
-
-            <SecaoTitulo numero={12}>Contato</SecaoTitulo>
-            <p>
-                Dúvidas sobre estes Termos:{' '}
-                <a href={`mailto:${legalInfo.emailContato}`} className="text-blue-600 font-semibold underline">
-                    {legalInfo.emailContato}
-                </a>.
-            </p>
-
-            <p className="text-xs text-slate-400 pt-4 border-t border-slate-100">
-                Documento em vigor desde {legalInfo.vigenciaDesde}.
+                Fica eleito o foro da Comarca de {legalInfo.cidadeUf} para dirimir quaisquer dúvidas ou litígios
+                decorrentes da interpretação destes Termos, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
             </p>
         </LegalLayout>
     );
