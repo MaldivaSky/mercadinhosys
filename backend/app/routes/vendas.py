@@ -200,19 +200,31 @@ def calcular_estatisticas_vendas(query_base, estabelecimento_id):
     total_itens = int(stats_itens.total_itens or 0)
     ticket_medio = total / quantidade if quantidade > 0 else 0
 
-    # Formas de pagamento via tabela Pagamento
     formas = db.session.query(
         Pagamento.forma_pagamento,
         func.count(Pagamento.id).label("quantidade"),
         func.sum(Pagamento.valor).label("total")
     ).filter(Pagamento.venda_id.in_(ids_select)).group_by(Pagamento.forma_pagamento).all()
 
+    def _norm(n):
+        if not n: return 'dinheiro'
+        n = n.lower().strip()
+        if 'crédito' in n or 'credito' in n: return 'cartao_credito'
+        if 'débito' in n or 'debito' in n: return 'cartao_debito'
+        if 'dinheiro' in n: return 'dinheiro'
+        if 'pix' in n: return 'pix'
+        if 'fiado' in n: return 'fiado'
+        if 'alimentação' in n or 'alimentacao' in n: return 'vale_alimentacao'
+        if 'refeição' in n or 'refeicao' in n: return 'vale_refeicao'
+        return n.replace(" ", "_").replace("ã", "a").replace("é", "e").replace("ê", "e").replace("í", "i").replace("ó", "o").replace("ç", "c")
+
     formas_dict = {}
     for f in formas:
-        formas_dict[f.forma_pagamento] = {
-            "quantidade": f.quantidade,
-            "total": float(f.total or 0)
-        }
+        norm_key = _norm(f.forma_pagamento)
+        if norm_key not in formas_dict:
+            formas_dict[norm_key] = {"quantidade": 0, "total": 0.0}
+        formas_dict[norm_key]["quantidade"] += f.quantidade
+        formas_dict[norm_key]["total"] += float(f.total or 0)
 
     datas = query_base.with_entities(
         func.min(Venda.data_venda).label("inicio"),
@@ -426,7 +438,7 @@ def estatisticas_vendas():
         vendas_historicas = [{"data": str(v.data), "quantidade": v.quantidade, "total": float(v.total or 0), "tipo": "historico"} for v in vendas_por_dia_res]
 
         from sqlalchemy import case
-        formas_pgto_res = db.session.query(
+        formas_pgto_raw = db.session.query(
             Pagamento.forma_pagamento,
             func.count(Pagamento.id).label("quantidade"),
             func.sum(
@@ -438,6 +450,19 @@ def estatisticas_vendas():
         ).join(Venda, Venda.id == Pagamento.venda_id).filter(
             Pagamento.venda_id.in_(ids_select)
         ).group_by(Pagamento.forma_pagamento).all()
+
+        formas_pgto_agrupadas = {}
+        for fp in formas_pgto_raw:
+            nk = _norm(fp[0])
+            if nk not in formas_pgto_agrupadas:
+                formas_pgto_agrupadas[nk] = {"quantidade": 0, "total": 0.0}
+            formas_pgto_agrupadas[nk]["quantidade"] += fp[1]
+            formas_pgto_agrupadas[nk]["total"] += float(fp[2] or 0)
+            
+        formas_pgto_res = [
+            (k, v["quantidade"], v["total"]) 
+            for k, v in formas_pgto_agrupadas.items()
+        ]
 
         vendas_func_res = query_base.join(Funcionario).with_entities(
             Funcionario.nome, func.count(Venda.id), func.sum(Venda.total)
@@ -537,8 +562,9 @@ def relatorio_diario():
         for v in vendas:
             for p in v.pagamentos:
                 if p.status == "aprovado":
-                    formas_pagamento[p.forma_pagamento]["quantidade"] += 1
-                    formas_pagamento[p.forma_pagamento]["total"] += float(p.valor)
+                    nk = _norm(p.forma_pagamento)
+                    formas_pagamento[nk]["quantidade"] += 1
+                    formas_pagamento[nk]["total"] += float(p.valor)
 
         funcionarios = defaultdict(lambda: {"quantidade": 0, "total": 0, "nome": ""})
         for v in vendas:

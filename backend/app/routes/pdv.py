@@ -270,6 +270,8 @@ def obter_configuracoes_pdv():
             {"tipo": "cartao_debito",  "label": "Cartão de Débito",   "taxa": 0,   "permite_troco": False},
             {"tipo": "cartao_credito", "label": "Cartão de Crédito",  "taxa": 2.5, "permite_troco": False},
             {"tipo": "pix",            "label": "PIX",                "taxa": 0,   "permite_troco": False},
+            {"tipo": "vale_alimentacao", "label": "Vale Alimentação", "taxa": 0,   "permite_troco": False},
+            {"tipo": "vale_refeicao",  "label": "Vale Refeição",      "taxa": 0,   "permite_troco": False},
             {"tipo": "fiado",          "label": "Fiado",              "taxa": 0,   "permite_troco": False},
         ]
 
@@ -282,15 +284,33 @@ def obter_configuracoes_pdv():
 
                 # Normaliza para o formato de objeto esperado pelo PDV
                 formas_pagamento = []
+                
+                # Mapeamento estrito para as chaves canônicas do sistema
+                def _normalizar_tipo_pagamento(nome):
+                    if not nome: return 'dinheiro'
+                    n = str(nome).lower().strip()
+                    if 'crédito' in n or 'credito' in n: return 'cartao_credito'
+                    if 'débito' in n or 'debito' in n: return 'cartao_debito'
+                    if 'dinheiro' in n: return 'dinheiro'
+                    if 'pix' in n: return 'pix'
+                    if 'fiado' in n: return 'fiado'
+                    if 'alimentação' in n or 'alimentacao' in n: return 'vale_alimentacao'
+                    if 'refeição' in n or 'refeicao' in n: return 'vale_refeicao'
+                    # fallback
+                    return n.replace(" ", "_").replace("ã", "a").replace("é", "e").replace("ê", "e").replace("í", "i").replace("ó", "o").replace("ç", "c")
+
                 for f in raw_fp:
                     if isinstance(f, dict):
+                        # Caso a configuração já esteja salva como objeto
+                        tipo_orig = f.get("tipo", f.get("label", ""))
+                        f["tipo"] = _normalizar_tipo_pagamento(tipo_orig)
                         formas_pagamento.append(f)
                     else:
-                        tipo = f.lower().replace(" ", "_").replace("ã", "a").replace("é", "e").replace("ê", "e")
+                        tipo = _normalizar_tipo_pagamento(f)
                         formas_pagamento.append({
                             "tipo": tipo,
                             "label": f,
-                            "taxa": 0,
+                            "taxa": 2.5 if tipo == "cartao_credito" else 0,
                             "permite_troco": tipo == "dinheiro"
                         })
 
@@ -1827,3 +1847,4 @@ def imprimir_venda_html(venda_id):
         import traceback
         current_app.logger.error(f"Erro na impressão HTML: {str(e)}\n{traceback.format_exc()}")
         return f"Erro ao gerar impressão: {str(e)}", 500
+

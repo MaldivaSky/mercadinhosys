@@ -31,11 +31,23 @@ const MultiPaymentManager: React.FC<MultiPaymentManagerProps> = ({
     const totalPago = pagamentosatuais.reduce((sum, p) => sum + p.valor, 0);
     const faltante = Math.max(0, totalVenda - totalPago);
 
-    const handleAdicionar = () => {
+    const [pixData, setPixData] = useState<{qr_code: string, txid: string, valor: number} | null>(null);
+    const [tefData, setTefData] = useState<{status: string, mensagem: string, valor: number, tipo: string} | null>(null);
+
+    const handleAdicionar = async () => {
         const valor = parseFloat(valorInput.replace(',', '.')) || faltante;
         if (valor <= 0) return;
 
-        onAdicionar(formaSelecionada, valor);
+        if (formaSelecionada === 'pix') {
+             // Fluxo manual para PIX
+             setPixData({ qr_code: '', txid: '', valor });
+        } else if (formaSelecionada === 'cartao_credito' || formaSelecionada === 'cartao_debito') {
+             // Fluxo manual para maquininha avulsa (POS Standalone)
+             setTefData({ status: 'aguardando', mensagem: 'Maquininha Avulsa', valor, tipo: formaSelecionada });
+        } else {
+            onAdicionar(formaSelecionada, valor);
+        }
+        
         setValorInput('');
     };
 
@@ -50,7 +62,58 @@ const MultiPaymentManager: React.FC<MultiPaymentManagerProps> = ({
     };
 
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 relative">
+            {/* OVERLAYS DE PAGAMENTO DINÂMICO */}
+            {pixData && (
+                <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-2xl border border-slate-200 p-4 text-center">
+                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Pagamento via PIX</h3>
+                    <Smartphone className="w-12 h-12 text-blue-500 mb-3" />
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-6">
+                        Verifique o recebimento de <strong className="text-blue-600 text-lg">{formatCurrency(pixData.valor)}</strong> na sua conta.
+                    </p>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => {
+                                onAdicionar('pix', pixData.valor);
+                                setPixData(null);
+                            }} 
+                            className="px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold uppercase transition-all shadow-lg shadow-green-500/30">
+                            Confirmar Pagamento
+                        </button>
+                        <button 
+                            onClick={() => setPixData(null)} 
+                            className="px-4 py-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-bold uppercase hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            {tefData && (
+                <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-2xl border border-slate-200 p-4 text-center">
+                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Maquininha de Cartão</h3>
+                    <CreditCard className="w-12 h-12 text-slate-500 mb-3" />
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-6">
+                        Passe o valor de <strong className="text-blue-600 text-lg">{formatCurrency(tefData.valor)}</strong> na sua maquininha.
+                    </p>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => {
+                                onAdicionar(tefData.tipo, tefData.valor);
+                                setTefData(null);
+                            }} 
+                            className="px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold uppercase transition-all shadow-lg shadow-green-500/30">
+                            Confirmar Pagamento
+                        </button>
+                        <button 
+                            onClick={() => setTefData(null)} 
+                            className="px-4 py-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-bold uppercase hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* 📊 RESUMO DE PAGAMENTO */}
             <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
