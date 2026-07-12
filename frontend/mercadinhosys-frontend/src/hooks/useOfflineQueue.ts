@@ -2,7 +2,7 @@
  * useOfflineQueue — Fila de vendas offline para PDV resiliente
  *
  * Arquitetura:
- * - Armazena vendas em IndexedDB quando sem internet
+ * - Armazena vendas em IndexedDB (via Dexie) quando sem internet
  * - Processa automaticamente quando conexão é restaurada
  * - Suporta até 24h de operação offline
  * - IDs temporários com UUID no frontend
@@ -10,66 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { apiClient } from '../api/apiClient';
-
-const DB_NAME = 'mercadinhosys_offline';
-const STORE_NAME = 'vendas_pendentes';
-const DB_VERSION = 1;
-
-export interface VendaOffline {
-  uuid: string;            // ID temporário gerado no frontend
-  payload: any;            // Payload completo para POST /pdv/finalizar
-  tentativas: number;      // Tentativas de sync
-  criadoEm: string;        // ISO datetime
-  erroUltimo?: string;     // Último erro de sync
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// IndexedDB helpers
-// ────────────────────────────────────────────────────────────────────────────
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'uuid' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbGetAll(): Promise<VendaOffline[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => resolve(req.result as VendaOffline[]);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbPut(item: VendaOffline): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const req = tx.objectStore(STORE_NAME).put(item);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbDelete(uuid: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const req = tx.objectStore(STORE_NAME).delete(uuid);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
+import { db, VendaOffline } from '../lib/db';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Hook principal
@@ -83,10 +24,10 @@ export function useOfflineQueue() {
   // Atualiza contagem de pendências
   const refreshCount = useCallback(async () => {
     try {
-      const items = await dbGetAll();
-      setPendingCount(items.length);
+      const count = await db.vendas.count();
+      setPendingCount(count);
     } catch {
-      // IndexedDB pode não estar disponível em alguns contextos
+      // Dexie pode não estar disponível em alguns contextos
     }
   }, []);
 
@@ -96,12 +37,12 @@ export function useOfflineQueue() {
     // garantindo que a venda tenha UM único uuid em toda a cadeia (idempotência).
     const uuid = payload?.offline_uuid || uuidv4();
     const item: VendaOffline = {
-      uuid,
+      id: uuid,
       payload,
-      tentativas: 0,
-      criadoEm: new Date().toISOString(),
+      status: 'pending',
+      timestamp: new Date().toISOString(),
     };
-    await dbPut(item);
+    await db.vendas.put(item);
     await refreshCount();
     console.log(`📦 Venda enfileirada offline: ${uuid}`);
     return uuid;
@@ -116,24 +57,27 @@ export function useOfflineQueue() {
     let failed = 0;
 
     try {
-      const items = await dbGetAll();
+      const items = await db.vendas.toArray();
       if (items.length === 0) return { synced: 0, failed: 0 };
 
       console.log(`🔄 Processando ${items.length} venda(s) offline...`);
 
       for (const item of items) {
         try {
+          // Atualiza status para syncing
+          await db.vendas.update(item.id, { status: 'syncing' });
+
           // Tenta enviar para o backend
           const response = await apiClient.post('/pdv/finalizar', {
             ...item.payload,
-            offline_uuid: item.uuid,     // Rastreabilidade
-            offline_criadoEm: item.criadoEm,
+            offline_uuid: item.id,     // Rastreabilidade
+            offline_criadoEm: item.timestamp,
           });
 
           if (response.data?.venda || response.data?.success) {
-            await dbDelete(item.uuid);
+            await db.vendas.delete(item.id);
             synced++;
-            console.log(`✅ Venda offline sincronizada: ${item.uuid}`);
+            console.log(`✅ Venda offline sincronizada: ${item.id}`);
           }
         } catch (err: any) {
           // Erro de rede → deixa na fila para próxima tentativa
@@ -141,14 +85,14 @@ export function useOfflineQueue() {
           const isNetworkError = !err?.response;
 
           if (isNetworkError) {
-            // Sem internet ainda — atualiza tentativas e sai do loop
-            await dbPut({ ...item, tentativas: item.tentativas + 1, erroUltimo: erroMsg });
+            // Sem internet ainda — atualiza status e sai do loop
+            await db.vendas.update(item.id, { status: 'error', error_message: erroMsg });
             failed++;
             break; // Não adianta tentar as próximas se sem rede
           } else {
             // Erro do servidor (400/500) — pode ser dado inválido; marca como falha permanente
-            console.error(`❌ Venda offline rejeitada pelo servidor (${item.uuid}):`, erroMsg);
-            await dbPut({ ...item, tentativas: item.tentativas + 1, erroUltimo: erroMsg });
+            console.error(`❌ Venda offline rejeitada pelo servidor (${item.id}):`, erroMsg);
+            await db.vendas.update(item.id, { status: 'error', error_message: erroMsg });
             failed++;
           }
         }
@@ -196,3 +140,4 @@ export function useOfflineQueue() {
     refreshCount,
   };
 }
+

@@ -1,9 +1,4 @@
-/**
- * offlineCatalog — cache local (IndexedDB) do catálogo de produtos para vender
- * SEM sinal. Guarda só o necessário para montar o carrinho: nome, códigos,
- * preço, estoque atual e unidade. A nuvem continua sendo a fonte da verdade;
- * isto é apenas uma cópia leve para operar offline.
- */
+import { db } from '../../lib/db';
 
 export interface ProdutoCatalogo {
   id: number;
@@ -15,73 +10,42 @@ export interface ProdutoCatalogo {
   unidade_medida: string;
 }
 
-const DB_NAME = 'mercadinhosys_catalog';
-const STORE = 'produtos';
-const DB_VERSION = 1;
 const LS_LAST_SYNC = 'catalogo_offline_last_sync';
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const os = db.createObjectStore(STORE, { keyPath: 'id' });
-        os.createIndex('codigo_barras', 'codigo_barras', { unique: false });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
 
 /** Substitui todo o catálogo cacheado pelo recebido do servidor. */
 export async function salvarCatalogo(produtos: ProdutoCatalogo[]): Promise<void> {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const store = tx.objectStore(STORE);
-    store.clear();
-    for (const p of produtos) store.put(p);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+  await db.transaction('rw', db.produtos, async () => {
+    await db.produtos.clear();
+    await db.produtos.bulkAdd(produtos);
   });
   try { localStorage.setItem(LS_LAST_SYNC, new Date().toISOString()); } catch { /* ignore */ }
 }
 
 export async function lerCatalogo(): Promise<ProdutoCatalogo[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve((req.result as ProdutoCatalogo[]) || []);
-    req.onerror = () => reject(req.error);
-  });
+  return await db.produtos.toArray();
 }
 
 export async function contarCatalogo(): Promise<number> {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).count();
-    req.onsuccess = () => resolve(req.result || 0);
-    req.onerror = () => resolve(0);
-  });
+  return await db.produtos.count();
 }
 
 /** Busca offline por nome, código de barras ou código interno. */
 export async function buscarOffline(termo: string, limite = 20): Promise<ProdutoCatalogo[]> {
   const t = (termo || '').trim().toLowerCase();
   if (!t) return [];
-  const todos = await lerCatalogo();
-  // EAN exato primeiro (scanner), depois "contém" no nome/código
-  const exato = todos.filter((p) => (p.codigo_barras || '') === termo.trim());
+  
+  // EAN exato primeiro (scanner)
+  const exato = await db.produtos.where('codigo_barras').equals(termo.trim()).toArray();
   if (exato.length) return exato.slice(0, limite);
+  
+  // Como o Dexie não tem "includes" nativo de forma eficiente em index (precisa de regex/filter),
+  // e o catálogo não costuma ter milhões de itens (são alguns milhares), podemos fazer em memória.
+  const todos = await db.produtos.toArray();
   return todos
     .filter((p) =>
       p.nome.toLowerCase().includes(t) ||
       (p.codigo_barras || '').toLowerCase().includes(t) ||
-      (p.codigo_interno || '').toLowerCase().includes(t),
+      (p.codigo_interno || '').toLowerCase().includes(t)
     )
     .slice(0, limite);
 }
