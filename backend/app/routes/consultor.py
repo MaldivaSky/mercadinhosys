@@ -164,7 +164,7 @@ def gerar_insights():
         ultima = ConsultorInteracao.query.filter_by(
             estabelecimento_id=estabelecimento_id, 
             especialista=f"insight_{especialista}"
-        ).order_by(ConsultorInteracao.data_criacao.desc()).first()
+        ).order_by(ConsultorInteracao.created_at.desc()).first()
         
         if ultima:
             return jsonify({
