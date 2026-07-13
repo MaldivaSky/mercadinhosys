@@ -579,6 +579,14 @@ def atualizar_status(id):
             entrega.veiculo_id = data.get("veiculo_id")
         elif novo_status == "entregue":
             entrega.data_entrega = datetime.now()
+            
+            # Calcular o tempo real de entrega em minutos
+            if entrega.data_saida:
+                delta = entrega.data_entrega - entrega.data_saida
+            else:
+                delta = entrega.data_entrega - entrega.created_at
+            entrega.tempo_real_minutos = int(delta.total_seconds() / 60)
+            
             # Incrementar estatística do motorista
             if entrega.motorista:
                 entrega.motorista.total_entregas += 1
