@@ -142,7 +142,7 @@ const ProductsPage: React.FC = () => {
       setProdutos(response?.produtos ?? []);
       setTotalPages(response?.paginacao?.total_paginas ?? 1);
       setTotalItems(response?.paginacao?.total_itens ?? 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar produtos:', error);
       showToast.error('Erro ao carregar produtos');
       setProdutos([]);
@@ -162,7 +162,7 @@ const ProductsPage: React.FC = () => {
           validade: response.estatisticas.validade || { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 }
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar estatísticas:', error);
     }
   }, [filtros]);
@@ -171,7 +171,7 @@ const ProductsPage: React.FC = () => {
     try {
       const response = await productsService.getCategorias(true);
       setCategorias(response.categorias);
-    } catch (error) {
+    } catch {
       console.error('Erro ao carregar categorias:', error);
     }
   }, []);
@@ -180,7 +180,7 @@ const ProductsPage: React.FC = () => {
     try {
       const response = await apiClient.get<{ fornecedores: Fornecedor[] }>('/fornecedores/', { params: { per_page: 100 } });
       setFornecedores(response.data.fornecedores || []);
-    } catch (error) {
+    } catch {
       console.error('Erro ao carregar fornecedores:', error);
     }
   }, []);
@@ -288,7 +288,7 @@ const ProductsPage: React.FC = () => {
       });
       loadProdutos();
       loadStats();
-    } catch (error) {
+    } catch {
       // Erro já tratado pelo promise
     }
   };
@@ -331,7 +331,7 @@ const ProductsPage: React.FC = () => {
       setShowStockModal(false);
       loadProdutos();
       loadStats();
-    } catch (error) {
+    } catch {
       // Erro já tratado pelo promise
     }
   };
@@ -355,7 +355,7 @@ const ProductsPage: React.FC = () => {
       setShowDiscardModal(false);
       loadProdutos();
       loadStats();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no descarte:', error);
     }
   };
@@ -380,7 +380,7 @@ const ProductsPage: React.FC = () => {
       link.download = `produtos_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       showToast.info(`${response.total_produtos} produtos exportados!`);
-    } catch (error) {
+    } catch {
       showToast.error('Erro ao exportar');
     }
   };
@@ -583,7 +583,7 @@ const ProductsPage: React.FC = () => {
   }), [stats]);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 tour-produtos-upload">
 
       <CommandToolbar 
         onNew={() => { setEditMode(false); setSelectedProduct(null); setShowProductModal(true); }}

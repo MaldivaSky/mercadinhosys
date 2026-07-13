@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import Sidebar from './Sidebar';
@@ -11,7 +11,7 @@ import usePullToRefresh from '../../hooks/usePullToRefresh';
 import { useSuperAdmin } from '../../contexts/SuperAdminContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye } from 'lucide-react';
-import OnboardingWizard from '../../features/onboarding/OnboardingWizard';
+import TourExecutivo from '../../features/onboarding/TourExecutivo';
 
 const MirrorReadOnlyBanner: React.FC = () => {
     const { user } = useAuth();
@@ -37,23 +37,6 @@ const MirrorReadOnlyBanner: React.FC = () => {
 const MainLayout: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
     const mainRef = React.useRef<HTMLElement>(null);
-    const [showOnboarding, setShowOnboarding] = useState(false);
-    const { isAuthenticated } = useAuth();
-    
-    useEffect(() => {
-        if (isAuthenticated) {
-            const hasSeen = localStorage.getItem('mercadinhosys_onboarding_done');
-            if (!hasSeen) {
-                setShowOnboarding(true);
-            }
-        }
-    }, [isAuthenticated]);
-
-    const handleOnboardingComplete = () => {
-        localStorage.setItem('mercadinhosys_onboarding_done', 'true');
-        setShowOnboarding(false);
-    };
-
     // PWA standalone não tem "puxar p/ atualizar" nativo — implementamos aqui.
     const { distance, refreshing, threshold } = usePullToRefresh(
         mainRef,
@@ -66,7 +49,7 @@ const MainLayout: React.FC = () => {
             <GlobalShortcuts />
             <TrialNotice />
             
-            {showOnboarding && <OnboardingWizard onComplete={handleOnboardingComplete} />}
+            <TourExecutivo />
             
             <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
             <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 min-w-0 min-h-0">
