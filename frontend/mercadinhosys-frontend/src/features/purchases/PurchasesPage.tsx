@@ -372,13 +372,13 @@ const PurchasesPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 md:pb-8 tour-compras-visao">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 md:pb-8">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-4 sm:space-y-5">
 
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl lg:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2 sm:gap-3">
+            <h1 className="text-lg sm:text-2xl lg:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2 sm:gap-3 tour-compras-visao">
               <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-md shrink-0">
                 <ShoppingBag className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
               </div>

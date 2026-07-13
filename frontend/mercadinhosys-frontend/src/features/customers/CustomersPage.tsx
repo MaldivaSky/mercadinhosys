@@ -921,7 +921,7 @@ const CustomersPage: React.FC = () => {
             <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-6 text-white shadow-xl">
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 800 }}>Clientes</Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 800 }} className="tour-clientes-upload">Clientes</Typography>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
                             Carteira, relacionamento e cobrança
                         </Typography>

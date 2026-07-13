@@ -64,7 +64,7 @@ export default function DashboardPageV2() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2 tour-indicadores">
             Intelligence Hub <span className="text-blue-500">•</span>
           </h1>
           <p className="text-slate-400 mt-1">Resumo estratégico do período selecionado</p>
@@ -117,7 +117,7 @@ export default function DashboardPageV2() {
         </div>
       </div>
 
-      <InsightCard especialista="geral" titulo="Consultor M-IA - Inteligência do Negócio" className="mb-6" />
+      <InsightCard especialista="geral" titulo="Consultor M-IA - Inteligência do Negócio" className="mb-6 tour-ia-consultor" />
       
       <div className="mb-6">
         <AlertsPanel />

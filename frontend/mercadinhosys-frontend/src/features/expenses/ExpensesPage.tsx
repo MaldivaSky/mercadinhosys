@@ -608,7 +608,7 @@ export default function ExpensesPage() {
                     <button
                         id="btn-nova-despesa"
                         onClick={abrirNova}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all hover:scale-105 active:scale-95"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all hover:scale-105 active:scale-95 tour-despesas-add"
                     >
                         <Plus className="w-4 h-4" />
                         Nova Despesa

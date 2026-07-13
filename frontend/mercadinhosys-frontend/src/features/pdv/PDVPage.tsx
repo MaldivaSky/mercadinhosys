@@ -276,7 +276,7 @@ const PDVPage: React.FC = () => {
     if (loading && !configuracoes) return <PDVSkeleton />;
 
     return (
-        <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100 tour-pdv-leitor">
+        <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100">
             {/* Barra de status: offline + vendas pendentes */}
             <AnimatePresence>
                 {(!isOnline || pendingCount > 0) && (
@@ -317,11 +317,13 @@ const PDVPage: React.FC = () => {
                 produto={produtoPendentePeso}
             />
 
-            <CaixaHeader
-                funcionarioNome={configuracoes?.funcionario.nome}
-                funcionarioRole={configuracoes?.funcionario.role}
-                onOpenCaixaManager={() => setManagerCaixaAberto(true)}
-            />
+            <div className="tour-pdv-leitor">
+                <CaixaHeader
+                    funcionarioNome={configuracoes?.funcionario.nome}
+                    funcionarioRole={configuracoes?.funcionario.role}
+                    onOpenCaixaManager={() => setManagerCaixaAberto(true)}
+                />
+            </div>
 
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden border-t border-slate-200 dark:border-slate-800">
                 {/* 🛒 LISTAGEM DE ITENS (FOCO TOTAL) */}

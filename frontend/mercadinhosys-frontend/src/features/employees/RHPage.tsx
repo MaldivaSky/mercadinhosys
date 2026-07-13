@@ -26,7 +26,7 @@ export default function RHPage() {
   const nivel = getNivel(authService.getCurrentUser());
   if (nivel > 3) {
     return (
-      <div className="p-6 max-w-5xl mx-auto bg-gray-50/50 dark:bg-gray-900/50 min-h-screen">
+      <div className="p-6 max-w-7xl mx-auto bg-gray-50/50 dark:bg-gray-900/50 min-h-screen">
         <MeuRH />
       </div>
     );
@@ -54,7 +54,7 @@ export default function RHPage() {
             <Users className="w-8 h-8 text-white" />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight tour-rh-visao">
               Recursos Humanos
             </h1>
             <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-widest">

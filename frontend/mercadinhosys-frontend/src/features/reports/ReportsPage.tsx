@@ -1599,7 +1599,7 @@ const ReportsPage: React.FC = () => {
     // ==================== RENDER PRINCIPAL ====================
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto pb-10 tour-relatorios-visao">
+        <div className="space-y-8 max-w-7xl mx-auto pb-10">
             {/* Header com Filtros */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center space-x-4">
@@ -1607,7 +1607,7 @@ const ReportsPage: React.FC = () => {
                         <BarChart3 className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Central de Inteligência</h1>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tour-relatorios-visao">Central de Inteligência</h1>
                         <p className="text-gray-500 dark:text-gray-400">Extraia insights valiosos para tomada de decisão</p>
                     </div>
                 </div>

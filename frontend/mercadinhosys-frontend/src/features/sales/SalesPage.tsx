@@ -87,7 +87,7 @@ function Kpi({ titulo, valor, sub, Icon, cor }: { titulo: string; valor: string;
 
 function InsightCard({ Icon, cor, titulo, valor, desc }: { Icon: React.ElementType; cor: string; titulo: string; valor: string; desc: string }) {
     return (
-        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 tour-vendas-historico">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5">
             <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cor}`}>
                     <Icon className="w-5 h-5" />
@@ -361,7 +361,7 @@ export default function SalesPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">Gestão de Vendas</h1>
+                    <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tour-vendas-historico">Gestão de Vendas</h1>
                     <p className="text-sm text-slate-500">Faturamento, aprovações e decisões baseadas em dados</p>
                 </div>
                 <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">

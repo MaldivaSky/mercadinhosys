@@ -583,20 +583,22 @@ const ProductsPage: React.FC = () => {
   }), [stats]);
 
   return (
-    <div className="space-y-6 p-6 tour-produtos-upload">
+    <div className="space-y-6 p-6">
 
-      <CommandToolbar 
-        onNew={() => { setEditMode(false); setSelectedProduct(null); setShowProductModal(true); }}
-        onRefresh={loadProdutos}
-        onPurchaseOrders={() => setShowPurchaseOrders(true)}
-        onMarkup={() => setShowMarkupCalculator(true)}
-        onImport={() => setShowImportModal(true)}
-        onExport={handleExportCSV}
-        search={buscaLocal}
-        onSearchChange={setBuscaLocal}
-        onToggleFilters={() => setShowFilters(!showFilters)}
-        showFilters={showFilters}
-      />
+      <div className="tour-produtos-upload">
+        <CommandToolbar 
+          onNew={() => { setEditMode(false); setSelectedProduct(null); setShowProductModal(true); }}
+          onRefresh={loadProdutos}
+          onPurchaseOrders={() => setShowPurchaseOrders(true)}
+          onMarkup={() => setShowMarkupCalculator(true)}
+          onImport={() => setShowImportModal(true)}
+          onExport={handleExportCSV}
+          search={buscaLocal}
+          onSearchChange={setBuscaLocal}
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          showFilters={showFilters}
+        />
+      </div>
 
       <ConsultorInsightCard especialista="estoque" titulo="Consultor IA - Inteligência de Estoque" className="mb-2" />
 
