@@ -245,10 +245,10 @@ const DeliveryList: React.FC = () => {
                                     <DollarSign className="w-3.5 h-3.5" /> Taxa de entrega
                                 </span>
                                 <div className="flex items-center gap-2">
-                                    {duracaoEntrega((entrega as any).tempo_entrega_minutos) && (
-                                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 px-2 py-0.5 text-[11px] font-bold">
-                                            <Clock className="w-3 h-3" /> {duracaoEntrega((entrega as any).tempo_entrega_minutos)}
-                                        </span>
+                                    {duracaoEntrega((entrega as any).tempo_real_minutos) && (
+                                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 px-2 py-1 rounded-md">
+                                            <Clock className="w-3 h-3" /> {duracaoEntrega((entrega as any).tempo_real_minutos)}
+                                        </div>
                                     )}
                                     <span className="font-black text-gray-800 dark:text-white">
                                         {formatCurrency(Number(entrega.taxa_entrega || 0))}

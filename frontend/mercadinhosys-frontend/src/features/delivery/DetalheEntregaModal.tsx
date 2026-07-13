@@ -85,7 +85,7 @@ export default function DetalheEntregaModal({ entregaId, onClose }: Props) {
                                         <Clock className="w-5 h-5" />
                                         <div>
                                             <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500 dark:text-blue-400">Tempo de entrega</p>
-                                            <p className="text-2xl font-black leading-none">{duracao(e?.tempo_entrega_minutos) || 'Em andamento'}</p>
+                                            <p className="text-2xl font-black leading-none">{duracao(e?.tempo_real_minutos) || 'Em andamento'}</p>
                                         </div>
                                     </div>
                                     <div className="text-xs text-gray-600 dark:text-gray-300 text-right">
