@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Play, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { X } from 'lucide-react';
 
 const steps = [
     {
@@ -76,7 +75,6 @@ const steps = [
 const TourExecutivo: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
     
     const [run, setRun] = useState(false);
     const [stepIndex, setStepIndex] = useState(0);
