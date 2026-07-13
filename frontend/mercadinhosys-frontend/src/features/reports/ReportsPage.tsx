@@ -1599,7 +1599,7 @@ const ReportsPage: React.FC = () => {
     // ==================== RENDER PRINCIPAL ====================
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto pb-10">
+        <div className="space-y-8 max-w-7xl mx-auto pb-10 tour-relatorios-visao">
             {/* Header com Filtros */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center space-x-4">

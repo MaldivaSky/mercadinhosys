@@ -276,7 +276,7 @@ const PDVPage: React.FC = () => {
     if (loading && !configuracoes) return <PDVSkeleton />;
 
     return (
-        <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100">
+        <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100 tour-pdv-leitor">
             {/* Barra de status: offline + vendas pendentes */}
             <AnimatePresence>
                 {(!isOnline || pendingCount > 0) && (
@@ -649,7 +649,7 @@ const PDVPage: React.FC = () => {
                                                                                 } else {
                                                                                     import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular.", { id: 'cep-toast' }));
                                                                                 }
-                                                                            } catch (err: any) {
+                                                                            } catch {
                                                                                 import('react-hot-toast').then(m => m.default.error("Erro na API.", { id: 'cep-toast' }));
                                                                             }
                                                                         } else {
@@ -686,7 +686,7 @@ const PDVPage: React.FC = () => {
                                                                             } else {
                                                                                 import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao recalcular.", { id: 'cep-toast' }));
                                                                             }
-                                                                        } catch (err) {
+                                                                        } catch {
                                                                             import('react-hot-toast').then(m => m.default.error("Erro na API.", { id: 'cep-toast' }));
                                                                         }
                                                                     }
@@ -884,7 +884,7 @@ const PDVPage: React.FC = () => {
                         setMostrarModalNotaFiscal(false);
                         setVendaFinalizada(null);
                         limparCarrinho();
-                    } catch (error) {
+                    } catch {
                         // Erro tratado pelo promise
                     } finally {
                         setEnviandoEmail(false);

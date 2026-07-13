@@ -87,7 +87,7 @@ function Kpi({ titulo, valor, sub, Icon, cor }: { titulo: string; valor: string;
 
 function InsightCard({ Icon, cor, titulo, valor, desc }: { Icon: React.ElementType; cor: string; titulo: string; valor: string; desc: string }) {
     return (
-        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 tour-vendas-historico">
             <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cor}`}>
                     <Icon className="w-5 h-5" />
