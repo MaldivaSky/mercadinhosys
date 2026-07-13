@@ -494,7 +494,7 @@ const PontoPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-6">
+    <div className="min-h-screen bg-slate-900 p-4 md:p-6 animate-in fade-in duration-500">
 
       {/* STATUS ONLINE/OFFLINE */}
       {!online && (
@@ -529,11 +529,11 @@ const PontoPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 flex items-center gap-3">
-              <Clock className="w-10 h-10 text-blue-600" />
+            <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center gap-3 tour-ponto-bater">
+              <Clock className="w-10 h-10 text-blue-500" />
               Controle de Ponto
             </h1>
-            <p className="text-gray-600 mt-2">
+            <p className="text-slate-400 mt-2">
               Registre sua entrada, saídas e retornos com foto e localização
             </p>
           </div>
@@ -567,9 +567,9 @@ const PontoPage: React.FC = () => {
             paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">📸 Tire sua foto</h3>
-            <p className="text-gray-600 text-sm mb-4">Posicione seu rosto na câmera e clique em "Capturar Foto"</p>
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto shadow-2xl">
+            <h3 className="text-2xl font-bold text-white mb-2">📸 Tire sua foto</h3>
+            <p className="text-slate-400 text-sm mb-4">Posicione seu rosto na câmera e clique em "Capturar Foto"</p>
 
             {!cameraReady && (
               <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded-lg">
@@ -622,8 +622,8 @@ const PontoPage: React.FC = () => {
             paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Confirmar foto e localização</h3>
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto shadow-2xl">
+            <h3 className="text-2xl font-bold text-white mb-4">Confirmar foto e localização</h3>
             <img src={foto} alt="Preview" className="w-full rounded-lg mb-4" />
 
             {/* Info de localização */}
@@ -697,30 +697,30 @@ const PontoPage: React.FC = () => {
               key={item.tipo}
               onClick={() => !registrado && registrarPonto(item.tipo)}
               disabled={registrado || loading}
-              className={`relative p-6 rounded-2xl shadow-xl transform transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${registrado ? 'bg-gray-200' : `bg-gradient-to-r ${item.color}`
+              className={`relative p-6 rounded-2xl shadow-xl transform transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border ${registrado ? 'bg-slate-800 border-slate-700' : `bg-gradient-to-r ${item.color} border-transparent`
                 }`}
             >
               {registrado && (
                 <div className="absolute top-2 right-2">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                  <CheckCircle className="w-6 h-6 text-green-400" />
                 </div>
               )}
 
               <div className="text-center">
                 <div className="text-4xl mb-2">{item.icon}</div>
-                <h3 className={`text-xl font-bold mb-2 ${registrado ? 'text-gray-700' : 'text-white'}`}>
+                <h3 className={`text-xl font-bold mb-2 ${registrado ? 'text-slate-300' : 'text-white'}`}>
                   {item.label}
                 </h3>
 
                 {configuracao && (
-                  <p className={`text-sm mb-2 ${registrado ? 'text-gray-600' : 'text-white/90'}`}>
+                  <p className={`text-sm mb-2 ${registrado ? 'text-slate-400' : 'text-white/90'}`}>
                     Horário: {getHorarioEsperado(item.tipo)}
                   </p>
                 )}
 
                 {registrado && registro && (
-                  <div className="mt-3 p-2 bg-white rounded-lg">
-                    <p className="text-sm font-semibold text-gray-900">
+                  <div className="mt-3 p-2 bg-slate-900/50 border border-slate-700 rounded-lg">
+                    <p className="text-sm font-semibold text-white">
                       Registrado às {registro.hora}
                     </p>
                     {registro.status === 'atrasado' && (
@@ -740,38 +740,56 @@ const PontoPage: React.FC = () => {
       {estatisticas && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* GRÁFICO DE FREQUÊNCIA - MELHORADO */}
-          <div className="bg-white rounded-2xl shadow-xl p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <BarChart3 className="w-6 h-6 text-blue-600" />
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6 flex flex-col">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-blue-400" />
               Frequência (Últimos 30 dias)
             </h3>
-            <div className="h-[300px]">
+            <div className="flex-1 min-h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={estatisticas.grafico_frequencia}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <AreaChart data={estatisticas.grafico_frequencia} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorFreq" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                   <XAxis
                     dataKey="data"
-                    tick={{ fontSize: 10 }}
+                    stroke="#334155"
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
                     angle={-45}
                     textAnchor="end"
-                    height={80}
+                    height={60}
+                    dy={15}
                   />
-                  <YAxis />
+                  <YAxis 
+                    stroke="#334155"
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    allowDecimals={false}
+                    dx={-10}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '8px'
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
                     }}
+                    cursor={{ stroke: '#475569', strokeWidth: 1, strokeDasharray: '3 3' }}
                     content={({ payload }) => {
                       if (payload && payload.length > 0) {
                         const data = payload[0].payload;
                         return (
                           <div className="p-3">
-                            <p className="font-bold text-gray-900">{data.data}</p>
-                            <p className="text-sm text-blue-600">Registros: {data.total_registros}</p>
+                            <p className="font-bold text-white mb-1">{data.data}</p>
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                              <p className="text-sm text-slate-300">Registros: <span className="font-bold text-white">{data.total_registros}</span></p>
+                            </div>
                             {data.teve_atraso && (
-                              <p className="text-sm text-red-600 font-semibold">
+                              <p className="text-sm text-red-400 font-semibold mt-2">
                                 ⚠️ Atraso: {data.minutos_atraso} min
                               </p>
                             )}
@@ -784,9 +802,10 @@ const PontoPage: React.FC = () => {
                   <Area
                     type="monotone"
                     dataKey="total_registros"
-                    fill="#93c5fd"
+                    fill="url(#colorFreq)"
                     stroke="#3b82f6"
-                    strokeWidth={2}
+                    strokeWidth={3}
+                    activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -817,8 +836,8 @@ const PontoPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <h4 className="font-bold text-gray-900 mb-4 text-lg">Registros por Tipo</h4>
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6">
+              <h4 className="font-bold text-white mb-4 text-lg">Registros por Tipo</h4>
               <div className="space-y-3">
                 {Object.entries(estatisticas.frequencia_tipo).map(([tipo, count]) => {
                   const icons = {
@@ -828,12 +847,12 @@ const PontoPage: React.FC = () => {
                     'saida': '🌙'
                   };
                   return (
-                    <div key={tipo} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div key={tipo} className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg hover:bg-slate-700 transition border border-slate-700/50">
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{icons[tipo]}</span>
-                        <span className="text-gray-700 font-medium">{getTipoLabel(tipo)}</span>
+                        <span className="text-slate-300 font-medium">{getTipoLabel(tipo)}</span>
                       </div>
-                      <span className="font-bold text-blue-600 text-lg">{count}</span>
+                      <span className="font-bold text-blue-400 text-lg">{count}</span>
                     </div>
                   );
                 })}
@@ -844,9 +863,9 @@ const PontoPage: React.FC = () => {
       )}
 
       {/* REGISTROS DE HOJE - MELHORADO */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
-        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <Calendar className="w-6 h-6 text-blue-600" />
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6 mb-8">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Calendar className="w-6 h-6 text-blue-400" />
           Registros de Hoje
         </h3>
 
