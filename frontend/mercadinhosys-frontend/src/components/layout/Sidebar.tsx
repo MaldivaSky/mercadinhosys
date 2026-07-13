@@ -23,7 +23,8 @@ import {
     Receipt,
     MapPin,
     ShoppingBag,
-    Sparkles
+    Sparkles,
+    Play
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 import { canAccessRoute } from '../../utils/permissions';
@@ -101,6 +102,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                         </li>
                     ))}
                 </ul>
+                <div className="mt-6 border-t border-gray-100 dark:border-gray-700 pt-4">
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('start-tour'))}
+                        className={`w-full flex items-center rounded-lg transition-colors ${isCollapsed ? 'justify-center px-1 py-3' : 'px-4 py-3 space-x-3'} bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md hover:from-blue-700 hover:to-blue-800`}
+                    >
+                        <Play className="w-5 h-5 flex-shrink-0 fill-white" />
+                        {!isCollapsed && <span className="font-bold whitespace-nowrap overflow-hidden text-sm">Tour & Ajuda</span>}
+                    </button>
+                </div>
             </nav>
         </aside>
     );

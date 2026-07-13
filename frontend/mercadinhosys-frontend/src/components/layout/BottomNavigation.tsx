@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign, Building2, Activity, Target, MapPin, ShoppingBag } from 'lucide-react';
+import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign, Building2, Activity, Target, MapPin, ShoppingBag, Play } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import EstablishmentSelector from '../EstablishmentSelector';
 import { authService } from '../../features/auth/authService';
@@ -150,15 +150,24 @@ const BottomNavigation: React.FC = () => {
                             <button
                                 onClick={() => {
                                     setMenuOpen(false);
+                                    window.dispatchEvent(new CustomEvent('start-tour'));
+                                }}
+                                className="flex-1 py-3 px-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-xs sm:text-sm flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 active:scale-95 transition-transform"
+                            >
+                                <Play className="w-4 h-4" /> Tour & Ajuda
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setMenuOpen(false);
                                     navigate('/settings');
                                 }}
-                                className="flex-1 py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                                className="flex-1 py-3 px-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-bold text-xs sm:text-sm flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 active:scale-95 transition-transform"
                             >
                                 <Settings className="w-4 h-4" /> Ajustes
                             </button>
                             <button
                                 onClick={handleLogout}
-                                className="flex-1 py-3 px-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                                className="flex-1 py-3 px-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold text-xs sm:text-sm flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 active:scale-95 transition-transform"
                             >
                                 <LogOut className="w-4 h-4" /> Sair
                             </button>
