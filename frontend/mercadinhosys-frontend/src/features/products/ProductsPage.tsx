@@ -171,7 +171,7 @@ const ProductsPage: React.FC = () => {
     try {
       const response = await productsService.getCategorias(true);
       setCategorias(response.categorias);
-    } catch {
+    } catch (error: any) {
       console.error('Erro ao carregar categorias:', error);
     }
   }, []);
@@ -180,7 +180,7 @@ const ProductsPage: React.FC = () => {
     try {
       const response = await apiClient.get<{ fornecedores: Fornecedor[] }>('/fornecedores/', { params: { per_page: 100 } });
       setFornecedores(response.data.fornecedores || []);
-    } catch {
+    } catch (error: any) {
       console.error('Erro ao carregar fornecedores:', error);
     }
   }, []);

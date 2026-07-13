@@ -255,8 +255,8 @@ const TourExecutivo: React.FC = () => {
                 run={run}
                 stepIndex={stepIndex}
                 continuous
-                hideCloseButton={false}
                 scrollToFirstStep
+                // @ts-expect-error - Tipagem do react-joyride omite a prop callback na versão instalada
                 callback={handleJoyrideCallback}
                 locale={{
                     back: 'Voltar',
