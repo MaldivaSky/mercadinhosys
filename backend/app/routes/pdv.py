@@ -40,6 +40,19 @@ class InsuficientStockError(Exception):
 
 # ==================== FUNÇÕES AUXILIARES ====================
 
+def _resolver_nome_operador(venda_data: dict) -> str:
+    funcionario_id = venda_data.get("funcionario_id") if venda_data else None
+    if funcionario_id:
+        funcionario_data = get_funcionario_safe(funcionario_id) or {}
+        nome = (
+            funcionario_data.get("nome")
+            or funcionario_data.get("username")
+            or funcionario_data.get("email")
+        )
+        if nome:
+            return str(nome).strip()
+    return "Operador"
+
 def calcular_rfm_cliente(cliente_id: int, estabelecimento_id: int) -> dict:
     """
     Calcula o segmento RFM de um cliente específico.
@@ -1523,6 +1536,8 @@ def enviar_cupom_email():
         ]
         endereco_completo = " - ".join([p for p in end_parts if p and str(p).strip()])
 
+        nome_operador = _resolver_nome_operador(venda_data)
+
         dados_formatados = {
             "venda": {
                 "codigo": venda_data.get("codigo", "V-0000"),
@@ -1530,7 +1545,7 @@ def enviar_cupom_email():
             },
 
             "comprovante": {
-                "funcionario": "Operador Balcão",
+                "funcionario": nome_operador,
                 "cliente": nome_cliente,
                 "itens": [
                     {
@@ -1643,7 +1658,7 @@ def obter_comprovante_venda(venda_id):
         percentual_tributos = (valor_tributos / subtotal_venda * 100) if subtotal_venda > 0 else 0
 
         comprovante = {
-            "funcionario": "Operador Balcão",
+            "funcionario": _resolver_nome_operador(venda_data),
             "cliente": nome_cliente,
             "logo_url": logo_url,
             "itens": [
@@ -1756,10 +1771,12 @@ def imprimir_venda_html(venda_id):
         
         from app.services.email_service import _format_moeda
         
+        nome_operador = _resolver_nome_operador(venda_data)
+
         dados_formatados = {
             "venda": {"codigo": venda_data.get("codigo"), "data": data_str, "total": float(venda_data.get("total") or 0)},
             "comprovante": {
-                "funcionario": "Operador Balcão",
+                "funcionario": nome_operador,
                 "cliente": nome_cliente,
                 "itens": [
                     {

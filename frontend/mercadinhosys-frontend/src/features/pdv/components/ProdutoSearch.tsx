@@ -212,7 +212,14 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
 
             {/* Lista de Resultados */}
             {resultados.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-96 overflow-y-auto">
+                <div
+                    className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden"
+                    style={{ maxHeight: 'min(24rem, calc(100dvh - 14rem))' }}
+                >
+                    <div
+                        className="overflow-y-auto overscroll-contain custom-scrollbar"
+                        style={{ maxHeight: 'min(24rem, calc(100dvh - 14rem))', WebkitOverflowScrolling: 'touch' }}
+                    >
                     {resultados.map((produto) => {
                         const un = ((produto as any).unidade_medida || 'UN').toUpperCase();
                         const isPeso = UNIDADES_PESO.includes(un);
@@ -296,6 +303,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                             </div>
                         );
                     })}
+                    </div>
                 </div>
             )}
 

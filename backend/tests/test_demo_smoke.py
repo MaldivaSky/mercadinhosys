@@ -225,6 +225,7 @@ def test_demo_venda_e_comprovante(client, ctx):
     comp = r2.get_json()
     assert comp.get("success") is True
     assert len(comp["comprovante"]["itens"]) >= 1
+    assert comp["comprovante"]["funcionario"] == admin.nome
     # Lei da Transparência: o comprovante carrega o campo de tributos (mesmo que 0).
     assert "valor_tributos" in comp["comprovante"]
 
