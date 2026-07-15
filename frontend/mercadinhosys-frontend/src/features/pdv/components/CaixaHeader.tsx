@@ -1,18 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import {
     Clock,
-    User
+    User,
+    Lock,
+    Unlock,
+    Wallet
 } from 'lucide-react';
+import { formatCurrency, formatDateTime } from '../../../utils/formatters';
 
 interface CaixaHeaderProps {
     funcionarioNome?: string;
     funcionarioRole?: string;
+    caixaNumero?: string;
+    caixaAberto?: boolean;
+    saldoAtualCaixa?: number;
+    dataAberturaCaixa?: string;
     onOpenCaixaManager?: () => void;
 }
 
 const CaixaHeader: React.FC<CaixaHeaderProps> = ({
     funcionarioNome = 'Operador',
     funcionarioRole = 'Caixa',
+    caixaNumero,
+    caixaAberto = false,
+    saldoAtualCaixa,
+    dataAberturaCaixa,
+    onOpenCaixaManager,
 }) => {
     const [horaAtual, setHoraAtual] = useState(new Date());
 
@@ -69,6 +82,20 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end flex-wrap md:flex-nowrap">
+                    <div className={`flex items-center gap-2 px-4 py-3 rounded-xl backdrop-blur-sm border ${
+                        caixaAberto
+                            ? 'bg-emerald-500/20 border-emerald-300/30 text-white'
+                            : 'bg-red-500/20 border-red-300/30 text-white'
+                    }`}>
+                        {caixaAberto ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                        <div className="text-left">
+                            <p className="text-[10px] uppercase tracking-widest font-black opacity-80">Status do Caixa</p>
+                            <p className="text-sm font-black uppercase">
+                                {caixaAberto ? `Aberto${caixaNumero ? ` • ${caixaNumero}` : ''}` : 'Fechado'}
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Relógio */}
                     <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-4 md:px-6 py-2 md:py-3 rounded-xl backdrop-blur-sm">
                         <Clock className="w-5 h-5 md:w-6 md:h-6" />
@@ -79,7 +106,39 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({
                 </div>
             </div>
 
-            {/* Cabeçalho Limpo: Somente Identificação e Relógio */}
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3">
+                <div className={`rounded-2xl px-4 py-3 border backdrop-blur-sm ${
+                    caixaAberto
+                        ? 'bg-white/10 border-white/15'
+                        : 'bg-red-950/25 border-red-300/20'
+                }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest font-black text-blue-100/80">Operação do PDV</p>
+                            <p className="text-sm md:text-base font-black">
+                                {caixaAberto
+                                    ? 'Caixa liberado para vendas, sangrias e fechamento do turno.'
+                                    : 'Caixa fechado. Abra o caixa antes de iniciar pagamentos e concluir vendas.'}
+                            </p>
+                            {caixaAberto && (
+                                <p className="text-xs text-blue-100 mt-1">
+                                    {dataAberturaCaixa ? `Aberto em ${formatDateTime(dataAberturaCaixa)}` : 'Turno ativo'}{typeof saldoAtualCaixa === 'number' ? ` • Saldo atual ${formatCurrency(saldoAtualCaixa)}` : ''}
+                                </p>
+                            )}
+                        </div>
+                        {onOpenCaixaManager && (
+                            <button
+                                type="button"
+                                onClick={onOpenCaixaManager}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-black uppercase tracking-wider text-xs bg-white text-blue-700 hover:bg-blue-50 transition-colors"
+                            >
+                                <Wallet className="w-4 h-4" />
+                                {caixaAberto ? 'Gerir Caixa' : 'Abrir Caixa'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

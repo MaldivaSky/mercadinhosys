@@ -222,8 +222,11 @@ export interface ProdutoLote {
     numero_lote: string;
     produto_id: number;
     produto_nome?: string;
+    pedido_compra_id?: number | null;
+    fornecedor_id?: number | null;
     quantidade: number;
     quantidade_inicial: number;
+    data_fabricacao?: string | null;
     data_validade: string;
     data_entrada: string;
     dias_para_vencer: number;

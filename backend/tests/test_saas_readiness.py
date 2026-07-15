@@ -6,10 +6,10 @@ from flask import jsonify
 def test_plan_hierarchy_normalization(session):
     # This test checks if normalization works as expected in plan_guards logic
     from app.decorators.plan_guards import normalize_plan
-    assert normalize_plan("Premium") == "Pro"
-    assert normalize_plan("PRO") == "Pro"
-    assert normalize_plan("Profissional") == "Pro"
-    assert normalize_plan("Premium Master") == "Pro"
+    assert normalize_plan("Premium") == "Premium"
+    assert normalize_plan("PRO") == "Premium"
+    assert normalize_plan("Profissional") == "Premium"
+    assert normalize_plan("Premium Master") == "Premium"
     assert normalize_plan("Gratuito") == "Gratuito"
     assert normalize_plan("Basic") == "Gratuito"
 
@@ -90,8 +90,8 @@ def test_premium_required_decorator(app, client, session):
     assert response.status_code == 403
     assert "upgrade" in response.get_json()['msg'].lower()
 
-    # 2. Upgrade to Pro
-    estab_free.plano = "Pro"
+    # 2. Upgrade to Premium
+    estab_free.plano = "Premium"
     import sqlalchemy as sa
     session.commit()
     
@@ -164,7 +164,7 @@ def test_onboarding_atomic_flow(client, session):
     with allow_all_tenants():
         stored_est = Est.query.filter_by(email="test@autostore.com").first()
         assert stored_est is not None
-        assert stored_est.plano == "Pro"  # Default in onboarding
+        assert stored_est.plano == "Premium"  # Default in onboarding
 
         stored_admin = Fun.query.filter_by(email="admin@autostore.com").first()
         assert stored_admin is not None
@@ -201,7 +201,7 @@ def test_trial_expiration_blocking(app, client, session):
 def test_public_checkout_requires_existing_account(client):
     payload = {
         "email": "not_exists@email.com",
-        "plan_name": "Pro"
+        "plan_name": "Premium"
     }
     response = client.post('/api/billing/public-checkout', json=payload)
     assert response.status_code == 404

@@ -780,9 +780,8 @@ def criar_venda():
         is_local_admin = str(func_dados.get("role", "")).upper() == "ADMIN" or str(func_dados.get("cargo", "")).lower() in ["admin", "administrador"]
 
         if tem_restrito and not (is_saas_admin or is_local_admin):
-            from app.decorators.plan_guards import normalize_plan
-            plano_atual = normalize_plan(estabelecimento.plano)
-            if plano_atual != "Pro":
+            plano_atual = (estabelecimento.plano or "Basic").upper()
+            if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
                 return jsonify({"error": "FUNCIONALIDADE_RESTRITA", "message": "Seu plano não permite vendas no FIADO/VALE."}), 403
             if not cliente_id:
                 return jsonify({"error": "CLIENTE_OBRIGATORIO", "message": "Vendas no FIADO/VALE exigem um cliente cadastrado."}), 400

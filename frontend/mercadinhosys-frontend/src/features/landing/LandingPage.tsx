@@ -263,7 +263,7 @@ const LandingPage: React.FC = () => {
                 'Consultor M-IA (Gestor Inteligente)',
                 'Suporte VIP Prioritário'
             ],
-            cta: 'Assinar Plano Pro',
+            cta: 'Assinar Plano Premium',
             highlight: true
         }
     ];

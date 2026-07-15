@@ -16,7 +16,6 @@ from app.models import (
     LoginHistory,
 )
 from app.decorators.rbac import super_admin_required
-from app.decorators.plan_guards import normalize_plan
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
 import logging
@@ -24,8 +23,20 @@ import logging
 logger = logging.getLogger(__name__)
 super_admin_dashboard_bp = Blueprint("super_admin_dashboard", __name__)
 
+# Preço mensal de referência por plano (R$). Ajuste conforme a tabela comercial.
+PLAN_PRICES = {
+    "gratuito": 0.0,
+    "bronze": 0.0,
+    "premium": 99.90,
+    "pro": 99.90,
+    "advanced": 149.90,
+    "enterprise": 249.90,
+    "premium master": 0.0,  # HQ interno
+}
+
+
 def _preco_plano(plano: str) -> float:
-    return 99.90 if normalize_plan(plano) == "Pro" else 0.0
+    return PLAN_PRICES.get((plano or "gratuito").strip().lower(), 0.0)
 
 
 def _is_pago(plano: str) -> bool:
@@ -73,7 +84,7 @@ def listar_estabelecimentos_ativos():
                 "cnpj": est.cnpj,
                 "cidade": est.cidade,
                 "estado": est.estado,
-                "plano": getattr(est, 'plano', 'Gratuito'),
+                "plano": getattr(est, 'plano', 'Basic'),
                 "plano_status": getattr(est, 'plano_status', 'experimental'),
                 "ativo": est.ativo,
                 "vendas_hoje": vendas_hoje,
@@ -167,7 +178,7 @@ def dashboard_estabelecimento_especifico(estabelecimento_id):
                 "cnpj": estabelecimento.cnpj,
                 "cidade": estabelecimento.cidade,
                 "estado": estabelecimento.estado,
-                "plano": getattr(estabelecimento, 'plano', 'Gratuito'),
+                "plano": getattr(estabelecimento, 'plano', 'Basic'),
                 "plano_status": getattr(estabelecimento, 'plano_status', 'experimental')
             },
             "metricas": {

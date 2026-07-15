@@ -22,7 +22,7 @@ def create_checkout():
             return jsonify({"error": "Usuário não encontrado"}), 404
 
         data = request.get_json() or {}
-        plan_name = data.get('plan_name', 'Pro')
+        plan_name = data.get('plan_name', 'Basic')
         
         billing_svc = _get_billing_service()
         checkout_url = billing_svc.create_checkout_session(

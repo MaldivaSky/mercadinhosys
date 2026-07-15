@@ -95,6 +95,18 @@ export const usePDV = () => {
     const [loading, setLoading] = useState(false);
     const [caixaAberto, setCaixaAberto] = useState<CaixaPDV | null>(null);
 
+    const refreshCaixa = useCallback(async () => {
+        try {
+            const caixa = await pdvService.getCaixaAtual();
+            setCaixaAberto(caixa);
+            return caixa;
+        } catch (error) {
+            console.error('Erro ao atualizar status do caixa:', error);
+            setCaixaAberto(null);
+            return null;
+        }
+    }, []);
+
     // Múltiplas Sessões do PDV — restauradas do sessionStorage ao remontar a tela
     const [estadoInicial] = useState(() => carregarSessoesSalvas());
     const [sessoes, setSessoes] = useState<PDVSession[]>(() => estadoInicial?.sessoes ?? [createInitialSession()]);
@@ -216,19 +228,39 @@ export const usePDV = () => {
                 const config = await pdvService.getConfiguracoes();
                 setConfiguracoes(config);
                 setFormasPagamento(config.formas_pagamento);
-
-                // Verificar Caixa Aberto
-                const caixa = await pdvService.getCaixaAtual();
-                setCaixaAberto(caixa);
+                await refreshCaixa();
             } catch (error) {
                 console.error('Erro ao carregar configurações/caixa do PDV:', error);
             }
         };
         carregarConfiguracoes();
-    }, []);
+    }, [refreshCaixa]);
+
+    useEffect(() => {
+        const syncCaixa = () => {
+            if (document.visibilityState === 'visible') {
+                refreshCaixa();
+            }
+        };
+
+        window.addEventListener('focus', syncCaixa);
+        window.addEventListener('online', syncCaixa);
+        document.addEventListener('visibilitychange', syncCaixa);
+
+        return () => {
+            window.removeEventListener('focus', syncCaixa);
+            window.removeEventListener('online', syncCaixa);
+            document.removeEventListener('visibilitychange', syncCaixa);
+        };
+    }, [refreshCaixa]);
 
     // Help: Precisão decimal rigorosa para operações financeiras
     const round = useCallback((val: number) => Math.round((val + Number.EPSILON) * 100) / 100, []);
+    const getEstoqueDisponivel = useCallback((produto: Produto) => {
+        const bruto = (produto as any).estoque_atual ?? (produto as any).quantidade_estoque ?? (produto as any).quantidade ?? 0;
+        const valor = Number(bruto);
+        return Number.isFinite(valor) ? valor : 0;
+    }, []);
 
     // Cálculos em tempo real memoizados para performance de elite
     const subtotal = round(carrinho.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0));
@@ -294,7 +326,7 @@ export const usePDV = () => {
 
         setCarrinho(prev => {
             const itemExistente = prev.find(item => item.produto.id === produto.id);
-            const estoqueDisponivel = produto.estoque_atual ?? 0;
+            const estoqueDisponivel = getEstoqueDisponivel(produto);
 
             if (itemExistente) {
                 const novaQuantidade = itemExistente.quantidade + quantidade;
@@ -350,7 +382,7 @@ export const usePDV = () => {
                 return [...prev, novoItem];
             }
         });
-    }, [configuracoes, round, setCarrinho]);
+    }, [configuracoes, getEstoqueDisponivel, round, setCarrinho]);
 
     const removerProduto = useCallback((produtoId: number) => {
         setCarrinho(prev => prev.filter(item => item.produto.id !== produtoId));
@@ -365,7 +397,7 @@ export const usePDV = () => {
         setCarrinho(prev =>
             prev.map(item => {
                 if (item.produto.id === produtoId) {
-                    const estoqueMax = item.produto.estoque_atual ?? 0;
+                    const estoqueMax = getEstoqueDisponivel(item.produto);
                     const permiteSemEstoque = configuracoes?.permitir_venda_sem_estoque ?? false;
 
                     const qtdValida = permiteSemEstoque
@@ -381,7 +413,7 @@ export const usePDV = () => {
                 return item;
             })
         );
-    }, [removerProduto, configuracoes, round, setCarrinho]);
+    }, [removerProduto, configuracoes, getEstoqueDisponivel, round, setCarrinho]);
 
     const aplicarDescontoItem = useCallback((produtoId: number, desconto: number, percentual: boolean = false) => {
         setCarrinho(prev =>
@@ -557,6 +589,7 @@ export const usePDV = () => {
         limparCarrinho,
         finalizarVenda,
         caixaAberto,
-        setCaixaAberto
+        setCaixaAberto,
+        refreshCaixa
     };
 };

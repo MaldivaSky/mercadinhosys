@@ -13,9 +13,9 @@ const SubscriptionSettings: React.FC = () => {
             if (!silent) setLoading(true);
             const statusData = await settingsService.getSubscriptionStatus();
 
-            // Caso o backend retorne aliases legados, normalizamos aqui também para a UI.
+            // Caso o backend retorne o plano como 'Basic' ou outros termos legados, normalizamos aqui também para a UI
             const search = (statusData.plano || '').toLowerCase();
-            const isPro = ['pro', 'pago', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'profissional', 'professional'].some(p => search.includes(p));
+            const isPro = ['pro', 'pago', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'basic', 'basico'].some(p => search.includes(p));
             const displayPlano = isPro ? 'Pro' : 'Gratuito';
 
             setStatus({
@@ -176,7 +176,7 @@ const SubscriptionSettings: React.FC = () => {
                                 </button>
                             ) : (
                                 <button
-                                    onClick={() => handleAction('Pro')}
+                                    onClick={() => handleAction('Premium')}
                                     disabled={processing}
                                     className="px-12 py-6 bg-primary text-white rounded-3xl font-black text-lg hover:scale-105 hover:brightness-110 transition-all flex items-center gap-3 shadow-3xl shadow-primary/30 disabled:opacity-50"
                                 >
@@ -215,7 +215,7 @@ const SubscriptionSettings: React.FC = () => {
                         <div className="absolute top-0 right-14 -translate-y-1/2 bg-primary text-white text-[11px] font-black uppercase tracking-[0.3em] px-8 py-3 rounded-full shadow-xl">Plano Único</div>
 
                         <div className="mb-10 text-left">
-                            <h3 className="text-3xl font-black text-white italic mb-2">Pro</h3>
+                            <h3 className="text-3xl font-black text-white italic mb-2">Premium</h3>
                             <p className="text-xs font-black text-white/40 uppercase tracking-widest">Acesso completo ao sistema</p>
                         </div>
 
@@ -227,11 +227,11 @@ const SubscriptionSettings: React.FC = () => {
                         </div>
 
                         <button
-                            onClick={() => handleAction('Pro')}
+                            onClick={() => handleAction('Premium')}
                             disabled={processing}
                             className="w-full py-6 bg-primary text-white rounded-[2rem] font-black text-lg hover:scale-[1.03] hover:brightness-110 active:scale-[0.98] transition-all duration-300 mb-12 shadow-3xl shadow-primary/40 disabled:opacity-50"
                         >
-                            Assinar Pro <ArrowRight className="w-6 h-6 ml-2" />
+                            Assinar Premium <ArrowRight className="w-6 h-6 ml-2" />
                         </button>
 
                         <div className="space-y-5 text-left">

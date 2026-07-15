@@ -19,6 +19,13 @@ export default function ProductHubPage() {
     const [error, setError] = useState('');
     const [periodo, setPeriodo] = useState('all');
     const [vendasHistorico, setVendasHistorico] = useState<any[]>([]);
+    const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
+    const [savingLoteId, setSavingLoteId] = useState<number | null>(null);
+    const [loteDrafts, setLoteDrafts] = useState<Record<number, {
+        numero_lote: string;
+        data_fabricacao: string;
+        data_validade: string;
+    }>>({});
 
     useEffect(() => {
         if (!id) return;
@@ -89,6 +96,67 @@ export default function ProductHubPage() {
     }
 
     const { produto, estatisticas, historico_precos, lotes, pedidos_pendentes } = hubData;
+
+    const iniciarEdicaoLote = (lote: any) => {
+        setEditingLoteId(lote.id);
+        setLoteDrafts((prev) => ({
+            ...prev,
+            [lote.id]: {
+                numero_lote: lote.numero_lote || '',
+                data_fabricacao: lote.data_fabricacao || '',
+                data_validade: lote.data_validade || '',
+            },
+        }));
+    };
+
+    const cancelarEdicaoLote = () => {
+        setEditingLoteId(null);
+    };
+
+    const atualizarDraftLote = (loteId: number, campo: 'numero_lote' | 'data_fabricacao' | 'data_validade', valor: string) => {
+        setLoteDrafts((prev) => ({
+            ...prev,
+            [loteId]: {
+                ...prev[loteId],
+                [campo]: valor,
+            },
+        }));
+    };
+
+    const salvarLote = async (loteId: number) => {
+        if (!id) return;
+        const draft = loteDrafts[loteId];
+        if (!draft?.numero_lote?.trim()) {
+            showToast.error('Informe o número do lote');
+            return;
+        }
+        if (!draft?.data_validade) {
+            showToast.error('Informe a data de validade');
+            return;
+        }
+
+        try {
+            setSavingLoteId(loteId);
+            await productsService.atualizarLote(parseInt(id), loteId, {
+                numero_lote: draft.numero_lote.trim(),
+                data_fabricacao: draft.data_fabricacao || '',
+                data_validade: draft.data_validade,
+            });
+
+            const refreshed = await productsService.getProductHubData(parseInt(id), periodo);
+            if (refreshed.success) {
+                setHubData(refreshed);
+            }
+
+            setEditingLoteId(null);
+            showToast.success('Lote atualizado com sucesso');
+        } catch (error: any) {
+            console.error('Erro ao salvar lote:', error);
+            showToast.error(error?.response?.data?.message || 'Erro ao salvar lote');
+        } finally {
+            setSavingLoteId(null);
+        }
+    };
 
     // Custo atual como proxy no gráfico de giro — enriquecido aqui no render
     // (não no fetch) para o histórico não depender do hubData no useEffect.
@@ -540,24 +608,92 @@ export default function ProductHubPage() {
                                         <th style={{ padding: '12px' }}>Fabricação</th>
                                         <th style={{ padding: '12px' }}>Validade</th>
                                         <th style={{ padding: '12px', textAlign: 'right' }}>Qtd Atual</th>
+                                        <th style={{ padding: '12px', textAlign: 'right' }}>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {lotes.map((lote: any) => {
+                                        const emEdicao = editingLoteId === lote.id;
+                                        const draft = loteDrafts[lote.id] || {
+                                            numero_lote: lote.numero_lote || '',
+                                            data_fabricacao: lote.data_fabricacao || '',
+                                            data_validade: lote.data_validade || '',
+                                        };
                                         const diasValidade = Math.ceil((new Date(lote.data_validade).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
                                         const isVencido = diasValidade < 0;
                                         const isProximo = diasValidade >= 0 && diasValidade <= 30;
                                         return (
                                             <tr key={lote.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '12px', fontWeight: '500' }}>{lote.numero_lote}</td>
+                                                <td style={{ padding: '12px', fontWeight: '500' }}>
+                                                    {emEdicao ? (
+                                                        <input
+                                                            type="text"
+                                                            value={draft.numero_lote}
+                                                            onChange={(e) => atualizarDraftLote(lote.id, 'numero_lote', e.target.value)}
+                                                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                                        />
+                                                    ) : lote.numero_lote}
+                                                </td>
                                                 <td style={{ padding: '12px' }}>{new Date(lote.data_entrada).toLocaleDateString('pt-BR')}</td>
-                                                <td style={{ padding: '12px' }}>{lote.data_fabricacao ? new Date(lote.data_fabricacao).toLocaleDateString('pt-BR') : '---'}</td>
+                                                <td style={{ padding: '12px' }}>
+                                                    {emEdicao ? (
+                                                        <input
+                                                            type="date"
+                                                            value={draft.data_fabricacao || ''}
+                                                            onChange={(e) => atualizarDraftLote(lote.id, 'data_fabricacao', e.target.value)}
+                                                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                                        />
+                                                    ) : (
+                                                        lote.data_fabricacao ? new Date(lote.data_fabricacao).toLocaleDateString('pt-BR') : '---'
+                                                    )}
+                                                </td>
                                                 <td style={{ padding: '12px', color: isVencido ? '#ef4444' : (isProximo ? '#f59e0b' : '#10b981'), fontWeight: isVencido || isProximo ? 'bold' : 'normal' }}>
-                                                    {new Date(lote.data_validade).toLocaleDateString('pt-BR')}
-                                                    {isVencido && ' (Vencido)'}
-                                                    {isProximo && ` (${diasValidade} dias)`}
+                                                    {emEdicao ? (
+                                                        <input
+                                                            type="date"
+                                                            value={draft.data_validade}
+                                                            onChange={(e) => atualizarDraftLote(lote.id, 'data_validade', e.target.value)}
+                                                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                                        />
+                                                    ) : (
+                                                        <>
+                                                            {new Date(lote.data_validade).toLocaleDateString('pt-BR')}
+                                                            {isVencido && ' (Vencido)'}
+                                                            {isProximo && ` (${diasValidade} dias)`}
+                                                        </>
+                                                    )}
                                                 </td>
                                                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{lote.quantidade}</td>
+                                                <td style={{ padding: '12px', textAlign: 'right' }}>
+                                                    {emEdicao ? (
+                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => salvarLote(lote.id)}
+                                                                disabled={savingLoteId === lote.id}
+                                                                style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                                            >
+                                                                {savingLoteId === lote.id ? 'Salvando...' : 'Salvar'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={cancelarEdicaoLote}
+                                                                disabled={savingLoteId === lote.id}
+                                                                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #334155', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}
+                                                            >
+                                                                Cancelar
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => iniciarEdicaoLote(lote)}
+                                                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #334155', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                    )}
+                                                </td>
                                             </tr>
                                         );
                                     })}

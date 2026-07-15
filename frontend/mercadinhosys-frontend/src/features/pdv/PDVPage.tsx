@@ -12,7 +12,8 @@ import {
     WifiOff,
     CloudUpload,
     Truck,
-    MapPin
+    MapPin,
+    Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -103,6 +104,7 @@ const PDVPage: React.FC = () => {
     const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
     const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
     const [emitirNfce, setEmitirNfce] = useState(true);
+    const caixaEstaAberto = !!caixaAberto;
 
     useBodyScrollLock(formaPagamentoAberta);
 
@@ -158,6 +160,12 @@ const PDVPage: React.FC = () => {
     }, [adicionarProduto]);
 
     const handleFinalizarVenda = async () => {
+        if (!caixaEstaAberto) {
+            showToast.error('Caixa fechado. Abra o caixa antes de concluir a venda.', { duration: 5000 });
+            setFormaPagamentoAberta(false);
+            setManagerCaixaAberto(true);
+            return;
+        }
         if (carrinho.length === 0) return showToast.error('Carrinho vazio');
         if (pagamentos.length === 0) {
             showToast.warning('Adicione ao menos uma forma de pagamento');
@@ -224,6 +232,16 @@ const PDVPage: React.FC = () => {
         }
     };
 
+    const handleAbrirCheckout = (section: 'cliente' | 'pagamento' = 'pagamento') => {
+        if (!caixaEstaAberto) {
+            showToast.error('Caixa fechado. Abra o caixa para liberar pagamentos e fechamento da venda.', { duration: 5000 });
+            setManagerCaixaAberto(true);
+            return;
+        }
+        setActiveSection(section);
+        setFormaPagamentoAberta(true);
+    };
+
     const handleLimparCarrinho = () => {
         if (carrinho.length > 0 && confirm('Deseja realmente cancelar esta venda?')) {
             limparCarrinho();
@@ -239,11 +257,11 @@ const PDVPage: React.FC = () => {
         },
         {
             combo: 'f2', allowInInput: true,
-            handler: () => { setFormaPagamentoAberta(true); setActiveSection('cliente'); },
+            handler: () => { handleAbrirCheckout('cliente'); },
         },
         {
             combo: 'f4', allowInInput: true,
-            handler: () => { setFormaPagamentoAberta(true); setActiveSection('pagamento'); },
+            handler: () => { handleAbrirCheckout('pagamento'); },
         },
         { combo: 'f9', allowInInput: true, handler: () => handleFinalizarVenda() },
         { combo: 'f10', allowInInput: true, handler: () => handleFinalizarVenda() },
@@ -321,6 +339,10 @@ const PDVPage: React.FC = () => {
                 <CaixaHeader
                     funcionarioNome={configuracoes?.funcionario.nome}
                     funcionarioRole={configuracoes?.funcionario.role}
+                    caixaNumero={caixaAberto?.numero_caixa}
+                    caixaAberto={caixaEstaAberto}
+                    saldoAtualCaixa={caixaAberto?.saldo_atual}
+                    dataAberturaCaixa={caixaAberto?.data_abertura}
                     onOpenCaixaManager={() => setManagerCaixaAberto(true)}
                 />
             </div>
@@ -412,13 +434,16 @@ const PDVPage: React.FC = () => {
                         <div className="space-y-3">
                             <button
                                 onClick={() => {
-                                    setFormaPagamentoAberta(true);
-                                    setActiveSection('pagamento');
+                                    handleAbrirCheckout('pagamento');
                                 }}
-                                className="w-full h-16 bg-red-600 hover:bg-red-700 text-white rounded-2xl flex items-center justify-center gap-3 font-bold uppercase text-xs tracking-widest shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                                className={`w-full h-16 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase text-xs tracking-widest shadow-lg active:scale-95 transition-all ${
+                                    caixaEstaAberto
+                                        ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20'
+                                        : 'bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-800/50 dark:hover:bg-amber-950/50'
+                                }`}
                             >
-                                <CreditCard className="w-5 h-5" />
-                                <span>Pagar (F4)</span>
+                                {caixaEstaAberto ? <CreditCard className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                                <span>{caixaEstaAberto ? 'Pagar (F4)' : 'Abrir Caixa para Pagar'}</span>
                             </button>
                             <button
                                 onClick={handleLimparCarrinho}
@@ -834,14 +859,20 @@ const PDVPage: React.FC = () => {
                                 <button
                                     onClick={handleFinalizarVenda}
                                     disabled={carrinho.length === 0 || loading}
-                                    className={`w-full h-16 rounded-2xl flex items-center justify-center gap-3 text-lg font-black uppercase tracking-widest shadow-xl transition-all active:scale-[0.98] ${carrinho.length === 0 || loading ? 'bg-slate-200 text-slate-400' : 'bg-red-600 text-white hover:bg-red-700 shadow-red-500/20'}`}
+                                    className={`w-full h-16 rounded-2xl flex items-center justify-center gap-3 text-lg font-black uppercase tracking-widest shadow-xl transition-all active:scale-[0.98] ${
+                                        carrinho.length === 0 || loading
+                                            ? 'bg-slate-200 text-slate-400'
+                                            : caixaEstaAberto
+                                                ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-500/20'
+                                                : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20'
+                                    }`}
                                 >
                                     {loading ? (
                                         <div className="animate-spin rounded-full h-6 w-6 border-2 border-white/20 border-t-white" />
                                     ) : (
-                                        <Check className="w-7 h-7" />
+                                        caixaEstaAberto ? <Check className="w-7 h-7" /> : <Lock className="w-7 h-7" />
                                     )}
-                                    <span>Concluir Venda</span>
+                                    <span>{caixaEstaAberto ? 'Concluir Venda' : 'Caixa Fechado'}</span>
                                 </button>
                                 
                             </div>
@@ -924,10 +955,14 @@ const PDVPage: React.FC = () => {
                         <span className="text-xl lg:text-xl xl:text-3xl font-black text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(total)}</span>
                     </div>
                     <button
-                        onClick={() => setFormaPagamentoAberta(true)}
-                        className="h-14 px-10 bg-red-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-red-500/20"
+                        onClick={() => handleAbrirCheckout('pagamento')}
+                        className={`h-14 px-10 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl ${
+                            caixaEstaAberto
+                                ? 'bg-red-600 text-white shadow-red-500/20'
+                                : 'bg-amber-500 text-white shadow-amber-500/20'
+                        }`}
                     >
-                        Pagar
+                        {caixaEstaAberto ? 'Pagar' : 'Abrir Caixa'}
                     </button>
                 </div>
             )}

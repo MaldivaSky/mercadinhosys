@@ -12,7 +12,6 @@ from app.models import (
     ContaPagar, MovimentacaoEstoque, Despesa, ProdutoLote
 )
 from app.decorators.decorator_jwt import funcionario_required
-from app.utils.date_utils import get_now_manaus
 
 pedidos_compra_bp = Blueprint('pedidos_compra', __name__)
 
@@ -68,7 +67,6 @@ def listar_pedidos():
             page=page, per_page=per_page, error_out=False
         )
         
-        hoje_local = get_now_manaus().date()
         pedidos = []
         for pedido in pedidos_paginados.items:
             try:
@@ -94,7 +92,7 @@ def listar_pedidos():
                     vencido = (
                         cp.status in ('aberto', 'pendente') and
                         cp.data_vencimento and
-                        cp.data_vencimento < hoje_local
+                        cp.data_vencimento < date.today()
                     )
                     pedido_dict['financeiro'] = {
                         'status': cp.status,                         # aberto | pago | vencido | cancelado
@@ -177,11 +175,10 @@ def criar_pedido():
                 return default
 
         # Datas: usa o que o operador informou; senão, defaults sensatos.
-        hoje_local = get_now_manaus().date()
-        data_pedido = _parse_date(data.get('data_pedido'), hoje_local)
+        data_pedido = _parse_date(data.get('data_pedido'), date.today())
         data_previsao = _parse_date(
             data.get('data_previsao_entrega'),
-            hoje_local + timedelta(days=fornecedor.prazo_entrega or 7),
+            date.today() + timedelta(days=fornecedor.prazo_entrega or 7),
         )
         horario_entrega = (data.get('horario_entrega') or '').strip() or None
 
@@ -247,7 +244,7 @@ def criar_pedido():
 
         # ERP: criar Conta a Pagar ao emitir o pedido (obrigação financeira)
         # A Despesa é criada quando o boleto for pago (pagar boleto)
-        data_vencimento = data_previsao or (hoje_local + timedelta(days=30))
+        data_vencimento = data_previsao or (date.today() + timedelta(days=30))
         conta_pagar = ContaPagar(
             estabelecimento_id=estab_id,
             fornecedor_id=pedido.fornecedor_id,
@@ -256,7 +253,7 @@ def criar_pedido():
             tipo_documento='pedido_compra',
             valor_original=total,
             valor_atual=total,
-            data_emissao=hoje_local,
+            data_emissao=date.today(),
             data_vencimento=data_vencimento,
             status='aberto',
             observacoes=f'Pedido de compra {numero_pedido}' + (f' - {pedido.observacoes}' if pedido.observacoes else ''),
@@ -397,8 +394,8 @@ def receber_pedido_compra():
                     quantidade=quantidade_para_estoque,
                     quantidade_inicial=quantidade_para_estoque,
                     data_fabricacao=data_fabricacao,
-                    data_validade=data_validade or (get_now_manaus().date() + timedelta(days=365)),  # Padrão: 1 ano
-                    data_entrada=get_now_manaus().date(),
+                    data_validade=data_validade or (date.today() + timedelta(days=365)),  # Padrão: 1 ano
+                    data_entrada=date.today(),
                     preco_custo_unitario=item.preco_unitario,
                     ativo=True,
                 )

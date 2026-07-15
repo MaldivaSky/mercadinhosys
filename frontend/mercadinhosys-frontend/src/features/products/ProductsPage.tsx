@@ -5,7 +5,7 @@ import {
   X,
   PackageX
 } from 'lucide-react';
-import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
+import { Fornecedor, Produto, ProdutoFiltros, ProdutoLote } from '../../types';
 import { productsService } from './productsService';
 import { apiClient } from '../../api/apiClient';
 import { showToast } from '../../utils/toast';
@@ -41,6 +41,8 @@ const ProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [stockLotes, setStockLotes] = useState<ProdutoLote[]>([]);
+  const [loadingStockLotes, setLoadingStockLotes] = useState(false);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -117,6 +119,8 @@ const ProductsPage: React.FC = () => {
     motivo: '',
     fonte: 'Estoque Loja / Geral', // NOVO: Fonte do ajuste
     fornecedor_id: undefined as number | undefined,
+    lote_id: undefined as number | undefined,
+    corrigir_lote_existente: false,
     lote: '',
     data_fabricacao: '',
     data_validade: '',
@@ -307,6 +311,10 @@ const ProductsPage: React.FC = () => {
       showToast.error('Informe o motivo do ajuste');
       return;
     }
+    if (stockAdjust.quantidade <= 0 && !(stockAdjust.operacao === 'entrada' && stockAdjust.corrigir_lote_existente && stockAdjust.lote_id)) {
+      showToast.error('Informe uma quantidade válida');
+      return;
+    }
     try {
       const motivoFinal = stockAdjust.fonte ? `[Origem: ${stockAdjust.fonte}] ${stockAdjust.motivo}` : stockAdjust.motivo;
       
@@ -320,11 +328,13 @@ const ProductsPage: React.FC = () => {
           stockAdjust.fornecedor_id,
           stockAdjust.lote,
           stockAdjust.data_fabricacao,
-          stockAdjust.data_validade
+          stockAdjust.data_validade,
+          stockAdjust.lote_id,
+          stockAdjust.corrigir_lote_existente
         ), 
         {
-          loading: 'Ajustando estoque...',
-          success: 'Estoque ajustado com sucesso!',
+          loading: stockAdjust.corrigir_lote_existente ? 'Salvando lote...' : 'Ajustando estoque...',
+          success: stockAdjust.corrigir_lote_existente ? 'Lote atualizado com sucesso!' : 'Estoque ajustado com sucesso!',
           error: 'Erro ao ajustar estoque'
         }
       );
@@ -397,6 +407,31 @@ const ProductsPage: React.FC = () => {
     );
   };
 
+  const aplicarLoteSelecionadoNoAjuste = useCallback((loteId?: number) => {
+    const loteSelecionado = stockLotes.find((item) => item.id === loteId);
+    setStockAdjust(prev => ({
+      ...prev,
+      lote_id: loteSelecionado?.id,
+      lote: loteSelecionado?.numero_lote || '',
+      data_fabricacao: loteSelecionado?.data_fabricacao || '',
+      data_validade: loteSelecionado?.data_validade || '',
+      fornecedor_id: loteSelecionado?.fornecedor_id ?? prev.fornecedor_id,
+    }));
+  }, [stockLotes]);
+
+  const carregarLotesParaAjuste = useCallback(async (produtoId: number) => {
+    try {
+      setLoadingStockLotes(true);
+      const response = await productsService.getLotesDisponiveis(produtoId);
+      setStockLotes((response.lotes || []) as ProdutoLote[]);
+    } catch (error) {
+      console.error('Erro ao carregar lotes do produto:', error);
+      setStockLotes([]);
+    } finally {
+      setLoadingStockLotes(false);
+    }
+  }, []);
+
   const openStockModal = (produto: Produto) => {
     setSelectedProduct(produto);
     setStockAdjust({ 
@@ -405,10 +440,14 @@ const ProductsPage: React.FC = () => {
       motivo: '',
       fonte: 'Estoque Loja / Geral',
       fornecedor_id: undefined,
+      lote_id: undefined,
+      corrigir_lote_existente: false,
       lote: '',
       data_fabricacao: '',
       data_validade: ''
     });
+    setStockLotes([]);
+    carregarLotesParaAjuste(produto.id);
     setShowStockModal(true);
   };
 
@@ -694,7 +733,12 @@ const ProductsPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Quantidade</label>
-                  <input type="number" min="1" value={stockAdjust.quantidade} onChange={(e) => setStockAdjust(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                  <input type="number" min={stockAdjust.operacao === 'entrada' && stockAdjust.corrigir_lote_existente ? "0" : "1"} value={stockAdjust.quantidade} onChange={(e) => setStockAdjust(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                  {stockAdjust.operacao === 'entrada' && stockAdjust.corrigir_lote_existente && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-300 mt-1">
+                      Use `0` para apenas corrigir lote, fabricação e validade sem mexer no estoque.
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -725,6 +769,54 @@ const ProductsPage: React.FC = () => {
               {stockAdjust.operacao === 'entrada' && (
                 <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-800 space-y-3">
                   <h4 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest">Informações Adicionais (Opcional)</h4>
+                  {stockLotes.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2 text-xs font-medium text-blue-900 dark:text-blue-200">
+                        <input
+                          type="checkbox"
+                          checked={stockAdjust.corrigir_lote_existente}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setStockAdjust(prev => ({
+                              ...prev,
+                              corrigir_lote_existente: checked,
+                              lote_id: checked ? prev.lote_id ?? stockLotes[0]?.id : undefined,
+                              quantidade: checked ? prev.quantidade : prev.quantidade,
+                            }));
+                            if (checked) {
+                              aplicarLoteSelecionadoNoAjuste(stockAdjust.lote_id ?? stockLotes[0]?.id);
+                            }
+                          }}
+                        />
+                        <span>
+                          Corrigir um lote existente em vez de criar outro.
+                          <span className="block text-[11px] text-blue-700/80 dark:text-blue-300/80">
+                            Ideal para ajustar o lote recém-recebido quando faltou informar fabricação ou validade.
+                          </span>
+                        </span>
+                      </label>
+                      {stockAdjust.corrigir_lote_existente && (
+                        <div>
+                          <label className="block text-xs font-medium mb-1">Lote existente</label>
+                          <select
+                            value={stockAdjust.lote_id || ''}
+                            onChange={(e) => aplicarLoteSelecionadoNoAjuste(e.target.value ? Number(e.target.value) : undefined)}
+                            className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                          >
+                            <option value="">-- Selecione um lote --</option>
+                            {stockLotes.map((lote) => (
+                              <option key={lote.id} value={lote.id}>
+                                {lote.numero_lote} • {lote.quantidade} un • {lote.data_validade}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {loadingStockLotes && (
+                    <p className="text-[11px] text-blue-700 dark:text-blue-300">Carregando lotes já existentes...</p>
+                  )}
                   <div>
                     <label className="block text-xs font-medium mb-1">Fornecedor (Origem)</label>
                     <select value={stockAdjust.fornecedor_id || ''} onChange={(e) => setStockAdjust(prev => ({ ...prev, fornecedor_id: e.target.value ? Number(e.target.value) : undefined }))} className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600">

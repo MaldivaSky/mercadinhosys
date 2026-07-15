@@ -163,7 +163,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                             )}
                             <div className="flex items-center gap-3 mt-3">
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
-                                    {estabelecimento.plano || 'Gratuito'}
+                                    {estabelecimento.plano || 'Basic'}
                                 </span>
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoStatusColor(estabelecimento.plano_status)}`}>
                                     {estabelecimento.plano_status || 'Experimental'}
@@ -238,6 +238,9 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                                     >
                                                         <option value="Gratuito">Gratuito</option>
                                                         <option value="Pro">Pro</option>
+                                                        <option value="Basic">Basic</option>
+                                                        <option value="Advanced">Advanced</option>
+                                                        <option value="Premium">Premium</option>
                                                     </select>
                                                     <button
                                                         onClick={handleSavePlan}
@@ -258,7 +261,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                             ) : (
                                                 <>
                                                     <span className={`px-2 py-1 rounded text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
-                                                        {estabelecimento.plano || 'Gratuito'}
+                                                        {estabelecimento.plano || 'Basic'}
                                                     </span>
                                                     {isSuperAdmin && (
                                                         <button

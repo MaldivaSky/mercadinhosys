@@ -144,7 +144,7 @@ def tenant_onboarding():
             cnpj=documento,
             telefone=data['telefone'].strip(),
             email=data['email_estabelecimento'].strip(),
-            plano='Pro',
+            plano='Premium',
             plano_status='ativo',
             data_abertura=date.today(),
             ativo=True,

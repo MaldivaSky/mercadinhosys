@@ -6,14 +6,14 @@ para o cliente, batendo nos ENDPOINTS REAIS da API:
 
 Se qualquer um quebrar, a demo quebra. Este teste é a prova de que não quebra.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
 from flask_jwt_extended import create_access_token
 
 from app.models import (
-    db, Estabelecimento, Funcionario, CategoriaProduto, Produto, Caixa,
+    db, Estabelecimento, Funcionario, CategoriaProduto, Produto, ProdutoLote, Caixa,
 )
 
 
@@ -63,6 +63,132 @@ def test_demo_cadastrar_produto(client, ctx):
     }, headers=_headers(ctx["estab"].id, ctx["admin"].id))
     assert r.status_code in (200, 201), r.get_data(as_text=True)
     assert r.get_json().get("success") is not False
+
+
+def test_demo_validar_produto_por_codigo_barras_retorna_aliases_estoque(client, ctx):
+    estab, admin = ctx["estab"], ctx["admin"]
+    produto = Produto(
+        estabelecimento_id=estab.id,
+        categoria_id=ctx["cat"].id,
+        nome="Hellmann's 500g",
+        preco_custo=Decimal("8.50"),
+        preco_venda=Decimal("12.90"),
+        quantidade=24,
+        codigo_barras="7890000000024",
+    )
+    db.session.add(produto)
+    db.session.commit()
+
+    r = client.post("/api/pdv/validar-produto", json={
+        "codigo_barras": produto.codigo_barras,
+        "quantidade": 1,
+    }, headers=_headers(estab.id, admin.id))
+    assert r.status_code == 200, r.get_data(as_text=True)
+
+    body = r.get_json()
+    assert body.get("valido") is True, body
+
+    payload = body.get("produto") or {}
+    assert payload.get("quantidade") == 24.0, payload
+    assert payload.get("quantidade_estoque") == 24.0, payload
+    assert payload.get("estoque_atual") == 24.0, payload
+
+
+def test_demo_ajuste_corrige_lote_existente_sem_criar_outro(client, ctx):
+    estab, admin = ctx["estab"], ctx["admin"]
+    produto = Produto(
+        estabelecimento_id=estab.id,
+        categoria_id=ctx["cat"].id,
+        nome="Maionese Tradicional",
+        preco_custo=Decimal("7.00"),
+        preco_venda=Decimal("10.50"),
+        quantidade=24,
+    )
+    db.session.add(produto)
+    db.session.flush()
+
+    lote = ProdutoLote(
+        estabelecimento_id=estab.id,
+        produto_id=produto.id,
+        numero_lote="LOTE-PC000607-1",
+        quantidade=Decimal("24"),
+        quantidade_inicial=Decimal("24"),
+        data_fabricacao=None,
+        data_validade=date(2027, 7, 14),
+        data_entrada=date(2026, 7, 14),
+        preco_custo_unitario=Decimal("7.00"),
+        preco_venda=Decimal("10.50"),
+        ativo=True,
+    )
+    db.session.add(lote)
+    db.session.commit()
+
+    r = client.post(f"/api/produtos/{produto.id}/estoque", json={
+        "tipo": "entrada",
+        "quantidade": 0,
+        "motivo": "Corrigir dados do lote recebido",
+        "lote_id": lote.id,
+        "corrigir_lote_existente": True,
+        "lote": "XD1D221409J",
+        "data_fabricacao": "2026-06-01",
+        "data_validade": "2026-12-17",
+    }, headers=_headers(estab.id, admin.id))
+    assert r.status_code == 200, r.get_data(as_text=True)
+
+    db.session.refresh(produto)
+    db.session.refresh(lote)
+
+    assert ProdutoLote.query.filter_by(produto_id=produto.id).count() == 1
+    assert lote.numero_lote == "XD1D221409J"
+    assert lote.data_fabricacao.isoformat() == "2026-06-01"
+    assert lote.data_validade.isoformat() == "2026-12-17"
+    assert float(produto.quantidade) == 24.0
+
+
+def test_demo_product_hub_atualiza_lote_existente(client, ctx):
+    estab, admin = ctx["estab"], ctx["admin"]
+    produto = Produto(
+        estabelecimento_id=estab.id,
+        categoria_id=ctx["cat"].id,
+        nome="Ketchup Tradicional",
+        preco_custo=Decimal("6.00"),
+        preco_venda=Decimal("9.50"),
+        quantidade=12,
+    )
+    db.session.add(produto)
+    db.session.flush()
+
+    lote = ProdutoLote(
+        estabelecimento_id=estab.id,
+        produto_id=produto.id,
+        numero_lote="KETCHUP-OLD",
+        quantidade=Decimal("12"),
+        quantidade_inicial=Decimal("12"),
+        data_fabricacao=None,
+        data_validade=date(2026, 11, 30),
+        data_entrada=date(2026, 7, 14),
+        preco_custo_unitario=Decimal("6.00"),
+        preco_venda=Decimal("9.50"),
+        ativo=True,
+    )
+    db.session.add(lote)
+    db.session.commit()
+
+    r = client.patch(f"/api/produtos/{produto.id}/lotes/{lote.id}", json={
+        "numero_lote": "KETCHUP-REV-1",
+        "data_fabricacao": "2026-05-10",
+        "data_validade": "2026-12-20",
+    }, headers=_headers(estab.id, admin.id))
+    assert r.status_code == 200, r.get_data(as_text=True)
+
+    db.session.refresh(produto)
+    db.session.refresh(lote)
+
+    assert lote.numero_lote == "KETCHUP-REV-1"
+    assert lote.data_fabricacao.isoformat() == "2026-05-10"
+    assert lote.data_validade.isoformat() == "2026-12-20"
+    assert produto.lote == "KETCHUP-REV-1"
+    assert produto.data_validade.isoformat() == "2026-12-20"
 
 
 def test_demo_venda_e_comprovante(client, ctx):

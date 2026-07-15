@@ -1,26 +1,3 @@
-const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-export const parseDatePreservingLocalDay = (date: string | Date | null | undefined): Date | null => {
-    if (!date) return null;
-    if (date instanceof Date) return date;
-
-    const raw = String(date).trim();
-    if (DATE_ONLY_RE.test(raw)) {
-        const [year, month, day] = raw.split('-').map(Number);
-        // Meio-dia local evita o recuo/avanço de dia causado por UTC.
-        return new Date(year, month - 1, day, 12, 0, 0, 0);
-    }
-
-    const parsed = new Date(raw);
-    return isNaN(parsed.getTime()) ? null : parsed;
-};
-
-export const localDateInputValue = (date = new Date()): string => {
-    const local = new Date(date);
-    local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
-    return local.toISOString().slice(0, 10);
-};
-
 export const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
@@ -33,8 +10,8 @@ export const formatCurrency = (value: number): string => {
 export const formatDate = (date: string | Date | null | undefined): string => {
     if (!date) return '---';
     try {
-        const d = parseDatePreservingLocalDay(date);
-        if (!d) return '---';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '---';
         return new Intl.DateTimeFormat('pt-BR').format(d);
     } catch (e) {
         return '---';
@@ -44,8 +21,8 @@ export const formatDate = (date: string | Date | null | undefined): string => {
 export const formatDateTime = (date: string | Date | null | undefined): string => {
     if (!date) return '---';
     try {
-        const d = parseDatePreservingLocalDay(date);
-        if (!d) return '---';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '---';
         return new Intl.DateTimeFormat('pt-BR', {
             dateStyle: 'short',
             timeStyle: 'short',

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { PedidoCompra, purchaseOrderService } from '../products/purchaseOrderService';
 import { Fornecedor } from '../../types';
-import { formatCurrency, formatDate, parseDatePreservingLocalDay } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { showToast } from '../../utils/toast';
 import { apiClient } from '../../api/apiClient';
 
@@ -31,16 +31,13 @@ interface DashboardStats {
 // ── Utils ─────────────────────────────────────────────────────────────────
 const getDaysLate = (previsao?: string): number => {
   if (!previsao) return 0;
-  const dataPrevista = parseDatePreservingLocalDay(previsao);
-  if (!dataPrevista) return 0;
-  const diff = Math.floor((Date.now() - dataPrevista.getTime()) / 86400000);
+  const diff = Math.floor((Date.now() - new Date(previsao).getTime()) / 86400000);
   return diff > 0 ? diff : 0;
 };
 
 const isToday = (dateStr?: string): boolean => {
   if (!dateStr) return false;
-  const d = parseDatePreservingLocalDay(dateStr);
-  if (!d) return false;
+  const d = new Date(dateStr);
   const t = new Date();
   return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
 };
@@ -342,19 +339,13 @@ const PurchasesPage: React.FC = () => {
       ]);
       const now = new Date();
       const startMes = new Date(now.getFullYear(), now.getMonth(), 1);
-      const recMes = resRec.pedidos.filter(p => {
-        const dataRecebimento = parseDatePreservingLocalDay(p.data_recebimento);
-        return !!dataRecebimento && dataRecebimento >= startMes;
-      });
+      const recMes = resRec.pedidos.filter(p => p.data_recebimento && new Date(p.data_recebimento) >= startMes);
       setStats({
         pendentes: resPend.paginacao.total_itens,
         recebidos_mes: recMes.length,
         valor_pendente: resPend.pedidos.reduce((s, p) => s + (p.total || 0), 0),
         valor_recebido_mes: recMes.reduce((s, p) => s + (p.total || 0), 0),
-        atrasados: resPend.pedidos.filter(p => {
-          const previsao = parseDatePreservingLocalDay(p.data_previsao_entrega);
-          return !!previsao && previsao < now;
-        }).length,
+        atrasados: resPend.pedidos.filter(p => p.data_previsao_entrega && new Date(p.data_previsao_entrega) < now).length,
         chegando_hoje: resPend.pedidos.filter(p => isToday(p.data_previsao_entrega)).length,
       });
     } catch { /* silencioso */ }

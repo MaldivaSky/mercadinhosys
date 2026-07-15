@@ -503,7 +503,11 @@ def validar_produto():
                 "codigo_barras": produto_data.get("codigo_barras"),
                 "preco_venda": float(produto_data.get("preco_venda")),
                 "preco_custo": float(produto_data.get("preco_custo")) if produto_data.get("preco_custo") else 0,
-                "quantidade_estoque": produto_data.get("quantidade"),
+                # Mantemos os aliases para o PDV e demais telas consumirem um payload consistente
+                # tanto na busca por nome quanto no bip do código de barras.
+                "quantidade": float(produto_data.get("quantidade") or 0),
+                "quantidade_estoque": float(produto_data.get("quantidade") or 0),
+                "estoque_atual": float(produto_data.get("quantidade") or 0),
                 "unidade_medida": produto_data.get("unidade_medida") or "UN",
                 "margem_lucro": float(produto_data.get("margem_lucro")) if produto_data.get("margem_lucro") else 0,
                 "ativo": produto_data.get("ativo"),
@@ -830,9 +834,9 @@ def finalizar_venda():
         tem_fiado = any((p.get("forma") or p.get("forma_pagamento", "")).lower() == "fiado" for p in pagamentos_data)
         is_local_admin = str(funcionario_data.get("role", "")).upper() == "ADMIN" or str(funcionario_data.get("cargo", "")).lower() in ["admin", "administrador"]
         if tem_fiado and not (is_saas_admin or is_local_admin):
-            from app.decorators.plan_guards import normalize_plan
-            plano_atual = normalize_plan(estabelecimento.plano)
-            if plano_atual != "Pro":
+            # Trava de Plano SaaS (Gratuito/Pro vs Premium/Basic)
+            plano_atual = (estabelecimento.plano or "Basic").upper()
+            if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
                 return jsonify({
                     "error": "FUNCIONALIDADE_RESTRITA",
                     "message": "Seu plano não permite vendas no FIADO/VALE."

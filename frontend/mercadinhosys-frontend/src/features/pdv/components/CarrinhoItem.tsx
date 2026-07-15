@@ -101,7 +101,7 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                             )}
                             {/* Estoque disponível */}
                             {(() => {
-                                const estoque = produto.estoque_atual ?? (produto as any).quantidade ?? null;
+                                const estoque = produto.estoque_atual ?? (produto as any).quantidade_estoque ?? (produto as any).quantidade ?? null;
                                 if (estoque === null) return null;
                                 const baixo = estoque <= 5;
                                 return (

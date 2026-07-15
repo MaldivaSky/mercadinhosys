@@ -7,7 +7,7 @@ import { CreatePedidoData, purchaseOrderService } from '../purchaseOrderService'
 import { productsService } from '../productsService';
 import { cosmosService } from '../../../services/cosmosService';
 import { apiClient } from '../../../api/apiClient';
-import { formatCurrency, localDateInputValue } from '../../../utils/formatters';
+import { formatCurrency } from '../../../utils/formatters';
 import { showToast } from '../../../utils/toast';
 import BarcodeScanner from '../../pdv/components/BarcodeScanner';
 
@@ -50,7 +50,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   const ehEAN = (v: string) => /^\d{8,14}$/.test(v.trim());
 
   // Form data
-  const hoje = localDateInputValue();
+  const hoje = new Date().toISOString().slice(0, 10);
   const [formData, setFormData] = useState({
     fornecedor_id: 0,
     condicao_pagamento: '',

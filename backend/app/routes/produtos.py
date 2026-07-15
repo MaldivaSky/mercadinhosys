@@ -48,6 +48,77 @@ def to_decimal(value, precision=2):
 from sqlalchemy import text, func, or_, case, and_, Date, Integer
 produtos_bp = Blueprint("produtos", __name__)
 
+
+def _parse_optional_date(raw_value):
+    if raw_value is None:
+        return None
+    raw_value = str(raw_value).strip()
+    if not raw_value:
+        return None
+    return datetime.strptime(raw_value, "%Y-%m-%d").date()
+
+
+def _ensure_unique_lote_number(estabelecimento_id: int, numero_lote: str, lote_id: int = None):
+    numero_lote = (numero_lote or "").strip()
+    if not numero_lote:
+        raise ValueError("Número do lote é obrigatório")
+
+    query = ProdutoLote.query.filter_by(
+        estabelecimento_id=estabelecimento_id,
+        numero_lote=numero_lote,
+    )
+    if lote_id is not None:
+        query = query.filter(ProdutoLote.id != lote_id)
+
+    if query.first():
+        raise ValueError("Já existe outro lote com esse número neste estabelecimento")
+
+    return numero_lote
+
+
+def _sync_produto_from_lotes(produto: Produto):
+    lotes = (
+        ProdutoLote.query.filter_by(
+            produto_id=produto.id,
+            estabelecimento_id=produto.estabelecimento_id,
+            ativo=True,
+        )
+        .order_by(ProdutoLote.data_validade.asc(), ProdutoLote.data_entrada.asc(), ProdutoLote.id.asc())
+        .all()
+    )
+
+    if not lotes:
+        return
+
+    lote_referencia = next(
+        (l for l in lotes if Decimal(str(l.quantidade or 0)) > 0),
+        lotes[0],
+    )
+
+    produto.lote = lote_referencia.numero_lote
+    produto.data_validade = lote_referencia.data_validade
+    produto.data_fabricacao = lote_referencia.data_fabricacao
+    if lote_referencia.fornecedor_id:
+        produto.fornecedor_id = lote_referencia.fornecedor_id
+
+
+def _serialize_lote(lote: ProdutoLote):
+    return {
+        "id": lote.id,
+        "numero_lote": lote.numero_lote,
+        "produto_id": lote.produto_id,
+        "pedido_compra_id": lote.pedido_compra_id,
+        "fornecedor_id": lote.fornecedor_id,
+        "quantidade": float(lote.quantidade) if lote.quantidade else 0.0,
+        "quantidade_inicial": float(lote.quantidade_inicial) if lote.quantidade_inicial else 0.0,
+        "data_fabricacao": lote.data_fabricacao.isoformat() if lote.data_fabricacao else None,
+        "data_validade": lote.data_validade.isoformat() if lote.data_validade else None,
+        "data_entrada": lote.data_entrada.isoformat() if lote.data_entrada else None,
+        "preco_custo_unitario": float(lote.preco_custo_unitario) if lote.preco_custo_unitario is not None else 0.0,
+        "preco_venda": float(lote.preco_venda) if lote.preco_venda is not None else None,
+        "ativo": bool(lote.ativo),
+    }
+
 # ============================================
 # VALIDAÇÕES ESPECÍFICAS DE PRODUTO
 # ============================================
@@ -1917,11 +1988,18 @@ def ajustar_estoque(id):
         data_fabricacao_str = data.get("data_fabricacao", "")
         data_validade_str = data.get("data_validade", "")
         fornecedor_id = data.get("fornecedor_id")
+        lote_id = data.get("lote_id")
+        corrigir_lote_existente = bool(data.get("corrigir_lote_existente"))
 
         if fornecedor_id == "":
             fornecedor_id = None
         elif fornecedor_id is not None:
             fornecedor_id = int(fornecedor_id)
+
+        if lote_id == "":
+            lote_id = None
+        elif lote_id is not None:
+            lote_id = int(lote_id)
 
         if tipo not in ["entrada", "saida"]:
             return (
@@ -1934,7 +2012,20 @@ def ajustar_estoque(id):
                 400,
             )
 
-        if not quantidade or quantidade <= 0:
+        metadata_only_lote_update = (
+            tipo == "entrada"
+            and lote_id is not None
+            and corrigir_lote_existente
+            and (not quantidade or quantidade <= 0)
+            and any([
+                lote_str,
+                data_fabricacao_str != "",
+                data_validade_str != "",
+                fornecedor_id is not None,
+            ])
+        )
+
+        if (not quantidade or quantidade <= 0) and not metadata_only_lote_update:
             return jsonify({"success": False, "message": "Quantidade inválida"}), 400
 
         if not motivo:
@@ -1942,69 +2033,118 @@ def ajustar_estoque(id):
 
         # ARREDONDAMENTO BLINDADO (Elite Grade)
         quantidade_anterior = to_decimal(produto.quantidade, precision=3)
+        novo_lote = None
+        lote_atualizado = None
+        movimentacao = None
 
         if tipo == "entrada":
-            # Guardar custo anterior para auditoria
-            custo_anterior = Decimal(str(produto.preco_custo or 0))
-            
-            # Aplicar CMP (Custo Médio Ponderado)
-            produto.recalcular_preco_custo_ponderado(
-                quantidade_entrada=quantidade,
-                custo_unitario_entrada=custo_unitario,
-                estoque_atual=quantidade_anterior,
-                registrar_historico=True,
-                funcionario_id=int(get_jwt_identity()),
-                motivo=motivo
-            )
-            produto.quantidade = to_decimal(quantidade_anterior + quantidade, precision=3)
-            
-            # Registrar no histórico se houve mudança de custo
-            if abs(produto.preco_custo - custo_anterior) > Decimal("0.01"):
-                historico = HistoricoPrecos(
+            if lote_id is not None:
+                lote_atualizado = ProdutoLote.query.filter_by(
+                    id=lote_id,
+                    produto_id=produto.id,
+                    estabelecimento_id=estabelecimento_id,
+                ).first()
+                if not lote_atualizado:
+                    return jsonify({"success": False, "message": "Lote selecionado não encontrado"}), 404
+
+                if lote_str:
+                    lote_atualizado.numero_lote = _ensure_unique_lote_number(
+                        estabelecimento_id,
+                        lote_str,
+                        lote_id=lote_atualizado.id,
+                    )
+                if "data_fabricacao" in data:
+                    lote_atualizado.data_fabricacao = _parse_optional_date(data_fabricacao_str)
+                if "data_validade" in data:
+                    lote_atualizado.data_validade = _parse_optional_date(data_validade_str) or lote_atualizado.data_validade
+                if fornecedor_id is not None:
+                    lote_atualizado.fornecedor_id = fornecedor_id
+
+            if quantidade and quantidade > 0:
+                custo_anterior = Decimal(str(produto.preco_custo or 0))
+
+                produto.recalcular_preco_custo_ponderado(
+                    quantidade_entrada=quantidade,
+                    custo_unitario_entrada=custo_unitario,
+                    estoque_atual=quantidade_anterior,
+                    registrar_historico=True,
+                    funcionario_id=int(get_jwt_identity()),
+                    motivo=motivo
+                )
+                produto.quantidade = to_decimal(quantidade_anterior + quantidade, precision=3)
+
+                if abs(produto.preco_custo - custo_anterior) > Decimal("0.01"):
+                    historico = HistoricoPrecos(
+                        estabelecimento_id=estabelecimento_id,
+                        produto_id=produto.id,
+                        funcionario_id=int(get_jwt_identity()),
+                        preco_custo_anterior=custo_anterior,
+                        preco_venda_anterior=produto.preco_venda,
+                        margem_anterior=produto.margem_lucro,
+                        preco_custo_novo=produto.preco_custo,
+                        preco_venda_novo=produto.preco_venda,
+                        margem_nova=produto.margem_lucro,
+                        motivo=f"CMP - Entrada de {quantidade} unidades",
+                        observacoes=f"Custo anterior: R$ {custo_anterior}, Novo custo: R$ {produto.preco_custo}"
+                    )
+                    db.session.add(historico)
+
+                if lote_atualizado:
+                    lote_atualizado.quantidade = to_decimal(lote_atualizado.quantidade + quantidade, precision=3)
+                    lote_atualizado.quantidade_inicial = to_decimal(lote_atualizado.quantidade_inicial + quantidade, precision=3)
+                    if custo_unitario is not None:
+                        lote_atualizado.preco_custo_unitario = to_decimal(custo_unitario, precision=4)
+                    lote_atualizado.preco_venda = produto.preco_venda
+                elif lote_str or data_validade_str:
+                    numero_lote_final = _ensure_unique_lote_number(
+                        estabelecimento_id,
+                        lote_str if lote_str else f"ENT-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    )
+                    validade_final = _parse_optional_date(data_validade_str) or (date.today() + timedelta(days=365))
+                    fabricacao_final = _parse_optional_date(data_fabricacao_str)
+
+                    novo_lote = ProdutoLote(
+                        estabelecimento_id=estabelecimento_id,
+                        produto_id=produto.id,
+                        fornecedor_id=fornecedor_id,
+                        numero_lote=numero_lote_final,
+                        quantidade=quantidade,
+                        quantidade_inicial=quantidade,
+                        data_fabricacao=fabricacao_final,
+                        data_validade=validade_final,
+                        preco_custo_unitario=custo_unitario if custo_unitario is not None else produto.preco_custo,
+                        preco_venda=produto.preco_venda,
+                        ativo=True
+                    )
+                    db.session.add(novo_lote)
+                    db.session.flush()
+
+                if fornecedor_id and not produto.fornecedor_id:
+                    produto.fornecedor_id = fornecedor_id
+
+                movimentacao = MovimentacaoEstoque(
                     estabelecimento_id=estabelecimento_id,
                     produto_id=produto.id,
                     funcionario_id=int(get_jwt_identity()),
-                    preco_custo_anterior=custo_anterior,
-                    preco_venda_anterior=produto.preco_venda,
-                    margem_anterior=produto.margem_lucro,
-                    preco_custo_novo=produto.preco_custo,
-                    preco_venda_novo=produto.preco_venda,
-                    margem_nova=produto.margem_lucro,
-                    motivo=f"CMP - Entrada de {quantidade} unidades",
-                    observacoes=f"Custo anterior: R$ {custo_anterior}, Novo custo: R$ {produto.preco_custo}"
-                )
-                db.session.add(historico)
-
-            # Criar lote se fornecido validade ou lote
-            novo_lote = None
-            if lote_str or data_validade_str:
-                numero_lote_final = lote_str if lote_str else f"ENT-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                validade_final = datetime.strptime(data_validade_str, "%Y-%m-%d").date() if data_validade_str else (date.today() + timedelta(days=365))
-                fabricacao_final = datetime.strptime(data_fabricacao_str, "%Y-%m-%d").date() if data_fabricacao_str else None
-                
-                novo_lote = ProdutoLote(
-                    estabelecimento_id=estabelecimento_id,
-                    produto_id=produto.id,
-                    fornecedor_id=fornecedor_id,
-                    numero_lote=numero_lote_final,
+                    lote_id=(lote_atualizado.id if lote_atualizado else (novo_lote.id if novo_lote else None)),
+                    tipo=tipo,
                     quantidade=quantidade,
-                    quantidade_inicial=quantidade,
-                    data_fabricacao=fabricacao_final,
-                    data_validade=validade_final,
-                    preco_custo_unitario=custo_unitario if custo_unitario is not None else produto.preco_custo,
-                    preco_venda=produto.preco_venda,
-                    ativo=True
+                    quantidade_anterior=quantidade_anterior,
+                    quantidade_atual=produto.quantidade,
+                    custo_unitario=(
+                        custo_unitario if custo_unitario is not None else produto.preco_custo
+                    ),
+                    valor_total=to_decimal(
+                        quantidade * (custo_unitario if custo_unitario is not None else produto.preco_custo),
+                        precision=2,
+                    ),
+                    motivo=motivo,
+                    observacoes=observacoes,
                 )
-                db.session.add(novo_lote)
-                db.session.flush() # Para obter o ID do lote
-                
-                # Se o produto não tinha data de validade global, atualizar
-                if not produto.data_validade or produto.data_validade < validade_final:
-                    produto.data_validade = validade_final
-                if lote_str and not produto.lote:
-                    produto.lote = lote_str
-                if fornecedor_id and not produto.fornecedor_id:
-                    produto.fornecedor_id = fornecedor_id
+                db.session.add(movimentacao)
+
+            if lote_atualizado or novo_lote:
+                _sync_produto_from_lotes(produto)
         else:  # saida
             if to_decimal(produto.quantidade, precision=3) < quantidade:
                 return (
@@ -2017,29 +2157,21 @@ def ajustar_estoque(id):
                     400,
                 )
             produto.quantidade = to_decimal(quantidade_anterior - quantidade, precision=3)
-
-        # Criar movimentação
-        movimentacao = MovimentacaoEstoque(
-            estabelecimento_id=estabelecimento_id,
-            produto_id=produto.id,
-            funcionario_id=int(get_jwt_identity()),
-            lote_id=novo_lote.id if tipo == "entrada" and 'novo_lote' in locals() and novo_lote else None,
-            tipo=tipo,
-            quantidade=quantidade,
-            quantidade_anterior=quantidade_anterior,
-            quantidade_atual=produto.quantidade,
-            custo_unitario=(
-                custo_unitario if (tipo == "entrada" and custo_unitario is not None) else produto.preco_custo
-            ),
-            valor_total=to_decimal(quantidade
-            * (
-                custo_unitario if (tipo == "entrada" and custo_unitario is not None) else produto.preco_custo
-            ), precision=2),
-            motivo=motivo,
-            observacoes=observacoes,
-        )
-
-        db.session.add(movimentacao)
+            movimentacao = MovimentacaoEstoque(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=produto.id,
+                funcionario_id=int(get_jwt_identity()),
+                lote_id=None,
+                tipo=tipo,
+                quantidade=quantidade,
+                quantidade_anterior=quantidade_anterior,
+                quantidade_atual=produto.quantidade,
+                custo_unitario=produto.preco_custo,
+                valor_total=to_decimal(quantidade * produto.preco_custo, precision=2),
+                motivo=motivo,
+                observacoes=observacoes,
+            )
+            db.session.add(movimentacao)
         db.session.commit()
 
         current_app.logger.info(
@@ -2049,17 +2181,21 @@ def ajustar_estoque(id):
         return jsonify(
             {
                 "success": True,
-                "message": f"Estoque ajustado com sucesso",
+                "message": "Dados do lote atualizados com sucesso" if metadata_only_lote_update else "Estoque ajustado com sucesso",
                 "produto": {
                     "id": produto.id,
                     "nome": produto.nome,
                     "quantidade_anterior": quantidade_anterior,
                     "quantidade_atual": produto.quantidade,
-                    "diferenca": quantidade if tipo == "entrada" else -quantidade,
+                    "diferenca": 0 if metadata_only_lote_update else (quantidade if tipo == "entrada" else -quantidade),
                 },
+                "lote": _serialize_lote(lote_atualizado or novo_lote) if (lote_atualizado or novo_lote) else None,
             }
         )
 
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 400
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Erro ao ajustar estoque do produto {id}: {str(e)}")
@@ -2067,6 +2203,95 @@ def ajustar_estoque(id):
             jsonify({"success": False, "message": "Erro interno ao ajustar estoque"}),
             500,
         )
+
+
+@produtos_bp.route("/<int:id>/lotes/<int:lote_id>", methods=["PATCH"])
+@funcionario_required
+@resource_required("estoque")
+def atualizar_lote_produto(id, lote_id):
+    """Atualiza os metadados de um lote sem criar nova entrada de estoque."""
+    try:
+        estabelecimento_id = get_authorized_establishment_id()
+        produto = Produto.query.filter_by(
+            id=id,
+            estabelecimento_id=estabelecimento_id,
+        ).first_or_404()
+
+        lote = ProdutoLote.query.filter_by(
+            id=lote_id,
+            produto_id=produto.id,
+            estabelecimento_id=estabelecimento_id,
+        ).first()
+        if not lote:
+            return jsonify({"success": False, "message": "Lote não encontrado"}), 404
+
+        data = request.get_json() or {}
+        houve_alteracao = False
+
+        if "numero_lote" in data:
+            numero_lote = _ensure_unique_lote_number(
+                estabelecimento_id,
+                data.get("numero_lote"),
+                lote_id=lote.id,
+            )
+            if numero_lote != lote.numero_lote:
+                lote.numero_lote = numero_lote
+                houve_alteracao = True
+
+        if "data_fabricacao" in data:
+            nova_fabricacao = _parse_optional_date(data.get("data_fabricacao"))
+            if nova_fabricacao != lote.data_fabricacao:
+                lote.data_fabricacao = nova_fabricacao
+                houve_alteracao = True
+
+        if "data_validade" in data:
+            nova_validade = _parse_optional_date(data.get("data_validade"))
+            if not nova_validade:
+                return jsonify({"success": False, "message": "Data de validade é obrigatória para o lote"}), 400
+            if nova_validade != lote.data_validade:
+                lote.data_validade = nova_validade
+                houve_alteracao = True
+
+        if "fornecedor_id" in data:
+            fornecedor_id = data.get("fornecedor_id")
+            if fornecedor_id == "":
+                fornecedor_id = None
+            elif fornecedor_id is not None:
+                fornecedor_id = int(fornecedor_id)
+
+            if fornecedor_id != lote.fornecedor_id:
+                lote.fornecedor_id = fornecedor_id
+                houve_alteracao = True
+
+        if not houve_alteracao:
+            return jsonify({
+                "success": True,
+                "message": "Nenhuma alteração foi necessária",
+                "lote": _serialize_lote(lote),
+            })
+
+        _sync_produto_from_lotes(produto)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Lote atualizado com sucesso",
+            "lote": _serialize_lote(lote),
+            "produto": {
+                "id": produto.id,
+                "lote": produto.lote,
+                "data_fabricacao": produto.data_fabricacao.isoformat() if produto.data_fabricacao else None,
+                "data_validade": produto.data_validade.isoformat() if produto.data_validade else None,
+            },
+        })
+
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar lote {lote_id} do produto {id}: {str(e)}")
+        return jsonify({"success": False, "message": "Erro interno ao atualizar lote"}), 500
 
 
 @produtos_bp.route("/<int:id>/preco", methods=["POST"])
@@ -4147,16 +4372,16 @@ def obter_produto_hub(id):
         # Lotes
         lotes = []
         from app.models import ProdutoLote
-        lotes_obj = ProdutoLote.query.filter_by(produto_id=id).order_by(ProdutoLote.data_validade.desc()).all()
+        lotes_obj = (
+            ProdutoLote.query.filter_by(
+                produto_id=id,
+                estabelecimento_id=estabelecimento_id,
+            )
+            .order_by(ProdutoLote.data_validade.desc(), ProdutoLote.data_entrada.desc())
+            .all()
+        )
         for l in lotes_obj:
-            lotes.append({
-                "id": l.id,
-                "numero_lote": l.numero_lote,
-                "quantidade": float(l.quantidade) if l.quantidade else 0,
-                "data_fabricacao": l.data_fabricacao.isoformat() if l.data_fabricacao else None,
-                "data_validade": l.data_validade.isoformat() if l.data_validade else None,
-                "data_entrada": l.data_entrada.isoformat() if l.data_entrada else None,
-            })
+            lotes.append(_serialize_lote(l))
             
         # Pedidos pendentes (placeholder se o modelo existir, mas por segurança evito joins não confirmados)
         pedidos_pendentes = []

@@ -103,7 +103,9 @@ export const productsService = {
         fornecedor_id?: number,
         lote?: string,
         data_fabricacao?: string,
-        data_validade?: string
+        data_validade?: string,
+        lote_id?: number,
+        corrigir_lote_existente?: boolean
     ): Promise<{ success: boolean; message: string; produto: any }> => {
         const payload: any = {
             tipo: operacao,
@@ -112,10 +114,35 @@ export const productsService = {
             fornecedor_id,
             lote,
             data_fabricacao,
-            data_validade
+            data_validade,
+            lote_id,
+            corrigir_lote_existente
         };
         if (observacoes !== undefined) payload.observacoes = observacoes;
         const response = await apiClient.post<any>(`/produtos/${id}/estoque`, payload);
+        return response.data;
+    },
+
+    getLotesDisponiveis: async (produtoId: number) => {
+        const response = await apiClient.get<{
+            lotes: any[];
+            total_lotes: number;
+            total_quantidade: number;
+        }>(`/pedidos-compra/produtos/${produtoId}/lotes-disponiveis`);
+        return response.data;
+    },
+
+    atualizarLote: async (
+        produtoId: number,
+        loteId: number,
+        data: {
+            numero_lote?: string;
+            data_fabricacao?: string;
+            data_validade?: string;
+            fornecedor_id?: number;
+        }
+    ) => {
+        const response = await apiClient.patch<any>(`/produtos/${produtoId}/lotes/${loteId}`, data);
         return response.data;
     },
 
