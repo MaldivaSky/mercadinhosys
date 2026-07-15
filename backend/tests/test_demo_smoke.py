@@ -229,6 +229,15 @@ def test_demo_venda_e_comprovante(client, ctx):
     # Lei da Transparência: o comprovante carrega o campo de tributos (mesmo que 0).
     assert "valor_tributos" in comp["comprovante"]
 
+    # 3) Painel de vendas precisa voltar com indicadores e série histórica,
+    # sem quebrar a rota de estatísticas.
+    r3 = client.get("/api/vendas/estatisticas", headers=headers)
+    assert r3.status_code == 200, r3.get_data(as_text=True)
+    stats = r3.get_json()
+    assert stats["estatisticas_gerais"]["quantidade_vendas"] >= 1
+    assert stats["estatisticas_gerais"]["total_valor"] >= 3.0
+    assert len(stats["formas_pagamento"]) >= 1
+
 
 def test_demo_venda_bloqueada_sem_caixa(client, session):
     """Regra de negócio: sem caixa aberto, a venda é bloqueada (não some silenciosa)."""

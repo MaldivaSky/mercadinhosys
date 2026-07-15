@@ -55,6 +55,35 @@ ORDENACOES_PERMITIDAS = {
     "funcionario_nome": Funcionario.nome,
 }
 
+
+def _norm_forma_pagamento(nome):
+    if not nome:
+        return "dinheiro"
+    nome = nome.lower().strip()
+    if "crédito" in nome or "credito" in nome:
+        return "cartao_credito"
+    if "débito" in nome or "debito" in nome:
+        return "cartao_debito"
+    if "dinheiro" in nome:
+        return "dinheiro"
+    if "pix" in nome:
+        return "pix"
+    if "fiado" in nome:
+        return "fiado"
+    if "alimentação" in nome or "alimentacao" in nome:
+        return "vale_alimentacao"
+    if "refeição" in nome or "refeicao" in nome:
+        return "vale_refeicao"
+    return (
+        nome.replace(" ", "_")
+        .replace("ã", "a")
+        .replace("é", "e")
+        .replace("ê", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ç", "c")
+    )
+
 def gerar_codigo_venda():
     """Gera código único para venda no formato V-YYYYMMDD-XXXX"""
     data_atual = datetime.now().strftime("%Y%m%d")
@@ -341,8 +370,10 @@ def listar_vendas():
             })
 
         paginacao = {
+            "pagina": pagination.page,
             "pagina_atual": pagination.page,
             "total_paginas": pagination.pages,
+            "total": pagination.total,
             "total_itens": pagination.total,
             "itens_por_pagina": pagination.per_page,
             "tem_proxima": pagination.has_next,
@@ -450,6 +481,9 @@ def estatisticas_vendas():
         ).join(Venda, Venda.id == Pagamento.venda_id).filter(
             Pagamento.venda_id.in_(ids_select)
         ).group_by(Pagamento.forma_pagamento).all()
+
+        def _norm(nome):
+            return _norm_forma_pagamento(nome)
 
         formas_pgto_agrupadas = {}
         for fp in formas_pgto_raw:
