@@ -59,20 +59,22 @@ SELF_SERVICE_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/dashboard/rh/ponto/espelho",
 )
 
-# Módulos VEDADOS ao plano Grátis. O plano Grátis acessa: Dashboard (visão
-# executiva), PDV/caixa, Vendas, Produtos, Fornecedores, Despesas,
-# Funcionários e Configurações. Sem fiscal (não emite nota nem lê XML),
-# sem SFA, RH & Ponto, logística, relatórios e auditoria.
-# /api/clientes fica acessível porque o PDV depende dele (busca de cliente
-# na venda); a página de Clientes é bloqueada no frontend.
+# Módulos VEDADOS ao plano Grátis. O plano Grátis acessa: Dashboard (apenas
+# visão executiva), PDV/caixa, Vendas, Produtos, Compras & Doca,
+# Fornecedores, Clientes e Configurações essenciais. Sem fiscal, Consultor
+# M-IA, RH, relatórios, auditoria, despesas operacionais avançadas ou gestão
+# de equipe além do admin titular.
 FREE_PLAN_BLOCKED_PREFIXES: tuple[str, ...] = (
     "/api/fiscal",
+    "/api/consultor",
     "/api/sfa",
     "/api/rh",
     "/api/ponto",
     "/api/delivery",
     "/api/relatorios",
     "/api/auditoria",
+    "/api/despesas",
+    "/api/funcionarios",
 )
 
 

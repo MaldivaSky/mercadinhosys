@@ -84,7 +84,7 @@ def listar_estabelecimentos_ativos():
                 "cnpj": est.cnpj,
                 "cidade": est.cidade,
                 "estado": est.estado,
-                "plano": getattr(est, 'plano', 'Basic'),
+                "plano": getattr(est, 'plano', 'Gratuito'),
                 "plano_status": getattr(est, 'plano_status', 'experimental'),
                 "ativo": est.ativo,
                 "vendas_hoje": vendas_hoje,
@@ -178,7 +178,7 @@ def dashboard_estabelecimento_especifico(estabelecimento_id):
                 "cnpj": estabelecimento.cnpj,
                 "cidade": estabelecimento.cidade,
                 "estado": estabelecimento.estado,
-                "plano": getattr(estabelecimento, 'plano', 'Basic'),
+                "plano": getattr(estabelecimento, 'plano', 'Gratuito'),
                 "plano_status": getattr(estabelecimento, 'plano_status', 'experimental')
             },
             "metricas": {

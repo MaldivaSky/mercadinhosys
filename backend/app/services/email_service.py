@@ -615,7 +615,7 @@ Senha Temporária: {senha_temporaria}
 ⚠️ **Importante:** Por favor, altere sua senha no primeiro acesso para maior segurança.
 
 🚀 **O que foi criado para você:**
-• Estabelecimento configurado com plano Basic
+• Estabelecimento configurado com plano Gratuito
 • Usuário Administrador com todas as permissões
 • Configurações básicas e horário comercial padrão
 • Caixa PDV-01 inicial

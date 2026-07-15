@@ -13,7 +13,7 @@ import pytest
 from flask_jwt_extended import create_access_token
 
 from app.models import (
-    db, Estabelecimento, Funcionario, CategoriaProduto, Produto, ProdutoLote, Caixa,
+    db, Estabelecimento, Funcionario, CategoriaProduto, Produto, ProdutoLote, Caixa, Cliente,
 )
 
 
@@ -257,3 +257,99 @@ def test_demo_venda_bloqueada_sem_caixa(client, session):
     }, headers=_headers(estab.id, admin.id))
     assert r.status_code == 403
     assert r.get_json().get("error") == "CAIXA_FECHADO"
+
+
+def test_demo_health_and_readiness_endpoints(client):
+    health = client.get("/api/health")
+    assert health.status_code == 200, health.get_data(as_text=True)
+    body = health.get_json()
+    assert body["service"] == "mercadinhosys-api"
+    assert body["database"]["status"] == "connected"
+
+    ready = client.get("/api/ready")
+    assert ready.status_code == 200, ready.get_data(as_text=True)
+    ready_body = ready.get_json()
+    assert ready_body["status"] == "ready"
+    assert ready_body["checks"]["database"]["status"] == "ok"
+    assert ready_body["checks"]["cache"]["status"] == "ok"
+
+
+def test_demo_pdv_fiado_liberado_para_plano_pro(client, session, ctx):
+    estab = ctx["estab"]
+    estab.plano = "Pro"
+    admin = ctx["admin"]
+
+    operador = Funcionario(
+        estabelecimento_id=estab.id,
+        nome="Operador Pro",
+        username="operador_pro",
+        email="operador.pro@demo.com",
+        cpf="12345678901",
+        data_nascimento=date(1995, 1, 10),
+        celular="92999990000",
+        role="CAIXA",
+        cargo="Caixa",
+        ativo=True,
+        status="ativo",
+        data_admissao=date.today(),
+    )
+    operador.set_password("123456")
+    session.add(operador)
+    session.flush()
+
+    caixa_operador = Caixa(
+        estabelecimento_id=estab.id,
+        funcionario_id=operador.id,
+        numero_caixa="PDV-PRO-02",
+        saldo_inicial=Decimal("50"),
+        saldo_atual=Decimal("50"),
+        status="aberto",
+        data_abertura=datetime.now(timezone.utc),
+    )
+    session.add(caixa_operador)
+
+    cliente = Cliente(
+        estabelecimento_id=estab.id,
+        nome="Cliente Fiado",
+        cpf="390.533.447-05",
+        celular="92999991111",
+        cep="69000-000",
+        logradouro="Rua Demo",
+        numero="123",
+        bairro="Centro",
+        cidade="Manaus",
+        estado="AM",
+        limite_credito=Decimal("100.00"),
+        saldo_devedor=Decimal("0.00"),
+    )
+    session.add(cliente)
+    session.flush()
+
+    produto = Produto(
+        estabelecimento_id=estab.id,
+        categoria_id=ctx["cat"].id,
+        nome="Arroz Pro",
+        preco_custo=Decimal("10.00"),
+        preco_venda=Decimal("15.00"),
+        quantidade=30,
+    )
+    session.add(produto)
+    session.commit()
+
+    token = create_access_token(identity=str(operador.id), additional_claims={
+        "estabelecimento_id": estab.id,
+        "role": "CAIXA",
+        "nome": operador.nome,
+    })
+    headers = {"Authorization": f"Bearer {token}"}
+
+    r = client.post("/api/pdv/finalizar", json={
+        "cliente_id": cliente.id,
+        "items": [{"id": produto.id, "quantity": 1, "price": 15.0}],
+        "subtotal": 15.0,
+        "total": 15.0,
+        "pagamentos": [{"forma": "fiado", "valor": 15.0}],
+    }, headers=headers)
+    assert r.status_code in (200, 201), r.get_data(as_text=True)
+    body = r.get_json()
+    assert body.get("success") is not False, body

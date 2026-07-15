@@ -3,6 +3,7 @@ from flask import current_app
 from app.models import Estabelecimento, db
 from datetime import datetime, timedelta, timezone
 from efipay import EfiPay
+from app.decorators.plan_guards import normalize_plan
 
 class BillingService:
     def __init__(self):
@@ -25,12 +26,16 @@ class BillingService:
         self.efi = EfiPay(self.options)
         
         self.PLAN_PRICES = {
-            'Premium': 9990,     # R$ 99,90/mês
-            'Basic': 4990        # R$ 49,90/mês
+            'Pro': 9990,
+            'Gratuito': 0,
         }
 
     def _get_price_amount(self, plan_name):
-        return self.PLAN_PRICES.get(plan_name, 9990)
+        return self.PLAN_PRICES.get(normalize_plan(plan_name), 9990)
+
+    def _normalize_checkout_plan(self, plan_name):
+        normalized = normalize_plan(plan_name)
+        return 'Pro' if normalized == 'Pro' else 'Gratuito'
 
     def create_checkout_session(self, estabelecimento_id, plan_name, user_email):
         try:
@@ -38,12 +43,16 @@ class BillingService:
             if not estab:
                 raise Exception("Estabelecimento não encontrado")
 
-            price = self._get_price_amount(plan_name)
+            normalized_plan = self._normalize_checkout_plan(plan_name)
+            if normalized_plan != 'Pro':
+                raise ValueError("Checkout disponível apenas para o plano Pro.")
+
+            price = self._get_price_amount(normalized_plan)
             
             # Tentar criar um Plano de Assinatura Recorrente (Efí Assinaturas)
             try:
                 plan_body = {
-                    "name": f"Assinatura {plan_name} - MercadinhoSys",
+                    "name": f"Assinatura {normalized_plan} - MercadinhoSys",
                     "repeats": 0, # 0 = indefinido (cobrança recorrente mensal)
                     "interval": 1
                 }
@@ -56,7 +65,7 @@ class BillingService:
                 link_body = {
                     "items": [
                         {
-                            "name": f"Mensalidade - {plan_name}",
+                            "name": f"Mensalidade - {normalized_plan}",
                             "value": price,
                             "amount": 1
                         }
@@ -68,6 +77,7 @@ class BillingService:
                     },
                     "metadata": {
                         "custom_id": str(estabelecimento_id),
+                        "plan_name": normalized_plan,
                         "notification_url": os.getenv('BACKEND_URL', 'https://mercadinhosys.herokuapp.com') + '/api/billing/webhook'
                     }
                 }
@@ -79,19 +89,20 @@ class BillingService:
                 body = {
                     "items": [
                         {
-                            "name": f"Assinatura Plano {plan_name} - 1 Mês",
+                            "name": f"Assinatura Plano {normalized_plan} - 1 Mês",
                             "value": price,
                             "amount": 1
                         }
                     ],
                     "settings": {
-                        "message": f"Assinatura MercadinhoSys - {plan_name}",
+                        "message": f"Assinatura MercadinhoSys - {normalized_plan}",
                         "expire_at": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
                         "request_delivery_address": False,
                         "payment_method": "pix,credit_card"
                     },
                     "metadata": {
                         "custom_id": str(estabelecimento_id),
+                        "plan_name": normalized_plan,
                         "notification_url": os.getenv('BACKEND_URL', 'https://mercadinhosys.herokuapp.com') + '/api/billing/webhook'
                     }
                 }
@@ -104,7 +115,7 @@ class BillingService:
             
             # Update gateway info on estab
             estab.gateway_subscription_id = str(charge_id)
-            estab.plano = plan_name
+            estab.plano = normalized_plan
             db.session.commit()
 
             return charge['data']['payment_url']

@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify, redirect, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import Estabelecimento, Funcionario, db
 from app.services.billing_service import BillingService
+from app.decorators.plan_guards import normalize_plan
 
 billing_bp = Blueprint('billing_bp', __name__, url_prefix='/api/billing')
 
@@ -22,7 +23,7 @@ def create_checkout():
             return jsonify({"error": "Usuário não encontrado"}), 404
 
         data = request.get_json() or {}
-        plan_name = data.get('plan_name', 'Basic')
+        plan_name = normalize_plan(data.get('plan_name', 'Pro'))
         
         billing_svc = _get_billing_service()
         checkout_url = billing_svc.create_checkout_session(
@@ -52,6 +53,13 @@ def public_checkout():
         
         if not plan_name or not email:
             return jsonify({"error": "Dados incompletos"}), 400
+
+        plan_name = normalize_plan(plan_name)
+        if plan_name != 'Pro':
+            return jsonify({
+                "success": False,
+                "error": "O checkout público está disponível apenas para o plano Pro."
+            }), 400
 
         estab = Estabelecimento.query.filter_by(email=email).first()
         if not estab:

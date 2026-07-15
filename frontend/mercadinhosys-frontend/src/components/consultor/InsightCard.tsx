@@ -3,6 +3,8 @@ import { Sparkles, RefreshCw, AlertCircle, CheckCircle, TrendingUp, HelpCircle }
 import { motion, AnimatePresence } from 'framer-motion';
 import { consultorService } from '../../services/consultorService';
 import toast from 'react-hot-toast';
+import { authService } from '../../features/auth/authService';
+import { isPlanoGratis } from '../../utils/permissions';
 
 interface InsightCardProps {
   especialista: 'financeiro' | 'vendas' | 'estoque' | 'rh' | 'compras' | 'fornecedores' | 'geral';
@@ -31,9 +33,14 @@ const iconMap = {
 };
 
 export const InsightCard: React.FC<InsightCardProps> = ({ especialista, titulo = 'Insights IA', className = '' }) => {
+  const planoGratis = isPlanoGratis(authService.getCurrentUser());
   const [insights, setInsights] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (planoGratis) {
+    return null;
+  }
 
   const fetchInsights = async (isManual = false) => {
     setLoading(true);

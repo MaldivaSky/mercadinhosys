@@ -92,12 +92,10 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
     };
 
     const getPlanoColor = (plano: string) => {
-        switch (plano?.toLowerCase()) {
-            case 'basic':
+        switch ((plano || '').toLowerCase()) {
+            case 'gratuito':
                 return 'bg-gray-100 text-gray-800 border-gray-300';
-            case 'advanced':
-                return 'bg-blue-100 text-blue-800 border-blue-300';
-            case 'premium':
+            case 'pro':
                 return 'bg-purple-100 text-purple-800 border-purple-300';
             default:
                 return 'bg-gray-100 text-gray-800 border-gray-300';
@@ -163,7 +161,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                             )}
                             <div className="flex items-center gap-3 mt-3">
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
-                                    {estabelecimento.plano || 'Basic'}
+                                    {estabelecimento.plano || 'Gratuito'}
                                 </span>
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoStatusColor(estabelecimento.plano_status)}`}>
                                     {estabelecimento.plano_status || 'Experimental'}
@@ -238,9 +236,6 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                                     >
                                                         <option value="Gratuito">Gratuito</option>
                                                         <option value="Pro">Pro</option>
-                                                        <option value="Basic">Basic</option>
-                                                        <option value="Advanced">Advanced</option>
-                                                        <option value="Premium">Premium</option>
                                                     </select>
                                                     <button
                                                         onClick={handleSavePlan}
@@ -261,7 +256,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                             ) : (
                                                 <>
                                                     <span className={`px-2 py-1 rounded text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
-                                                        {estabelecimento.plano || 'Basic'}
+                                                        {estabelecimento.plano || 'Gratuito'}
                                                     </span>
                                                     {isSuperAdmin && (
                                                         <button

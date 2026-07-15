@@ -26,11 +26,13 @@ export const usePlanGate = () => {
     const rawPlano = (userData?.plano || 'Gratuito').toString().trim().toLowerCase();
 
     // 🔥 SuperAdmins sempre têm acesso PRO (ou superior), mas Admins de Tenant dependem do plano real
-    const isPro = isSuperAdmin || ['pro', 'pago', 'premium', 'elite', 'advanced', 'enterprise', 'master'].some(p => rawPlano.includes(p));
+    const isPro = isSuperAdmin || ['pro', 'pago', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'profissional', 'professional'].some(p => rawPlano.includes(p));
+    const isGratis = !isPro;
 
     // Mapeamento de Features (Baseado apenas em isPro e isAdmin para simplicidade e robustez)
     const PLAN_FEATURES = {
         hasAdvancedDashboard: isPro,
+        hasBasicExecutiveDashboard: true,
         hasDetailedReports: isPro,
         hasAIInsights: isPro,
         hasInventoryPredictor: isPro,
@@ -42,6 +44,7 @@ export const usePlanGate = () => {
 
     return {
         plano: isPro ? 'Pro' : 'Gratuito',
+        isGratis,
         isPro,
         isSuperAdmin,
         isAdmin,

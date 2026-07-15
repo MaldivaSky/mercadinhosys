@@ -487,7 +487,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                 <div className="mt-6 p-4 bg-green-50 rounded-md">
                   <h4 className="font-medium text-green-900 mb-2">✨ Recursos que serão criados:</h4>
                   <ul className="text-sm text-green-800 space-y-1">
-                    <li>• Estabelecimento com plano Basic</li>
+                    <li>• Estabelecimento com plano Gratuito</li>
                     <li>• Usuário Administrador com todas as permissões</li>
                     <li>• Configurações básicas e horário comercial</li>
                     <li>• Caixa PDV-01 inicial</li>

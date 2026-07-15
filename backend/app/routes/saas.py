@@ -12,6 +12,7 @@ import logging
 from app.services.email_service import email_service
 import json
 from app.middleware.rate_limit import limiter
+from app.decorators.plan_guards import normalize_plan
 
 saas_bp = Blueprint("saas", __name__)
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ def _invalidar_cache_plano(tenant_id):
     try:
         from app import cache
         cache.delete(f"plano_status:{tenant_id}")
-        cache.delete(f"plano:{tenant_id}")  # gate Grátis x Premium do access_control
+        cache.delete(f"plano:{tenant_id}")  # gate Grátis x Pro do access_control
     except Exception:
         pass
 
@@ -138,13 +139,15 @@ def tenant_onboarding():
         logger.info(f"🚀 Iniciando onboarding atômico: {data['nome_fantasia']}")
 
         # 1. Criar Estabelecimento
+        plano_inicial = normalize_plan(data.get('plano', 'Gratuito'))
+
         estabelecimento = Estabelecimento(
             nome_fantasia=data['nome_fantasia'].strip(),
             razao_social=data['razao_social'].strip(),
             cnpj=documento,
             telefone=data['telefone'].strip(),
             email=data['email_estabelecimento'].strip(),
-            plano='Premium',
+            plano=plano_inicial,
             plano_status='ativo',
             data_abertura=date.today(),
             ativo=True,

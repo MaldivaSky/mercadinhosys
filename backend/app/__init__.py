@@ -223,7 +223,7 @@ def create_app(config_name=None):
         from flask import g, request, abort
 
         # Ignorar OPTIONS e rotas de auth/health que não requerem JWT filtrado
-        if request.method == "OPTIONS" or any(p in request.path for p in ["/api/auth/login", "/api/health", "/api/onboarding"]):
+        if request.method == "OPTIONS" or any(p in request.path for p in ["/api/auth/login", "/api/health", "/api/ready", "/api/onboarding"]):
             return
 
         # Verifica o JWT sem forçar erro (algumas rotas são públicas). Token
@@ -263,7 +263,7 @@ def create_app(config_name=None):
             g.estabelecimento_id = tid
             # Bloqueio Global de Inadimplência (Fase 1 Comercial)
             if request.path.startswith("/api/"):
-                allowed_prefixes = ("/api/auth", "/api/billing", "/api/onboarding", "/api/saas", "/api/health")
+                allowed_prefixes = ("/api/auth", "/api/billing", "/api/onboarding", "/api/saas", "/api/health", "/api/ready")
                 if not request.path.startswith(allowed_prefixes):
                     # Performance: o plano_status era buscado no Postgres em CADA request
                     # autenticada (uma ida ao banco remoto por chamada). Agora fica em cache
@@ -480,7 +480,7 @@ def create_app(config_name=None):
 
                 schema_sqls = [
                     # Estabelecimento - SaaS
-                    ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Basic'"),
+                    ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Gratuito'"),
                     ("estabelecimentos", "plano_status",            "VARCHAR(20)  DEFAULT 'experimental'"),
                     ("estabelecimentos", "gateway_customer_id",      "VARCHAR(100)"),
                     ("estabelecimentos", "gateway_subscription_id",  "VARCHAR(100)"),
@@ -895,22 +895,30 @@ def create_app(config_name=None):
             "version": "2.0.0",
             "timestamp": get_manaus_time().isoformat(),
         }
+        database_ok = True
 
         # Database Check
         try:
             db.session.execute(text("SELECT 1"))
-            health["database"] = "connected"
+            health["database"] = {"status": "connected"}
         except Exception as e:
-            health["status"] = "degraded"
-            health["database"] = f"error: {str(e)}"
+            database_ok = False
+            health["status"] = "unhealthy"
+            health["database"] = {"status": "error", "detail": str(e)}
 
         # Cache Check
         try:
             cache.set("health_ping", 1, timeout=5)
             ping = cache.get("health_ping")
-            health["cache"] = "alive" if ping == 1 else "fail"
-        except Exception:
-            health["cache"] = "unreachable"
+            health["cache"] = {
+                "status": "alive" if ping == 1 else "fail"
+            }
+            if ping != 1 and health["status"] == "healthy":
+                health["status"] = "degraded"
+        except Exception as e:
+            health["cache"] = {"status": "unreachable", "detail": str(e)}
+            if health["status"] == "healthy":
+                health["status"] = "degraded"
 
         # System Metrics
         try:
@@ -922,7 +930,42 @@ def create_app(config_name=None):
         except:
             pass
 
-        return jsonify(health), 200 if health["status"] == "healthy" else 503
+        return jsonify(health), 200 if database_ok else 503
+
+    @app.route("/api/ready", methods=["GET"])
+    def readiness_check():
+        from sqlalchemy import text
+
+        readiness = {
+            "status": "ready",
+            "service": "mercadinhosys-api",
+            "timestamp": get_manaus_time().isoformat(),
+            "checks": {},
+        }
+        status_code = 200
+
+        try:
+            db.session.execute(text("SELECT 1"))
+            readiness["checks"]["database"] = {"status": "ok"}
+        except Exception as e:
+            readiness["status"] = "not_ready"
+            readiness["checks"]["database"] = {"status": "error", "detail": str(e)}
+            status_code = 503
+
+        try:
+            cache.set("readiness_ping", "ok", timeout=5)
+            readiness["checks"]["cache"] = {
+                "status": "ok" if cache.get("readiness_ping") == "ok" else "fail"
+            }
+            if readiness["checks"]["cache"]["status"] != "ok":
+                readiness["status"] = "not_ready"
+                status_code = 503
+        except Exception as e:
+            readiness["status"] = "not_ready"
+            readiness["checks"]["cache"] = {"status": "error", "detail": str(e)}
+            status_code = 503
+
+        return jsonify(readiness), status_code
 
     # Rota inicial
     @app.route("/", methods=["GET"])
@@ -945,6 +988,7 @@ def create_app(config_name=None):
                     ),
                 },
                 "health_check": "/api/health",
+                "readiness_check": "/api/ready",
             }
         )
 

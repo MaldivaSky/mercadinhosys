@@ -234,22 +234,22 @@ const LandingPage: React.FC = () => {
 
     const tiers = [
         {
-            name: 'Basic',
+            name: 'Gratuito',
             price: 'Grátis',
-            period: 'Por tempo limitado',
-            description: 'O essencial para quem quer profissionalizar o pequeno varejo.',
+            period: 'Plano de entrada',
+            description: 'O essencial para operar com profissionalismo e validar o sistema no dia a dia.',
             features: [
-                '1 Terminal PDV Offline-First',
-                'Gestão de Estoque Simplificada',
-                'Emissão de Cupons e Recibos',
-                'Módulo de Delivery Básico',
-                'Suporte Comercial'
+                '1 usuário administrador',
+                'PDV e gestão de caixa',
+                'Produtos, clientes e fornecedores',
+                'Compras & Doca',
+                'Dashboard executivo básico'
             ],
             cta: 'Ativar Plano Grátis',
             highlight: false
         },
         {
-            name: 'Pro ERP',
+            name: 'Pro',
             price: 'R$ 99,90',
             period: '/mês (Oferta de Lançamento)',
             description: 'Tecnologia de ponta acessível para você destruir a concorrência.',
@@ -263,7 +263,7 @@ const LandingPage: React.FC = () => {
                 'Consultor M-IA (Gestor Inteligente)',
                 'Suporte VIP Prioritário'
             ],
-            cta: 'Assinar Plano Premium',
+            cta: 'Assinar Plano Pro',
             highlight: true
         }
     ];
