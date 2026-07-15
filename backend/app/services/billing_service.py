@@ -3,6 +3,7 @@ from flask import current_app
 from app.models import Estabelecimento, db
 from datetime import datetime, timedelta, timezone
 from efipay import EfiPay
+from app.decorators.plan_guards import normalize_plan
 
 class BillingService:
     def __init__(self):
@@ -25,12 +26,16 @@ class BillingService:
         self.efi = EfiPay(self.options)
         
         self.PLAN_PRICES = {
-            'Premium': 9990,     # R$ 99,90/mês
-            'Basic': 4990        # R$ 49,90/mês
+            'Pro': 9990,         # R$ 99,90/mês
+            'Gratuito': 0
         }
 
     def _get_price_amount(self, plan_name):
         return self.PLAN_PRICES.get(plan_name, 9990)
+
+    def _normalize_paid_plan(self, plan_name):
+        normalized = normalize_plan(plan_name)
+        return 'Pro' if normalized == 'Pro' else 'Pro'
 
     def create_checkout_session(self, estabelecimento_id, plan_name, user_email):
         try:
@@ -38,6 +43,7 @@ class BillingService:
             if not estab:
                 raise Exception("Estabelecimento não encontrado")
 
+            plan_name = self._normalize_paid_plan(plan_name)
             price = self._get_price_amount(plan_name)
             
             # Tentar criar um Plano de Assinatura Recorrente (Efí Assinaturas)

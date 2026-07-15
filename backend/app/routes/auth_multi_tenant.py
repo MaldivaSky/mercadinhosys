@@ -27,7 +27,7 @@ def get_main_connection():
 def normalize_plan_name(p):
     """Garante retorno apenas de Pro ou Gratuito no motor de auth"""
     s = str(p or 'Gratuito').lower().strip()
-    if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago']):
+    if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago', 'profissional', 'professional']):
         return 'Pro'
     return 'Gratuito'
 

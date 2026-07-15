@@ -480,7 +480,7 @@ def create_app(config_name=None):
 
                 schema_sqls = [
                     # Estabelecimento - SaaS
-                    ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Basic'"),
+                    ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Gratuito'"),
                     ("estabelecimentos", "plano_status",            "VARCHAR(20)  DEFAULT 'experimental'"),
                     ("estabelecimentos", "gateway_customer_id",      "VARCHAR(100)"),
                     ("estabelecimentos", "gateway_subscription_id",  "VARCHAR(100)"),

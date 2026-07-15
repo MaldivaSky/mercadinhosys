@@ -329,7 +329,7 @@ class Estabelecimento(db.Model, EnderecoMixin, SerializableMixin, AuditMixin):
     
     # Campos de Assinatura e Integração
     premium = db.Column(db.Boolean, default=False)
-    plano = db.Column(db.String(50), default="bronze")
+    plano = db.Column(db.String(50), default="Gratuito")
     plano_status = db.Column(db.String(20), default="experimental")
     vencimento_plano = db.Column(db.Date)
     vencimento_assinatura = db.Column(db.DateTime)

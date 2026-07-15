@@ -145,7 +145,7 @@ const EstabelecimentoSelectorDashboard: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="mt-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${estabelecimento.plano === 'premium'
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${String(estabelecimento.plano || '').toLowerCase().includes('pro') || String(estabelecimento.plano || '').toLowerCase().includes('premium')
                                         ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400'
                                         : 'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
                                         }`}>

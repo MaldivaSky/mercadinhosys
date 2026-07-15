@@ -6,10 +6,57 @@ from flask import jsonify
 def test_plan_hierarchy_normalization(session):
     # This test checks if normalization works as expected in plan_guards logic
     from app.decorators.plan_guards import normalize_plan
-    assert normalize_plan("Premium") == "Premium"
-    assert normalize_plan("PRO") == "Premium"
+    assert normalize_plan("Premium") == "Pro"
+    assert normalize_plan("PRO") == "Pro"
+    assert normalize_plan("Profissional") == "Pro"
+    assert normalize_plan("Premium Master") == "Pro"
     assert normalize_plan("Gratuito") == "Gratuito"
     assert normalize_plan("Basic") == "Gratuito"
+
+
+def test_quota_required_respeita_alias_legado_de_plano_pago(client, session):
+    from app.models import Estabelecimento, Funcionario, CategoriaProduto, Produto
+    from flask_jwt_extended import create_access_token
+    from decimal import Decimal
+
+    estab = Estabelecimento.query.first()
+    estab.plano = "Profissional"
+    estab.plano_status = "ativo"
+
+    admin = Funcionario.query.filter_by(estabelecimento_id=estab.id).first()
+    categoria = CategoriaProduto(estabelecimento_id=estab.id, nome="Geral")
+    session.add(categoria)
+    session.flush()
+
+    for i in range(100):
+        session.add(Produto(
+            estabelecimento_id=estab.id,
+            categoria_id=categoria.id,
+            nome=f"Produto Seed {i}",
+            preco_custo=Decimal("5.00"),
+            preco_venda=Decimal("10.00"),
+            quantidade=10,
+        ))
+    session.commit()
+
+    token = create_access_token(identity=str(admin.id), additional_claims={
+        "is_super_admin": False,
+        "estabelecimento_id": estab.id,
+        "role": "admin",
+    })
+
+    response = client.post('/api/produtos/', json={
+        "nome": "Produto Liberado Alias Pago",
+        "categoria": "Geral",
+        "preco_custo": 4.50,
+        "preco_venda": 8.90,
+        "quantidade": 100,
+        "codigo_barras": "7890000000093",
+    }, headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code in (200, 201), response.get_data(as_text=True)
+    data = response.get_json()
+    assert data["success"] is True
 
 def test_premium_required_decorator(app, client, session):
     from app.models import Estabelecimento, Funcionario
@@ -43,8 +90,8 @@ def test_premium_required_decorator(app, client, session):
     assert response.status_code == 403
     assert "upgrade" in response.get_json()['msg'].lower()
 
-    # 2. Upgrade to Premium
-    estab_free.plano = "Premium"
+    # 2. Upgrade to Pro
+    estab_free.plano = "Pro"
     import sqlalchemy as sa
     session.commit()
     
@@ -117,7 +164,7 @@ def test_onboarding_atomic_flow(client, session):
     with allow_all_tenants():
         stored_est = Est.query.filter_by(email="test@autostore.com").first()
         assert stored_est is not None
-        assert stored_est.plano == "Premium"  # Default in onboarding
+        assert stored_est.plano == "Pro"  # Default in onboarding
 
         stored_admin = Fun.query.filter_by(email="admin@autostore.com").first()
         assert stored_admin is not None
@@ -154,7 +201,7 @@ def test_trial_expiration_blocking(app, client, session):
 def test_public_checkout_requires_existing_account(client):
     payload = {
         "email": "not_exists@email.com",
-        "plan_name": "Premium"
+        "plan_name": "Pro"
     }
     response = client.post('/api/billing/public-checkout', json=payload)
     assert response.status_code == 404

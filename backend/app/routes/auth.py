@@ -161,7 +161,7 @@ def setup_db():
 
             "estabelecimentos": [
 
-                ("plano", "VARCHAR(20) DEFAULT 'Basic'"),
+                ("plano", "VARCHAR(20) DEFAULT 'Gratuito'"),
 
                 ("plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
 
@@ -1516,7 +1516,7 @@ def get_profile():
 
                 "estado": estabelecimento_data.get("estado") if estabelecimento_data else None,
 
-                "plano": estabelecimento_data.get("plano") if estabelecimento_data else "Basic",
+                "plano": estabelecimento_data.get("plano") if estabelecimento_data else "Gratuito",
 
                 "plano_status": estabelecimento_data.get("plano_status") if estabelecimento_data else "experimental",
 

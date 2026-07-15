@@ -4,16 +4,16 @@ from flask_jwt_extended import get_jwt
 
 PLAN_HIERARCHY = {
     'Gratuito': 1,
-    'Premium': 2,
+    'Pro': 2,
     'Superadmin': 99
 }
 
 
 def normalize_plan(plan_name):
-    """Normaliza aliases legados de plano para a hierarquia atual."""
+    """Normaliza qualquer alias legado para os dois planos oficiais."""
     s = str(plan_name or 'Gratuito').lower().strip()
-    if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago']):
-        return 'Premium'
+    if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago', 'profissional', 'professional']):
+        return 'Pro'
     return 'Gratuito'
 
 def plan_required(min_plan='Gratuito'):
@@ -59,8 +59,8 @@ def plan_required(min_plan='Gratuito'):
             if user_level < required_level:
                 return jsonify({
                     "success": False,
-                    "error": f"Acesso Negado: O Plano {user_plan_norm} não inclui esta ferramenta. Upgrade para Premium necessário.",
-                    "msg": f"Acesso Negado: O Plano {user_plan_norm} nao inclui esta ferramenta. Upgrade para Premium necessario.",
+                    "error": f"Acesso Negado: O Plano {user_plan_norm} não inclui esta ferramenta. Upgrade para Pro necessário.",
+                    "msg": f"Acesso Negado: O Plano {user_plan_norm} nao inclui esta ferramenta. Upgrade para Pro necessario.",
                     "code": "PLAN_RESTRICTED"
                 }), 403
             
@@ -76,7 +76,8 @@ def plan_required(min_plan='Gratuito'):
     return decorator
 
 
-premium_required = plan_required("Premium")
+pro_required = plan_required("Pro")
+premium_required = pro_required
 
 def quota_required(model_name):
     """
@@ -97,14 +98,14 @@ def quota_required(model_name):
                 from app.models import Estabelecimento, Produto, Cliente, Fornecedor, Funcionario
                 est_id = claims.get('estabelecimento_id')
                 est = Estabelecimento.query.get(est_id)
-                
-                plano = (est.plano or 'Gratuito').title()
-                if plano in ['Pro', 'Enterprise', 'Premium', 'Advanced']:
-                    # Plano Premium tem cotas ilimitadas (exceto funcionários que é 3)
+
+                plano = normalize_plan(getattr(est, 'plano', 'Gratuito'))
+                if plano == 'Pro':
+                    # Plano Pro tem cotas ilimitadas (exceto funcionários que é 3)
                     if model_name == 'funcionario':
                         count = Funcionario.query.filter_by(estabelecimento_id=est_id, ativo=True).count()
                         if count >= 3:
-                            return jsonify({"success": False, "error": "Limite de 3 funcionários atingido no Plano Premium."}), 403
+                            return jsonify({"success": False, "error": "Limite de 3 funcionários atingido no Plano Pro."}), 403
                     return f(*args, **kwargs)
 
                 # Regras Plano Gratuito
