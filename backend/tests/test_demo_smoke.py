@@ -193,6 +193,9 @@ def test_demo_product_hub_atualiza_lote_existente(client, ctx):
 
 def test_demo_venda_e_comprovante(client, ctx):
     estab, admin = ctx["estab"], ctx["admin"]
+    estab.plano = "Pro"
+    db.session.commit()
+
     # Produto para vender (via ORM p/ isolar o teste da venda em si)
     p = Produto(
         estabelecimento_id=estab.id, categoria_id=ctx["cat"].id,
@@ -237,6 +240,22 @@ def test_demo_venda_e_comprovante(client, ctx):
     assert stats["estatisticas_gerais"]["quantidade_vendas"] >= 1
     assert stats["estatisticas_gerais"]["total_valor"] >= 3.0
     assert len(stats["formas_pagamento"]) >= 1
+
+
+def test_demo_plano_gratuito_bloqueia_vendas_analiticas_e_compras(client, ctx):
+    estab, admin = ctx["estab"], ctx["admin"]
+    estab.plano = "Gratuito"
+    db.session.commit()
+
+    headers = _headers(estab.id, admin.id)
+
+    r_vendas = client.get("/api/vendas/estatisticas", headers=headers)
+    assert r_vendas.status_code == 403, r_vendas.get_data(as_text=True)
+    assert r_vendas.get_json().get("code") == "PLAN_RESTRICTED"
+
+    r_compras = client.get("/api/pedidos-compra", headers=headers)
+    assert r_compras.status_code == 403, r_compras.get_data(as_text=True)
+    assert r_compras.get_json().get("code") == "PLAN_RESTRICTED"
 
 
 def test_demo_venda_bloqueada_sem_caixa(client, session):

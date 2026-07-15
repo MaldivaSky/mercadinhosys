@@ -78,7 +78,7 @@ export const MODULOS_POR_NIVEL: Record<Modulo, number[]> = {
 
 /** Módulos incluídos no Plano Grátis. */
 export const MODULOS_PLANO_GRATIS: Modulo[] = [
-    'dashboard', 'pdv', 'gestao_caixa', 'vendas', 'produtos', 'compras',
+    'dashboard', 'pdv', 'gestao_caixa', 'produtos',
     'fornecedores', 'clientes', 'configuracoes',
 ];
 
@@ -159,7 +159,7 @@ export function getSettingsTabs(user?: UsuarioLogado | null): string[] {
         tabs = ['geral', 'conta'];
     }
     if (isPlanoGratis(user)) {
-        const permitidasGratis = ['geral', 'conta', 'estabelecimento', 'estoque', 'vendas', 'assinatura'];
+        const permitidasGratis = ['geral', 'conta', 'estabelecimento', 'assinatura'];
         tabs = tabs.filter(t => permitidasGratis.includes(t));
     }
     return tabs;

@@ -154,7 +154,7 @@ const LandingPage: React.FC = () => {
             } else {
                 showToast.error(result.error || 'Ocorreu um erro ao enviar seus dados.');
             }
-        } catch (_error) {
+        } catch {
             showToast.error('Erro de conexão com o servidor.');
         } finally {
             setLoadingLead(false);
@@ -191,7 +191,7 @@ const LandingPage: React.FC = () => {
             } else {
                 showToast.error(result.message || 'Erro ao iniciar checkout.');
             }
-        } catch (_error) {
+        } catch {
             showToast.error('Erro de conexão.');
         } finally {
             setLoadingCheckout(false);
@@ -226,7 +226,7 @@ const LandingPage: React.FC = () => {
                 showToast.dismiss();
                 showToast.error(result.error || 'Erro ao acessar demonstração');
             }
-        } catch (_error) {
+        } catch {
             showToast.dismiss();
             showToast.error('Erro de conexão com o servidor demo.');
         }
@@ -237,13 +237,13 @@ const LandingPage: React.FC = () => {
             name: 'Gratuito',
             price: 'Grátis',
             period: 'Plano de entrada',
-            description: 'O essencial para operar com profissionalismo e validar o sistema no dia a dia.',
+            description: 'Para colocar a operação no eixo e testar o sistema sem investimento inicial.',
             features: [
                 '1 usuário administrador',
                 'PDV e gestão de caixa',
                 'Produtos, clientes e fornecedores',
-                'Compras & Doca',
-                'Dashboard executivo básico'
+                'Dashboard executivo básico',
+                'Ideal para operação essencial'
             ],
             cta: 'Ativar Plano Grátis',
             highlight: false
@@ -252,9 +252,11 @@ const LandingPage: React.FC = () => {
             name: 'Pro',
             price: 'R$ 99,90',
             period: '/mês (Oferta de Lançamento)',
-            description: 'Tecnologia de ponta acessível para você destruir a concorrência.',
+            description: 'Para crescer com controle, produtividade e visão gerencial da operação.',
             features: [
                 'Terminais PDV Ilimitados',
+                'Compras & Doca com recebimento',
+                'Vendas analíticas e histórico gerencial',
                 'Módulo SFA (Força de Vendas)',
                 'Módulo RH (Holerite e Ponto GPS)',
                 'Emissão NFe/NFCe Automática',
@@ -273,6 +275,7 @@ const LandingPage: React.FC = () => {
         { q: "E se a minha internet cair, o PDV para?", a: "Nunca. Nosso PDV possui tecnologia Offline-First. Você continua vendendo e emitindo cupons normalmente. Assim que a internet voltar, tudo é sincronizado para a nuvem automaticamente." },
         { q: "Como funciona o controle de ponto do RH?", a: "É um RH de verdade! Seus funcionários batem ponto pelo celular ou tablet com registro de Foto e Geolocalização (GPS). O sistema gera relatórios completos e até holerites para sua equipe." },
         { q: "Consigo limitar o que meus funcionários acessam?", a: "Com certeza. Temos um controle de acesso granular de nível empresarial. Você define exatamente o que o Caixa, o Gerente e o Repositor podem ver e fazer. E tudo fica registrado no nosso log de Auditoria." },
+        { q: "O que entra no plano Grátis e quando vale migrar para o Pro?", a: "O plano Grátis entrega o mínimo operacional: <strong>PDV, caixa, produtos, clientes, fornecedores e visão executiva</strong>. O plano Pro libera a gestão profissional completa, com <strong>compras, vendas analíticas, fiscal, inteligência, equipe e módulos avançados</strong>. Para quem quer sair do básico e ganhar escala com controle, o Pro é o caminho natural." },
         { q: "Existe fidelidade ou multa de cancelamento?", a: "Não. Acreditamos na qualidade do nosso sistema. Você assina, usa, e se não gostar, pode cancelar a qualquer momento sem pegadinhas ou taxas escondidas." }
     ];
 
@@ -389,18 +392,29 @@ const LandingPage: React.FC = () => {
                         className="text-center max-w-4xl flex flex-col items-center"
                     >
                         <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#2E9BFF]/10 backdrop-blur-sm border border-[#2E9BFF]/30 text-[#6FCBFF] rounded-full text-xs font-bold tracking-widest uppercase mb-6 shadow-[0_0_15px_rgba(46,155,255,0.2)]">
-                            <Activity className="w-4 h-4" /> Gestão de Alta Performance
+                            <Activity className="w-4 h-4" /> ERP SaaS para Mercados e Distribuição
                         </div>
                         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] lg:leading-[1.05] mb-8 text-white">
-                            O controle absoluto da sua operação. <br className="hidden sm:block" />
-                            <span className="bg-gradient-to-r from-[#2E9BFF] to-[#6FCBFF] bg-clip-text text-transparent">Desempenho máximo para o varejo.</span>
+                            Pare de perder venda, margem e tempo. <br className="hidden sm:block" />
+                            <span className="bg-gradient-to-r from-[#2E9BFF] to-[#6FCBFF] bg-clip-text text-transparent">Controle sua operação em um só lugar.</span>
                         </h1>
                         <p className="text-xl lg:text-2xl text-[#8FA3C0] leading-relaxed mb-6 font-medium max-w-3xl">
-                            A tecnologia que as gigantes usam, agora acessível para o <span className="text-white font-bold">Pequeno, Médio e Grande Varejo</span>. Um sistema 100% fluído, veloz, e altamente robusto.
+                            PDV rápido, estoque confiável, compras organizadas, caixa sob controle e visão clara do negócio para <span className="text-white font-bold">mercados, mercearias, conveniências e distribuidores</span>.
                         </p>
                         <p className="text-lg text-[#8FA3C0] mb-10 max-w-3xl">
-                            O <strong>MercadinhoSys</strong> centraliza e otimiza a sua empresa. PDV ágil e confiável, Gestor de IA para inteligência financeira, e controle de estoque impecável. Eleve a maturidade do seu negócio.
+                            O <strong>MercadinhoSys</strong> reduz fila no caixa, melhora o controle de estoque, organiza o recebimento de mercadorias e transforma dados soltos em decisão operacional.
                         </p>
+                        <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
+                            {[
+                                'Fila no caixa -> PDV ágil',
+                                'Estoque confuso -> controle por produto e lote',
+                                'Gestão no escuro -> visão executiva'
+                            ].map((item) => (
+                                <div key={item} className="px-4 py-2 rounded-full border border-[#24344F] bg-[#101C31]/80 text-sm font-medium text-[#DCE8F7]">
+                                    {item}
+                                </div>
+                            ))}
+                        </div>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
                             <motion.button
@@ -477,7 +491,7 @@ const LandingPage: React.FC = () => {
                             <span className="bg-gradient-to-r from-red-500 to-[#FF6A5C] bg-clip-text text-transparent">Cliente na Concorrência.</span>
                         </h3>
                         <p className="text-xl text-[#8FA3C0]">
-                            Nós entendemos a dor de ter uma fila gigante e o sistema "pensando". O MercadinhoSys foi construído com arquitetura de alta performance. Venda rápida, fluída e sem gargalos. Compare com os dinossauros do mercado e sinta a diferença.
+                            Nós entendemos a dor de ver fila crescendo, operador travado e cliente desistindo da compra. O MercadinhoSys foi desenhado para o varejo real: resposta rápida, operação fluida e menos atrito no balcão.
                         </p>
                     </div>
 
@@ -757,8 +771,8 @@ const LandingPage: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                     <div className="text-center max-w-4xl mx-auto mb-16">
                         <h2 className="text-red-500 font-bold tracking-[2px] text-xs uppercase mb-4">A Verdade Inconveniente do Mercado</h2>
-                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">Sankhya, SAP e TOTVS <span className="text-[#8FA3C0] font-normal text-3xl mx-4">VS</span> MercadinhoSys</h3>
-                        <p className="text-xl text-[#8FA3C0]">Por que pagar fortunas por sistemas corporativos engessados dos anos 2000, se você pode ter tecnologia de 2026, com IA nativa?</p>
+                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">ERPs tradicionais <span className="text-[#8FA3C0] font-normal text-3xl mx-4">vs</span> MercadinhoSys</h3>
+                        <p className="text-xl text-[#8FA3C0]">Compare o que realmente pesa na decisão: implantação, facilidade de uso, velocidade operacional e custo para crescer sem depender de projeto caro.</p>
                     </div>
 
                     <div className="overflow-x-auto custom-scrollbar pb-8 px-4">
@@ -812,8 +826,8 @@ const LandingPage: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-16">
                         <h2 className="text-red-500 font-bold tracking-[1.5px] text-xs uppercase mb-4">Decisão de Sobrevivência</h2>
-                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">O preço da ignorância é a falência.</h3>
-                        <p className="text-xl text-[#8FA3C0]">Quanto custa não saber para onde vai o seu dinheiro? Escolha o plano que vai salvar o seu negócio hoje. Sem taxas escondidas. Cancele quando quiser.</p>
+                        <h3 className="text-4xl lg:text-5xl font-bold text-white mb-6">Comece simples. Evolua com controle.</h3>
+                        <p className="text-xl text-[#8FA3C0]">Escolha entre testar a operação essencial sem investimento inicial ou liberar a gestão profissional completa. Sem taxas escondidas. Cancele quando quiser.</p>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">

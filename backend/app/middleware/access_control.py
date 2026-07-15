@@ -59,12 +59,12 @@ SELF_SERVICE_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/dashboard/rh/ponto/espelho",
 )
 
-# Módulos VEDADOS ao plano Grátis. O plano Grátis acessa: Dashboard (apenas
-# visão executiva), PDV/caixa, Vendas, Produtos, Compras & Doca,
-# Fornecedores, Clientes e Configurações essenciais. Sem fiscal, Consultor
-# M-IA, RH, relatórios, auditoria, despesas operacionais avançadas ou gestão
-# de equipe além do admin titular.
+# Módulos VEDADOS ao plano Grátis. O plano Grátis fica no mínimo do mínimo:
+# visão executiva, PDV/caixa, produtos, fornecedores, clientes e configurações
+# essenciais. Gestão analítica, compras e módulos de expansão ficam no Pro.
 FREE_PLAN_BLOCKED_PREFIXES: tuple[str, ...] = (
+    "/api/vendas",
+    "/api/pedidos-compra",
     "/api/fiscal",
     "/api/consultor",
     "/api/sfa",
@@ -76,6 +76,16 @@ FREE_PLAN_BLOCKED_PREFIXES: tuple[str, ...] = (
     "/api/despesas",
     "/api/funcionarios",
 )
+
+FREE_PLAN_ALLOWED_EXACT_PATHS: tuple[str, ...] = (
+    "/api/vendas/pdv",
+)
+
+
+def _free_plan_blocks_path(path: str) -> bool:
+    if any(path == allowed or path.startswith(f"{allowed}/") for allowed in FREE_PLAN_ALLOWED_EXACT_PATHS):
+        return False
+    return path.startswith(FREE_PLAN_BLOCKED_PREFIXES)
 
 
 def _plano_do_estabelecimento(tid):
@@ -119,7 +129,7 @@ def init_access_control(app):
                 plano = _plano_do_estabelecimento(tid)
             except Exception:
                 plano = claims.get("plano", "Gratuito")
-            if normalize_plan(plano) == "Gratuito" and path.startswith(FREE_PLAN_BLOCKED_PREFIXES):
+            if normalize_plan(plano) == "Gratuito" and _free_plan_blocks_path(path):
                 return jsonify({
                     "success": False,
                     "error": "Este módulo não está incluído no Plano Grátis. Faça upgrade para desbloquear.",

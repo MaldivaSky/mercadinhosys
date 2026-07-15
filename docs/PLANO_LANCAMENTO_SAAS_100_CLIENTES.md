@@ -27,13 +27,13 @@ Recursos liberados:
 - produtos;
 - clientes;
 - fornecedores;
-- compras & doca;
-- vendas;
 - dashboard com visão executiva;
 - configurações essenciais.
 
 Recursos bloqueados:
 - Consultor M-IA;
+- compras & doca;
+- vendas analíticas e histórico gerencial;
 - fiscal;
 - RH e ponto;
 - relatórios avançados;
