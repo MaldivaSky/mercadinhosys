@@ -1634,6 +1634,14 @@ class PedidoCompra(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     itens = db.relationship("PedidoCompraItem", back_populates="pedido", lazy=True, cascade="all, delete-orphan")
     __table_args__ = (db.Index("ix_pedido_numero", "numero_pedido"), db.UniqueConstraint("estabelecimento_id", "numero_pedido", name="uq_pedido_estab_numero"))
 
+    def to_dict(self, include_relationships: bool = False, depth: int = 0) -> Dict:
+        data = super().to_dict(include_relationships=include_relationships, depth=depth)
+        # Pedido de compra usa "data do dia" na UI. Serializar só YYYY-MM-DD
+        # evita deslocamento de fuso no navegador.
+        if self.data_pedido:
+            data["data_pedido"] = self.data_pedido.date().isoformat()
+        return data
+
 class PedidoCompraItem(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "pedido_compra_itens"
     id = db.Column(db.Integer, primary_key=True)

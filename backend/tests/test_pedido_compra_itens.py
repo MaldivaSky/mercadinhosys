@@ -54,7 +54,7 @@ def test_pedido_persiste_datas_e_horario_de_entrega(client, ctx):
 
     det = client.get(f"/api/pedidos-compra/{pedido_id}", headers=headers).get_json()
     p = det.get("pedido", det)
-    assert (p.get("data_pedido") or "").startswith("2026-07-01"), p.get("data_pedido")
+    assert p.get("data_pedido") == "2026-07-01", p.get("data_pedido")
     assert p.get("data_previsao_entrega") == "2026-07-05", p.get("data_previsao_entrega")
     assert p.get("horario_entrega") == "08:00 - 12:00", p.get("horario_entrega")
 
