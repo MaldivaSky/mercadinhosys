@@ -649,6 +649,13 @@ def create_app(config_name=None):
 
         app.register_blueprint(produtos_bp, url_prefix="/api/produtos")
         logger.info("✅ Blueprint produtos registrado em /api/produtos")
+
+    # Motor de Renderiza??o Contextual (schema din?mico por segmento/tenant)
+    try:
+        from app.routes.view_schema import view_schema_bp
+        app.register_blueprint(view_schema_bp, url_prefix="/api/view-schema")
+        logger.info("? Blueprint view_schema registrado em /api/view-schema")
+    except Exception as e:
     except Exception as e:
         logger.error(f"❌ Erro ao registrar produtos: {e}")
 

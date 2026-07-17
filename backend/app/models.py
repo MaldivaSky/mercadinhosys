@@ -322,6 +322,9 @@ class Estabelecimento(db.Model, EnderecoMixin, SerializableMixin, AuditMixin):
     regime_tributario = db.Column(db.String(30), default="SIMPLES NACIONAL")
     logotipo_url = db.Column(db.String(255))
     tema_principal = db.Column(db.String(50), default="blue")
+    # Segmento de negócio (nível Tenant da cascata do view schema):
+    # mercearia | vestuario | construcao | autopecas | generico
+    segmento = db.Column(db.String(30), default="mercearia")
     configuracoes_json = db.Column(db.Text, default="{}")
     ativo = db.Column(db.Boolean, default=True)
     data_abertura = db.Column(db.Date, nullable=False, default=date.today)
@@ -1071,6 +1074,10 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     lote = db.Column(db.String(50))
     imagem_url = db.Column(db.String(500))  # ampliado de 255 para suportar URLs longas
     controlar_validade = db.Column(db.Boolean, default=True)
+    # ---- Motor de renderização contextual (nível Produto da cascata) ----
+    tipo_item = db.Column(db.String(10), default="produto")   # produto | servico
+    controlar_estoque = db.Column(db.Boolean, default=True)   # False p/ serviços: venda não movimenta estoque
+    atributos_json = db.Column(db.Text, default="{}")         # atributos dinâmicos por segmento (cor, tamanho, dimensões...)
     ativo = db.Column(db.Boolean, default=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
     categoria = db.relationship("CategoriaProduto", backref=db.backref("produtos", lazy=True))
@@ -1244,17 +1251,34 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
         self.quantidade = novo_saldo if novo_saldo > 0 else Decimal("0")
         return consumidos
 
+    @property
+    def atributos(self) -> Dict:
+        try:
+            return json.loads(self.atributos_json or "{}")
+        except Exception:
+            return {}
+
+    @atributos.setter
+    def atributos(self, value):
+        self.atributos_json = json.dumps(value or {}, ensure_ascii=False, default=str)
+
     def to_dict(self, depth=0, include_metrics=False, include_relationships=False):
         data = super().to_dict(include_relationships=include_relationships, depth=depth)
-        
+
         # Injetar categoria para o Frontend (que espera a string do nome)
         if hasattr(self, 'categoria') and getattr(self, 'categoria'):
             data["categoria"] = self.categoria.nome
         else:
             data["categoria"] = "Sem Categoria"
-            
+
         # Garantir retorno correto de ativo
         data["ativo"] = bool(self.ativo)
+
+        # Motor contextual: JSON cru sai, dict parseado entra; legado (None) = produto que controla estoque
+        data.pop("atributos_json", None)
+        data["atributos"] = self.atributos
+        data["tipo_item"] = self.tipo_item or "produto"
+        data["controlar_estoque"] = self.controlar_estoque is not False
 
         if include_metrics:
             giro = round(float(self.quantidade_vendida or 0) / 30.0, 2)
@@ -1344,6 +1368,40 @@ class CatalogoMestre(db.Model):
             "imagem_url": self.imagem_url, "fonte": self.fonte, "status": self.status,
             "consultado_em": self.consultado_em.isoformat() if self.consultado_em else None,
         }
+
+
+class ViewRegistry(db.Model):
+    """
+    Registro GLOBAL do Motor de Renderização Contextual (nível Sistema da cascata
+    Global → Tenant → Produto). Cada linha define UM campo ou UMA métrica e para
+    quais segmentos ela vale. Seed automático a partir do catálogo em
+    app/services/view_schema_service.py; o banco é a fonte de verdade em runtime.
+    """
+    __tablename__ = "view_registry"
+    id = db.Column(db.Integer, primary_key=True)
+    escopo = db.Column(db.String(10), nullable=False)          # 'campo' | 'metrica'
+    chave = db.Column(db.String(50), nullable=False)
+    definicao_json = db.Column(db.Text, nullable=False, default="{}")
+    segmentos_json = db.Column(db.Text, nullable=False, default='["*"]')
+    ordem = db.Column(db.Integer, default=0)
+    ativo = db.Column(db.Boolean, default=True)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (db.UniqueConstraint("escopo", "chave", name="uq_view_registry_escopo_chave"),
+                      db.Index("ix_view_registry_escopo", "escopo"))
+
+    @property
+    def definicao(self) -> Dict:
+        try:
+            return json.loads(self.definicao_json or "{}")
+        except Exception:
+            return {}
+
+    @property
+    def segmentos(self) -> List[str]:
+        try:
+            return json.loads(self.segmentos_json or '["*"]')
+        except Exception:
+            return ["*"]
 
 
 # ------------------------------------------------------------------------------

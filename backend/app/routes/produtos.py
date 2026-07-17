@@ -34,6 +34,7 @@ from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import quota_required, permission_required
 from app.decorators.rbac import gerente_required, resource_required
+from app.services.view_schema_service import resolver_view_schema, sanitizar_atributos
 
 def to_decimal(value, precision=2):
     """Converte qualquer valor numérico para Decimal de forma segura com precisão variável"""
@@ -139,6 +140,15 @@ def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
         codigo_barras = data["codigo_barras"].strip()
         produto_existente = Produto.query.filter_by(
             codigo_barras=codigo_barras,
+def _resolver_schema_estabelecimento(estabelecimento_id):
+    if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
+        return resolver_view_schema()
+    estabelecimento = Estabelecimento.query.get(int(estabelecimento_id))
+    if estabelecimento is None:
+        return resolver_view_schema()
+    return resolver_view_schema(estabelecimento)
+
+
             estabelecimento_id=estabelecimento_id,
         ).first()
 
@@ -1430,6 +1440,10 @@ def criar_produto():
                 nova_categoria = CategoriaProduto(
                     nome=categoria_nome,
                     estabelecimento_id=estabelecimento_id
+        tipo_item = "servico" if (data.get("tipo_item") == "servico") else "produto"
+        schema = _resolver_schema_estabelecimento(estabelecimento_id)
+        atributos_limpos = sanitizar_atributos(schema, data.get("atributos"), tipo_item=tipo_item)
+
                 )
                 db.session.add(nova_categoria)
                 db.session.flush()
@@ -1461,10 +1475,13 @@ def criar_produto():
 
         # VERIFICACAO ANTI-DUPLICACAO: checar EAN antes do INSERT para evitar
         # UniqueViolation silenciosa que consumia IDs e retornava 500.
+            tipo_item=tipo_item,
+            controlar_estoque=(False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))),
         codigo_barras_novo = (data.get('codigo_barras') or '').strip() or None
         codigo_interno_novo = (data.get('codigo_interno') or '').strip() or None
 
         if codigo_barras_novo:
+        produto.atributos = atributos_limpos
             produto_existente_ean = Produto.query.filter_by(
                 estabelecimento_id=estabelecimento_id,
                 codigo_barras=codigo_barras_novo
@@ -1523,7 +1540,7 @@ def criar_produto():
             margem_lucro=margem,
             ncm=data.get("ncm", "").strip() if data.get("ncm") else "",
             origem=safe_int(data.get("origem"), 0),
-            controlar_validade=data.get("controlar_validade", False),
+            controlar_validade=(False if tipo_item == "servico" else data.get("controlar_validade", False)),
             data_validade=(
                 datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
                 if data.get("data_validade")
@@ -1594,6 +1611,9 @@ def criar_produto():
             tipo_evento="produto_criado",
             descricao=f"Produto '{produto.nome}' cadastrado",
             usuario_id=int(get_jwt_identity()),
+        tipo_item = "servico" if (data.get("tipo_item") == "servico") else (produto.tipo_item or "produto")
+        schema = _resolver_schema_estabelecimento(estabelecimento_id)
+
             valor=produto.preco_venda,
             detalhes={"id": produto.id, "nome": produto.nome, "preco_venda": float(produto.preco_venda)}
         )
@@ -1616,6 +1636,7 @@ def criar_produto():
         )
 
     except Exception as e:
+            "tipo_item",
         db.session.rollback()
         import traceback
         error_details = traceback.format_exc()
@@ -1672,12 +1693,19 @@ def atualizar_produto(id):
             "codigo_interno",
             "nome",
             "descricao",
+                    elif campo == "tipo_item":
+                        produto.tipo_item = tipo_item
             "marca",
             "categoria",
             "subcategoria",
             "unidade_medida",
             "quantidade_minima",
             "preco_custo",
+        if "controlar_estoque" in data or "tipo_item" in data:
+            produto.controlar_estoque = False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))
+        if "atributos" in data or "tipo_item" in data:
+            produto.atributos = sanitizar_atributos(schema, data.get("atributos"), tipo_item=tipo_item)
+
             "preco_venda",
             "ncm",
             "origem",
@@ -1716,7 +1744,7 @@ def atualizar_produto(id):
                         else:
                             setattr(produto, campo, int(data[campo]))
                     elif campo == "controlar_validade":
-                        setattr(produto, campo, bool(data[campo]))
+                        setattr(produto, campo, False if tipo_item == "servico" else bool(data[campo]))
                     elif campo == "categoria":
                         # Tratar categoria separadamente - encontrar ou criar categoria
                         if data[campo] and data[campo].strip():
