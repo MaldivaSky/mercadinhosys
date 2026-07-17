@@ -40,6 +40,7 @@ from app.services.view_schema_service import (
     normalizar_familia_produto,
     resolver_view_schema,
     sanitizar_atributos,
+    sugestao_fiscal_para_familia,
 )
 
 def to_decimal(value, precision=2):
@@ -1490,6 +1491,9 @@ def criar_produto():
             schema, data.get("atributos"), tipo_item=tipo_item
         )
         usa_validade = bool(schema.get("flags", {}).get("usa_validade", True))
+        # Sugestão fiscal por família — só usada como fallback quando o usuário
+        # não informou o campo explicitamente (nunca sobrescreve valor digitado).
+        fiscal_sugerido = sugestao_fiscal_para_familia(familia_produto, tipo_item=tipo_item)
 
         categoria_id = None
         if data.get("categoria"):
@@ -1620,11 +1624,18 @@ def criar_produto():
             ncm=clean_nullable_str(re.sub(r"\D", "", data.get("ncm", "")), 8) or "",
             origem=safe_int(data.get("origem"), 0),
             cest=clean_nullable_str(re.sub(r"\D", "", data.get("cest", "")), 7),
-            cfop_padrao=clean_nullable_str(re.sub(r"\D", "", data.get("cfop_padrao", "")), 4) or "5102",
-            cst_icms=clean_nullable_str(re.sub(r"\D", "", data.get("cst_icms", "")), 3),
-            csosn=clean_nullable_str(re.sub(r"\D", "", data.get("csosn", "")), 3) or "102",
+            cfop_padrao=clean_nullable_str(re.sub(r"\D", "", data.get("cfop_padrao", "")), 4)
+            or fiscal_sugerido["cfop_padrao_sugerido"],
+            cst_icms=clean_nullable_str(re.sub(r"\D", "", data.get("cst_icms", "")), 3)
+            or fiscal_sugerido["cst_icms_sugerido"],
+            csosn=clean_nullable_str(re.sub(r"\D", "", data.get("csosn", "")), 3)
+            or fiscal_sugerido["csosn_sugerido"],
             unidade_tributavel=clean_nullable_str(data.get("unidade_tributavel"), 6),
-            icms_aliquota=safe_decimal(data.get("icms_aliquota"), "0"),
+            icms_aliquota=(
+                safe_decimal(data.get("icms_aliquota"), None)
+                if data.get("icms_aliquota") not in (None, "")
+                else Decimal(str(fiscal_sugerido["icms_aliquota_sugerida"]))
+            ),
             pis_aliquota=safe_decimal(data.get("pis_aliquota"), "0"),
             cofins_aliquota=safe_decimal(data.get("cofins_aliquota"), "0"),
             controlar_validade=(

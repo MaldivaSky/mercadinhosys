@@ -47,6 +47,15 @@ def obter_view_schema():
     Com ?base=1 devolve o nível Global puro do segmento (sem overrides) junto com
     os overrides salvos — é o que a tela de configurações usa para religar campos.
     """
+    def _sem_cache(payload, status=200):
+        # O schema depende de tenant + família + overrides em tempo real — o
+        # navegador nunca pode servir uma resposta antiga do próprio cache HTTP
+        # (aconteceu de verdade: trocar de família repetia a mesma URL GET e o
+        # Chrome devolvia a resposta anterior sem nem chamar o backend de novo).
+        resp = jsonify(payload)
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
+        return resp, status
+
     try:
         estabelecimento = _estabelecimento_atual()
         quer_base = request.args.get("base") in ("1", "true")
@@ -59,7 +68,7 @@ def obter_view_schema():
                 familia_produto=familia_produto,
                 tipo_item=tipo_item,
             )
-            return jsonify({"success": True, "schema": schema}), 200
+            return _sem_cache({"success": True, "schema": schema})
 
         if quer_base:
             base = resolver_view_schema(
@@ -74,14 +83,14 @@ def obter_view_schema():
                 or base.get("mix_permitido")
                 or []
             )
-            return jsonify({"success": True, "schema": base, "overrides": overrides}), 200
+            return _sem_cache({"success": True, "schema": base, "overrides": overrides})
 
         schema = resolver_view_schema(
             estabelecimento,
             familia_produto=familia_produto,
             tipo_item=tipo_item,
         )
-        return jsonify({"success": True, "schema": schema}), 200
+        return _sem_cache({"success": True, "schema": schema})
     except Exception as e:
         current_app.logger.error(f"Erro ao resolver view schema: {e}")
         return jsonify({"success": False, "error": "Erro ao resolver o schema de exibição"}), 500

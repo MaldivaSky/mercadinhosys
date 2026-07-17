@@ -173,6 +173,48 @@ FAMILIAS_PRODUTO = {
             "marca": "Ex: Tigre",
         },
     },
+    "construcao_eletrica": {
+        "nome": "Construção — Elétrica",
+        "descricao": "Fios, disjuntores, lâmpadas e material elétrico em geral.",
+        "segmento_base": "construcao",
+        "flags_override": {"usa_validade": False, "usa_lotes": False, "usa_servicos": False},
+        "campos_ocultos": ["controlar_validade", "largura_mm", "espessura_mm", "comprimento_m",
+                            "diametro_pol", "raio_mm"],
+        "campos_habilitados": ["voltagem_v", "amperagem_a", "potencia_w"],
+        "exemplos": {
+            "nome": "Ex: Disjuntor Bipolar 25A",
+            "categoria": "Ex: Elétrica, Iluminação, Fiação...",
+            "marca": "Ex: Siemens",
+        },
+    },
+    "construcao_hidraulica": {
+        "nome": "Construção — Hidráulica",
+        "descricao": "Tubos, conexões, registros e material hidráulico em geral.",
+        "segmento_base": "construcao",
+        "flags_override": {"usa_validade": False, "usa_lotes": False, "usa_servicos": False},
+        "campos_ocultos": ["controlar_validade", "largura_mm", "espessura_mm",
+                            "diametro_pol", "raio_mm"],
+        "campos_habilitados": ["diametro_hidraulico_mm", "pressao_maxima_bar", "material_tubo", "comprimento_m"],
+        "exemplos": {
+            "nome": "Ex: Tubo PVC Água 25mm 6m",
+            "categoria": "Ex: Hidráulica, Esgoto, Conexões...",
+            "marca": "Ex: Tigre",
+        },
+    },
+    "construcao_ferragem": {
+        "nome": "Construção — Ferragem",
+        "descricao": "Parafusos, dobradiças, cadeados e ferragens em geral.",
+        "segmento_base": "construcao",
+        "flags_override": {"usa_validade": False, "usa_lotes": False, "usa_servicos": False},
+        "campos_ocultos": ["controlar_validade", "largura_mm", "espessura_mm", "comprimento_m",
+                            "diametro_pol", "raio_mm", "peso_kg"],
+        "campos_habilitados": ["tipo_rosca", "comprimento_parafuso_mm", "material_ferragem", "tipo_cabeca"],
+        "exemplos": {
+            "nome": "Ex: Parafuso Chipboard 6x40mm",
+            "categoria": "Ex: Parafusos, Dobradiças, Cadeados...",
+            "marca": "Ex: Ciser",
+        },
+    },
     "vestuario": {
         "nome": "Vestuário",
         "descricao": "Roupas, calçados e acessórios com grade e atributos têxteis.",
@@ -196,9 +238,10 @@ FAMILIAS_PRODUTO = {
 MIX_PADRAO_POR_SEGMENTO = {
     "mercearia": ["alimento", "bebida", "embalagem_descartavel", "bazar", "construcao_leve"],
     "vestuario": ["vestuario", "bebida"],
-    "construcao": ["construcao_leve"],
+    "construcao": ["construcao_leve", "construcao_eletrica", "construcao_hidraulica", "construcao_ferragem"],
     "autopecas": ["autopecas", "servico"],
-    "generico": ["alimento", "bebida", "embalagem_descartavel", "bazar", "construcao_leve", "vestuario", "servico"],
+    "generico": ["alimento", "bebida", "embalagem_descartavel", "bazar", "construcao_leve",
+                 "construcao_eletrica", "construcao_hidraulica", "construcao_ferragem", "vestuario", "servico"],
 }
 
 PERFIL_FISCAL_PADRAO_POR_FAMILIA = {
@@ -207,6 +250,9 @@ PERFIL_FISCAL_PADRAO_POR_FAMILIA = {
     "embalagem_descartavel": "embalagem_descartavel",
     "bazar": "bazar_padrao",
     "construcao_leve": "construcao_leve",
+    "construcao_eletrica": "construcao_eletrica",
+    "construcao_hidraulica": "construcao_hidraulica",
+    "construcao_ferragem": "construcao_ferragem",
     "vestuario": "vestuario_padrao",
     "servico": "servico",
     "autopecas": "autopecas_padrao",
@@ -274,6 +320,37 @@ CAMPOS_PADRAO = [
      "origem": "atributo", "segmentos": ["construcao"], "unidade": "mm", "ordem": 260},
     {"chave": "peso_kg", "label": "Peso", "tipo": "number", "grupo": "dimensoes",
      "origem": "atributo", "segmentos": ["construcao", "autopecas"], "unidade": "kg", "ordem": 270},
+
+    # ---- Construção: elétrica, hidráulica e ferragem ----
+    # segmentos=[] deliberado: só aparecem via `campos_habilitados` da família
+    # técnica correspondente (construcao_eletrica/hidraulica/ferragem) — o
+    # segmento_base de todas é "construcao", então a exclusividade por
+    # sub-tipo tem que vir da família, não do segmento (mesmo padrão já usado
+    # por "servico").
+    {"chave": "voltagem_v", "label": "Voltagem", "tipo": "number", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [], "unidade": "V", "aplica_tipo_item": ["produto"], "ordem": 280},
+    {"chave": "amperagem_a", "label": "Amperagem", "tipo": "number", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [], "unidade": "A", "aplica_tipo_item": ["produto"], "ordem": 281},
+    {"chave": "potencia_w", "label": "Potência", "tipo": "number", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [], "unidade": "W", "aplica_tipo_item": ["produto"], "ordem": 282},
+    {"chave": "diametro_hidraulico_mm", "label": "Diâmetro", "tipo": "number", "grupo": "dimensoes",
+     "origem": "atributo", "segmentos": [], "unidade": "mm", "aplica_tipo_item": ["produto"], "ordem": 283},
+    {"chave": "pressao_maxima_bar", "label": "Pressão Máxima", "tipo": "number", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [], "unidade": "bar", "aplica_tipo_item": ["produto"], "ordem": 284},
+    {"chave": "material_tubo", "label": "Material", "tipo": "select", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [],
+     "opcoes": ["PVC", "Cobre", "PPR", "Ferro Galvanizado", "Outro"], "aplica_tipo_item": ["produto"], "ordem": 285},
+    {"chave": "tipo_rosca", "label": "Tipo de Rosca", "tipo": "select", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [],
+     "opcoes": ["Métrica", "BSP", "NPT", "Sem rosca"], "aplica_tipo_item": ["produto"], "ordem": 286},
+    {"chave": "comprimento_parafuso_mm", "label": "Comprimento", "tipo": "number", "grupo": "dimensoes",
+     "origem": "atributo", "segmentos": [], "unidade": "mm", "aplica_tipo_item": ["produto"], "ordem": 287},
+    {"chave": "material_ferragem", "label": "Material", "tipo": "select", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [],
+     "opcoes": ["Aço Carbono", "Inox", "Latão", "Zamak", "Outro"], "aplica_tipo_item": ["produto"], "ordem": 288},
+    {"chave": "tipo_cabeca", "label": "Tipo de Cabeça", "tipo": "select", "grupo": "atributos",
+     "origem": "atributo", "segmentos": [],
+     "opcoes": ["Phillips", "Fenda", "Sextavada", "Allen", "Torx"], "aplica_tipo_item": ["produto"], "ordem": 289},
 
     # ---- Moto peças ----
     {"chave": "montadora", "label": "Montadora", "tipo": "select", "grupo": "atributos",
@@ -359,26 +436,43 @@ def invalidar_cache_view_schema(estabelecimento_id=None):
 
 
 def garantir_registry_seed():
-    """Popula o view_registry a partir do catálogo em código quando vazio (idempotente)."""
-    if ViewRegistry.query.count() > 0:
-        return False
+    """
+    Sincroniza o view_registry com o catálogo em código (CAMPOS_PADRAO/
+    METRICAS_PADRAO). Idempotente e incremental: insere só as chaves que
+    ainda não existem (por escopo), nunca apaga ou reescreve linha existente
+    — é seguro rodar em toda resolução de schema (não é gate de "tabela
+    vazia" — isso fazia com que campos novos adicionados ao catálogo depois
+    do primeiro seed NUNCA chegassem ao banco de um tenant já em uso).
+    """
+    existentes = {
+        (escopo, chave) for escopo, chave in
+        db.session.query(ViewRegistry.escopo, ViewRegistry.chave).all()
+    }
+    novas = False
     for definicao in CAMPOS_PADRAO:
+        if ("campo", definicao["chave"]) in existentes:
+            continue
         d = dict(definicao)
         segmentos = d.pop("segmentos", ["*"])
         ordem = d.pop("ordem", 0)
         db.session.add(ViewRegistry(escopo="campo", chave=d["chave"], ordem=ordem,
                                     definicao_json=json.dumps(d, ensure_ascii=False),
                                     segmentos_json=json.dumps(segmentos, ensure_ascii=False)))
+        novas = True
     for definicao in METRICAS_PADRAO:
+        if ("metrica", definicao["chave"]) in existentes:
+            continue
         d = dict(definicao)
         segmentos = d.pop("segmentos", ["*"])
         ordem = d.pop("ordem", 0)
         db.session.add(ViewRegistry(escopo="metrica", chave=d["chave"], ordem=ordem,
                                     definicao_json=json.dumps(d, ensure_ascii=False),
                                     segmentos_json=json.dumps(segmentos, ensure_ascii=False)))
-    db.session.commit()
-    invalidar_cache_view_schema()
-    return True
+        novas = True
+    if novas:
+        db.session.commit()
+        invalidar_cache_view_schema()
+    return novas
 
 
 def _overrides_do_tenant(estabelecimento) -> dict:
@@ -462,6 +556,94 @@ def inferir_perfil_fiscal_padrao(familia_produto: str = None, tipo_item: str = "
         return "servico"
     familia = str(familia_produto or "").strip().lower()
     return PERFIL_FISCAL_PADRAO_POR_FAMILIA.get(familia, "padrao")
+
+
+# ==============================================================================
+# SUGESTÃO FISCAL POR FAMÍLIA — consultoria assistida, não parecer de contador.
+#
+# Alimenta os campos que o motor de emissão REAL já lê e valida
+# (app/services/fiscal/emissao_service.py: csosn/cst_icms/cfop_padrao/
+# icms_aliquota, escolhendo csosn vs cst_icms pelo regime_tributario do
+# estabelecimento). Antes disso todo produto nascia com os defaults genéricos
+# do model (CFOP "5102", CSOSN "102", CST/ICMS em branco) independente da
+# categoria — o "perfil_fiscal" do schema era só uma etiqueta, nada lia.
+#
+# NCM fica de fora deste catálogo de propósito: varia produto a produto demais
+# dentro de uma família (a Cosmos, quando encontra o EAN, já traz o NCM real;
+# senão, quem cadastra informa). O que este catálogo sugere é o que realmente
+# é estável por categoria: regime de tributação do ICMS (CSOSN/CST), CFOP e
+# uma alíquota de referência — sempre com aviso para revisar com contador,
+# nunca aplicado silenciosamente por cima do que o usuário já digitou.
+# ==============================================================================
+FISCAL_SUGERIDO_POR_FAMILIA = {
+    "alimento": {
+        "csosn_sugerido": "102", "cst_icms_sugerido": "00", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 7.0,
+        "observacao_fiscal": "Itens de cesta básica costumam ter redução de base ou isenção "
+                              "por convênio (ICMS 128/94) — confirme por NCM com seu contador.",
+    },
+    "bebida": {
+        "csosn_sugerido": "500", "cst_icms_sugerido": "60", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0,
+        "observacao_fiscal": "Bebidas (sobretudo alcoólicas) costumam ter ICMS-ST recolhido pelo "
+                              "fornecedor — confirme se o CSOSN 500/CST 60 já reflete isso.",
+    },
+    "embalagem_descartavel": {
+        "csosn_sugerido": "102", "cst_icms_sugerido": "00", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0, "observacao_fiscal": "",
+    },
+    "bazar": {
+        "csosn_sugerido": "102", "cst_icms_sugerido": "00", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0, "observacao_fiscal": "",
+    },
+    "construcao_leve": {
+        "csosn_sugerido": "102", "cst_icms_sugerido": "00", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0,
+        "observacao_fiscal": "Alguns materiais de construção entram em ICMS-ST conforme o "
+                              "protocolo do seu estado — confirme por NCM.",
+    },
+    "construcao_eletrica": {
+        "csosn_sugerido": "500", "cst_icms_sugerido": "60", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0,
+        "observacao_fiscal": "Material elétrico costuma estar no ICMS-ST (Convênio ICMS 92/2015) "
+                              "— confirme com seu contador antes de emitir em produção.",
+    },
+    "construcao_hidraulica": {
+        "csosn_sugerido": "102", "cst_icms_sugerido": "00", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0,
+        "observacao_fiscal": "Confirme se seu estado inclui tubos/conexões no regime de ICMS-ST.",
+    },
+    "construcao_ferragem": {
+        "csosn_sugerido": "102", "cst_icms_sugerido": "00", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0, "observacao_fiscal": "",
+    },
+    "vestuario": {
+        "csosn_sugerido": "500", "cst_icms_sugerido": "60", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0,
+        "observacao_fiscal": "Vestuário tem ICMS-ST em vários estados (ex.: parte do Sudeste) "
+                              "— confirme com seu contador.",
+    },
+    "servico": {
+        "csosn_sugerido": "400", "cst_icms_sugerido": "40", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 0.0,
+        "observacao_fiscal": "Serviço não é mercadoria: emitir Nota Fiscal de Serviço (NFS-e) "
+                              "pela prefeitura do seu município. Aqui é só um item avulso no PDV.",
+    },
+    "autopecas": {
+        "csosn_sugerido": "500", "cst_icms_sugerido": "60", "cfop_padrao_sugerido": "5102",
+        "icms_aliquota_sugerida": 18.0,
+        "observacao_fiscal": "Autopeças quase sempre têm ICMS-ST (Protocolo ICMS 41/2008) — "
+                              "confirme com seu contador e fornecedor.",
+    },
+}
+
+
+def sugestao_fiscal_para_familia(familia_produto: str = None, tipo_item: str = "produto") -> dict:
+    """Sugestão assistida (não autoritativa) de CSOSN/CST/CFOP/alíquota por família."""
+    if str(tipo_item or "produto").lower() == "servico":
+        return dict(FISCAL_SUGERIDO_POR_FAMILIA["servico"])
+    familia = str(familia_produto or "").strip().lower()
+    return dict(FISCAL_SUGERIDO_POR_FAMILIA.get(familia) or FISCAL_SUGERIDO_POR_FAMILIA["alimento"])
 
 
 def _linha_vale_para(linha: ViewRegistry, segmento: str, habilitados: set, ocultos: set) -> bool:
@@ -567,6 +749,10 @@ def resolver_view_schema(
             "segmento_base": info_familia["segmento_base"],
             "perfil_fiscal_padrao": inferir_perfil_fiscal_padrao(familia_produto, tipo_item=tipo_item),
         },
+        # Sugestão assistida de CSOSN/CST/CFOP/alíquota por família — o frontend
+        # pré-preenche com isso (produto novo) e mostra aviso de revisão; nunca
+        # sobrescreve o que o usuário já digitou.
+        "sugestao_fiscal": sugestao_fiscal_para_familia(familia_produto, tipo_item=tipo_item),
         "mix_permitido": mix_permitido,
         "familias_configuraveis": listar_familias_disponiveis(segmento_tenant),
         "familias_disponiveis": listar_familias_disponiveis(segmento_tenant, mix_permitido),
