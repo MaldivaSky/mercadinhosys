@@ -20,13 +20,72 @@ class RealisticInjector:
     # Catálogo de produtos com EANs reais (carregado uma vez por processo).
     _catalog = None
 
-    # ── Fornecedores por especialidade (cada produto é linkado por categoria) ──
-    FORNECEDORES_BASE = [
-        {"key": "bebidas",    "fantasia": "Ambev Distribuição",        "razao": "Companhia de Bebidas das Américas LTDA"},
-        {"key": "mercearia",  "fantasia": "Atacadão Secos e Molhados", "razao": "Atacadão Distribuição Comércio LTDA"},
-        {"key": "laticinios", "fantasia": "Frios & Cia Distribuidora", "razao": "Frios e Laticínios Distribuição LTDA"},
-        {"key": "limpeza",    "fantasia": "LimpaTudo Atacado",         "razao": "LimpaTudo Produtos de Limpeza LTDA"},
-        {"key": "doces",      "fantasia": "Doce Sabor Distribuidora",  "razao": "Doce Sabor Comércio de Alimentos LTDA"},
+    # ── Fornecedores por especialidade/segmento ──
+    FORNECEDORES_POR_SEGMENTO = {
+        "mercearia": [
+            {"key": "bebidas",    "fantasia": "Ambev Distribuição",        "razao": "Companhia de Bebidas das Américas LTDA"},
+            {"key": "mercearia",  "fantasia": "Atacadão Secos e Molhados", "razao": "Atacadão Distribuição Comércio LTDA"},
+            {"key": "laticinios", "fantasia": "Frios & Cia Distribuidora", "razao": "Frios e Laticínios Distribuição LTDA"},
+            {"key": "limpeza",    "fantasia": "LimpaTudo Atacado",         "razao": "LimpaTudo Produtos de Limpeza LTDA"},
+            {"key": "doces",      "fantasia": "Doce Sabor Distribuidora",  "razao": "Doce Sabor Comércio de Alimentos LTDA"},
+        ],
+        "vestuario": [
+            {"key": "basicos",     "fantasia": "Têxtil Essencial",      "razao": "Têxtil Essencial Confecções LTDA"},
+            {"key": "jeans",       "fantasia": "Denim Prime",           "razao": "Denim Prime Indústria de Jeans LTDA"},
+            {"key": "calcados",    "fantasia": "Passo Firme Calçados",  "razao": "Passo Firme Comércio de Calçados LTDA"},
+            {"key": "acessorios",  "fantasia": "Moda Mix Acessórios",   "razao": "Moda Mix Distribuidora de Acessórios LTDA"},
+        ],
+        "autopecas": [
+            {"key": "motor",        "fantasia": "Motor Forte Peças",    "razao": "Motor Forte Distribuidora de Peças LTDA"},
+            {"key": "freio",        "fantasia": "Freio Seguro",         "razao": "Freio Seguro Autopeças LTDA"},
+            {"key": "eletrica",     "fantasia": "Elétrica Moto Center", "razao": "Elétrica Moto Center LTDA"},
+            {"key": "lubrificantes","fantasia": "LubriMax Moto",        "razao": "LubriMax Distribuidora LTDA"},
+        ],
+    }
+
+    VESTUARIO_SKUS = [
+        {"sku": "CAM-BAS-ALG", "n": "Camiseta Básica Algodão", "marca": "Hering", "cat": "Camisetas", "un": "UN", "p": 49.90, "ncm": "61091000", "forn": "basicos",
+         "atributos": {"colecao": "Essenciais 2026", "genero": "Unissex", "tamanhos": ["P", "M", "G", "GG"], "cores": ["Preto", "Branco", "Azul"], "tecido": "Algodão"}},
+        {"sku": "CAM-OVS-EST", "n": "Camiseta Oversized Estonada", "marca": "Reserva", "cat": "Camisetas", "un": "UN", "p": 89.90, "ncm": "61091000", "forn": "basicos",
+         "atributos": {"colecao": "Street Inverno 2026", "genero": "Unissex", "tamanhos": ["M", "G", "GG"], "cores": ["Cinza", "Preto"], "tecido": "Algodão Penteado"}},
+        {"sku": "CAL-JEA-SKN", "n": "Calça Jeans Skinny Feminina", "marca": "Sawary", "cat": "Calças", "un": "UN", "p": 139.90, "ncm": "62046200", "forn": "jeans",
+         "atributos": {"colecao": "Denim Verão 2026", "genero": "Feminino", "tamanhos": ["36", "38", "40", "42", "44"], "cores": ["Azul"], "tecido": "Jeans com Elastano"}},
+        {"sku": "CAL-ALF-MAS", "n": "Calça Alfaiataria Masculina", "marca": "Aramis", "cat": "Calças", "un": "UN", "p": 199.90, "ncm": "62034300", "forn": "jeans",
+         "atributos": {"colecao": "Office 2026", "genero": "Masculino", "tamanhos": ["38", "40", "42", "44", "46"], "cores": ["Preto", "Cinza"], "tecido": "Poliéster com Viscose"}},
+        {"sku": "VES-MID-FLO", "n": "Vestido Midi Floral", "marca": "Farm", "cat": "Vestidos", "un": "UN", "p": 239.90, "ncm": "62044300", "forn": "basicos",
+         "atributos": {"colecao": "Primavera 2026", "genero": "Feminino", "tamanhos": ["P", "M", "G"], "cores": ["Estampado"], "tecido": "Viscose"}},
+        {"sku": "TEN-CAS-URB", "n": "Tênis Casual Urbano", "marca": "Vizzano", "cat": "Calçados", "un": "PAR", "p": 179.90, "ncm": "64029990", "forn": "calcados",
+         "atributos": {"colecao": "Urban 2026", "genero": "Feminino", "tamanhos": ["34", "35", "36", "37", "38", "39"], "cores": ["Branco", "Bege"], "tecido": "Sintético"}},
+        {"sku": "SAP-SOC-CLA", "n": "Sapatênis Social Casual", "marca": "Ferracini", "cat": "Calçados", "un": "PAR", "p": 229.90, "ncm": "64039990", "forn": "calcados",
+         "atributos": {"colecao": "Executivo 2026", "genero": "Masculino", "tamanhos": ["39", "40", "41", "42", "43"], "cores": ["Marrom", "Preto"], "tecido": "Couro"}},
+        {"sku": "BOL-TRA-COU", "n": "Bolsa Transversal Couro Sintético", "marca": "Luz da Lua", "cat": "Acessórios", "un": "UN", "p": 159.90, "ncm": "42022210", "forn": "acessorios",
+         "atributos": {"colecao": "Acessórios 2026", "genero": "Feminino", "tamanhos": ["UN"], "cores": ["Preto", "Bege"], "tecido": "PU Premium"}},
+    ]
+
+    AUTOPECAS_SKUS = [
+        {"sku": "KIT-REL-CG160", "n": "Kit Relação CG 160", "marca": "Coroa&Cia", "cat": "Transmissão", "un": "KIT", "p": 169.90, "ncm": "87141000", "forn": "motor",
+         "atributos": {"montadora": "Honda", "veiculo_compativel": "CG 160 2016+", "numero_oem": "06406-KVS-600", "posicao": "Transmissão", "peso_kg": 2.4}},
+        {"sku": "PNE-TRA-9090", "n": "Pneu Traseiro 90/90-18", "marca": "Pirelli", "cat": "Pneus", "un": "UN", "p": 289.90, "ncm": "40114000", "forn": "freio",
+         "atributos": {"montadora": "Honda", "veiculo_compativel": "CG 150/160, Titan", "numero_oem": "MT75-909018", "posicao": "Traseira", "diametro_pol": 18, "peso_kg": 4.8}},
+        {"sku": "PST-FRE-DIA", "n": "Pastilha de Freio Dianteira", "marca": "Cobreq", "cat": "Freios", "un": "PAR", "p": 59.90, "ncm": "68138190", "forn": "freio",
+         "atributos": {"montadora": "Yamaha", "veiculo_compativel": "Fazer 250, Lander 250", "numero_oem": "2GS-W0045-00", "posicao": "Dianteira", "peso_kg": 0.25}},
+        {"sku": "BAT-12V-6AH", "n": "Bateria Selada 12V 6Ah", "marca": "Moura", "cat": "Elétrica", "un": "UN", "p": 199.90, "ncm": "85071010", "forn": "eletrica",
+         "atributos": {"montadora": "Honda", "veiculo_compativel": "Biz 125, Pop 110", "numero_oem": "MA6-ECO", "posicao": "Elétrica", "peso_kg": 1.9}},
+        {"sku": "OLE-4T-10W30", "n": "Óleo 4T 10W30 Semissintético 1L", "marca": "Motul", "cat": "Lubrificantes", "un": "L", "p": 44.90, "ncm": "27101932", "forn": "lubrificantes",
+         "atributos": {"montadora": "Outra", "veiculo_compativel": "Motos 4T até 300cc", "numero_oem": "7100-10W30", "posicao": "Motor", "peso_kg": 0.95}},
+        {"sku": "CAB-ACE-CG", "n": "Cabo de Acelerador CG 160", "marca": "Vedamotors", "cat": "Cabos", "un": "UN", "p": 39.90, "ncm": "87089990", "forn": "motor",
+         "atributos": {"montadora": "Honda", "veiculo_compativel": "CG 160 Start/Fan", "numero_oem": "17910-KVS-600", "posicao": "Motor", "peso_kg": 0.12}},
+        {"sku": "RET-AMA-POP", "n": "Retentor de Bengala Pop 110", "marca": "Nakata", "cat": "Suspensão", "un": "PAR", "p": 34.90, "ncm": "40169300", "forn": "freio",
+         "atributos": {"montadora": "Honda", "veiculo_compativel": "Pop 110i", "numero_oem": "51490-K01-931", "posicao": "Dianteira", "diametro_pol": 1.2, "peso_kg": 0.08}},
+    ]
+
+    AUTOPECAS_SERVICOS = [
+        {"sku": "SRV-TROCA-OLEO", "n": "Troca de Óleo com Filtro", "cat": "Serviços Oficina", "p": 79.90,
+         "atributos": {"duracao_minutos": 40, "garantia_dias": 30, "exige_agendamento": False}},
+        {"sku": "SRV-REVISAO-BASE", "n": "Revisão Básica Preventiva", "cat": "Serviços Oficina", "p": 149.90,
+         "atributos": {"duracao_minutos": 90, "garantia_dias": 60, "exige_agendamento": True}},
+        {"sku": "SRV-TROCA-PAST", "n": "Troca de Pastilha de Freio", "cat": "Serviços Oficina", "p": 59.90,
+         "atributos": {"duracao_minutos": 35, "garantia_dias": 30, "exige_agendamento": False}},
     ]
 
     @staticmethod
@@ -81,6 +140,8 @@ class RealisticInjector:
     @classmethod
     def inject_all_modules(cls, estabelecimento_id, fetch_cosmos=False):
         print(f"[SEED] Populando estabelecimento {estabelecimento_id}...")
+        est = Estabelecimento.query.get(estabelecimento_id)
+        segmento = (est.segmento if est and est.segmento else "mercearia").lower()
         forns = cls.inject_fornecedores(estabelecimento_id)            # 1. Fornecedores (antes dos produtos)
         cls.inject_clientes(estabelecimento_id)                        # 2. Clientes
         cls.inject_funcionarios_time(estabelecimento_id)              # 3. Time completo (6 níveis RBAC)
@@ -91,6 +152,7 @@ class RealisticInjector:
         cls.inject_compras_financeiro(estabelecimento_id, forns)      # 8. Compras + contas a pagar
         cls.inject_despesas_setup(estabelecimento_id)                  # 9. Despesas de implantação
         db.session.commit()
+        print(f"[SEED] Segmento semeado: {segmento}")
 
     # ------------------------------------------------------------------ #
     # 1. Fornecedores (por especialidade)
@@ -98,8 +160,11 @@ class RealisticInjector:
     @classmethod
     def inject_fornecedores(cls, est_id):
         """Cria fornecedores especializados. Retorna dict {especialidade: Fornecedor}."""
+        est = Estabelecimento.query.get(est_id)
+        segmento = (est.segmento if est and est.segmento else "mercearia").lower()
+        bases = cls.FORNECEDORES_POR_SEGMENTO.get(segmento) or cls.FORNECEDORES_POR_SEGMENTO["mercearia"]
         forns = {}
-        for base in cls.FORNECEDORES_BASE:
+        for base in bases:
             end = cls.get_endereco_random()
             f = Fornecedor(
                 estabelecimento_id=est_id,
@@ -212,7 +277,8 @@ class RealisticInjector:
         if forns is None:
             forns = {f.nome_fantasia: f for f in Fornecedor.query.filter_by(estabelecimento_id=est_id).all()}
 
-        catalog = cls.get_catalog(fetch_cosmos)
+        est = Estabelecimento.query.get(est_id)
+        segmento = (est.segmento if est and est.segmento else "mercearia").lower()
         admin = Funcionario.query.filter_by(estabelecimento_id=est_id).first()
 
         # Categorias a partir do catálogo
@@ -228,6 +294,152 @@ class RealisticInjector:
             return cat_cache[nome]
 
         forn_keys = list(forns.keys())
+
+        if segmento == "vestuario":
+            for item in cls.VESTUARIO_SKUS:
+                forn = forns.get(item.get("forn")) or forns.get(random.choice(forn_keys))
+                preco_venda = Decimal(str(item["p"])).quantize(Decimal("0.01"))
+                preco_custo = (preco_venda * Decimal("0.52")).quantize(Decimal("0.01"))
+                margem = ((preco_venda - preco_custo) / preco_custo * 100).quantize(Decimal("0.01"))
+                qtd = random.randint(12, 90)
+                p = Produto(
+                    estabelecimento_id=est_id,
+                    categoria_id=get_cat(item["cat"]).id,
+                    fornecedor_id=forn.id,
+                    nome=item["n"],
+                    descricao=f"{item['n']} — coleção profissional do segmento vestuário.",
+                    marca=item.get("marca") or "Marca Própria",
+                    fabricante=item.get("marca") or "Marca Própria",
+                    tipo="Nacional",
+                    subcategoria=item["cat"],
+                    unidade_medida=item["un"],
+                    codigo_barras=None,
+                    codigo_interno=f"MOD-{item['sku']}",
+                    preco_custo=preco_custo,
+                    preco_venda=preco_venda,
+                    margem_lucro=margem,
+                    quantidade=qtd,
+                    quantidade_minima=Decimal("6.000"),
+                    ncm=item.get("ncm"),
+                    origem=0,
+                    controlar_validade=False,
+                    ativo=True,
+                    imagem_url="",
+                    controlar_estoque=True,
+                    tipo_item="produto",
+                )
+                p.atributos = item.get("atributos") or {}
+                db.session.add(p)
+                db.session.flush()
+                if admin:
+                    db.session.add(HistoricoPrecos(
+                        estabelecimento_id=est_id, produto_id=p.id, funcionario_id=admin.id,
+                        preco_custo_anterior=(preco_custo * Decimal("0.93")).quantize(Decimal("0.01")),
+                        preco_venda_anterior=(preco_venda * Decimal("0.94")).quantize(Decimal("0.01")),
+                        margem_anterior=margem,
+                        preco_custo_novo=preco_custo, preco_venda_novo=preco_venda, margem_nova=margem,
+                        motivo="Cadastro inicial do catálogo de moda"
+                    ))
+            db.session.commit()
+            total = Produto.query.filter_by(estabelecimento_id=est_id).count()
+            print(f"[SEED]   {total} itens cadastrados para vestuário.")
+            return
+
+        if segmento == "autopecas":
+            for item in cls.AUTOPECAS_SKUS:
+                forn = forns.get(item.get("forn")) or forns.get(random.choice(forn_keys))
+                preco_venda = Decimal(str(item["p"])).quantize(Decimal("0.01"))
+                preco_custo = (preco_venda * Decimal("0.58")).quantize(Decimal("0.01"))
+                margem = ((preco_venda - preco_custo) / preco_custo * 100).quantize(Decimal("0.01"))
+                qtd = random.randint(8, 45)
+                p = Produto(
+                    estabelecimento_id=est_id,
+                    categoria_id=get_cat(item["cat"]).id,
+                    fornecedor_id=forn.id,
+                    nome=item["n"],
+                    descricao=f"{item['n']} — peça técnica para oficina e balcão.",
+                    marca=item.get("marca") or "Marca Própria",
+                    fabricante=item.get("marca") or "Marca Própria",
+                    tipo="Nacional",
+                    subcategoria=item["cat"],
+                    unidade_medida=item["un"],
+                    codigo_barras=None,
+                    codigo_interno=f"MTP-{item['sku']}",
+                    preco_custo=preco_custo,
+                    preco_venda=preco_venda,
+                    margem_lucro=margem,
+                    quantidade=qtd,
+                    quantidade_minima=Decimal("4.000"),
+                    ncm=item.get("ncm"),
+                    origem=0,
+                    controlar_validade=False,
+                    ativo=True,
+                    imagem_url="",
+                    controlar_estoque=True,
+                    tipo_item="produto",
+                )
+                p.atributos = item.get("atributos") or {}
+                db.session.add(p)
+                db.session.flush()
+                if admin:
+                    db.session.add(HistoricoPrecos(
+                        estabelecimento_id=est_id, produto_id=p.id, funcionario_id=admin.id,
+                        preco_custo_anterior=(preco_custo * Decimal("0.95")).quantize(Decimal("0.01")),
+                        preco_venda_anterior=(preco_venda * Decimal("0.95")).quantize(Decimal("0.01")),
+                        margem_anterior=margem,
+                        preco_custo_novo=preco_custo, preco_venda_novo=preco_venda, margem_nova=margem,
+                        motivo="Cadastro inicial do catálogo de moto peças"
+                    ))
+
+            for item in cls.AUTOPECAS_SERVICOS:
+                preco_venda = Decimal(str(item["p"])).quantize(Decimal("0.01"))
+                preco_custo = (preco_venda * Decimal("0.35")).quantize(Decimal("0.01"))
+                margem = ((preco_venda - preco_custo) / preco_custo * 100).quantize(Decimal("0.01"))
+                s = Produto(
+                    estabelecimento_id=est_id,
+                    categoria_id=get_cat(item["cat"]).id,
+                    fornecedor_id=None,
+                    nome=item["n"],
+                    descricao=f"{item['n']} — serviço profissional de oficina.",
+                    marca="Serviço Interno",
+                    fabricante="Equipe Técnica",
+                    tipo="Serviço",
+                    subcategoria=item["cat"],
+                    unidade_medida="UN",
+                    codigo_barras=None,
+                    codigo_interno=f"SRV-{item['sku']}",
+                    preco_custo=preco_custo,
+                    preco_venda=preco_venda,
+                    margem_lucro=margem,
+                    quantidade=0,
+                    quantidade_minima=Decimal("0.000"),
+                    ncm=None,
+                    origem=0,
+                    controlar_validade=False,
+                    ativo=True,
+                    imagem_url="",
+                    controlar_estoque=False,
+                    tipo_item="servico",
+                )
+                s.atributos = item.get("atributos") or {}
+                db.session.add(s)
+                db.session.flush()
+                if admin:
+                    db.session.add(HistoricoPrecos(
+                        estabelecimento_id=est_id, produto_id=s.id, funcionario_id=admin.id,
+                        preco_custo_anterior=(preco_custo * Decimal("0.95")).quantize(Decimal("0.01")),
+                        preco_venda_anterior=(preco_venda * Decimal("0.95")).quantize(Decimal("0.01")),
+                        margem_anterior=margem,
+                        preco_custo_novo=preco_custo, preco_venda_novo=preco_venda, margem_nova=margem,
+                        motivo="Cadastro inicial dos serviços de oficina"
+                    ))
+
+            db.session.commit()
+            total = Produto.query.filter_by(estabelecimento_id=est_id).count()
+            print(f"[SEED]   {total} itens cadastrados para moto peças / oficina.")
+            return
+
+        catalog = cls.get_catalog(fetch_cosmos)
 
         # Um produto REAL por SKU: nome, EAN, marca e NCM verdadeiros (sem variantes falsas)
         for variacao in [0]:
@@ -279,6 +491,8 @@ class RealisticInjector:
                     quantidade_minima=Decimal("20.000"),
                     ncm=item.get("ncm") or None,  # NCM real do catálogo; sem placeholder falso "00000000"
                     origem=0,
+                    tipo_item="produto",
+                    controlar_estoque=True,
                     controlar_validade=True,
                     data_fabricacao=fabricacao,
                     data_validade=validade,

@@ -1,20 +1,70 @@
 from datetime import date, timedelta
 import os
 import random
-from app.models import db, Estabelecimento, Funcionario
+from app.models import (
+    db,
+    Estabelecimento,
+    Funcionario,
+    StatusPedidoLogistica,
+    AuditoriaQuilometragem,
+    ConfiguracaoLogistica,
+    TurnoEntregador,
+)
 from app.simulation.chronicle import ChronicleSimulator
 from app.simulation.dna_factory import DNAFactory
 from app.simulation.injectors import RealisticInjector
 from flask import g
 
 class MasterSeeder:
+    DEMO_CNPJS = [
+        "00000000000100",
+        "11.222.333/0001-44",
+        "22.333.444/0001-55",
+        "33.444.555/0001-66",
+        "44.555.666/0001-77",
+        "55.666.777/0001-88",
+        "66.777.888/0001-99",
+        "77.888.999/0001-11",
+    ]
+
     @staticmethod
-    def run_master_generation(app, months=6, fetch_cosmos=False):
+    def cleanup_demo_data():
+        """Remove somente a malha de demonstração conhecida para permitir reruns limpos."""
+        print("[CLEANUP] Removendo estrutura demo anterior (HQ + tenants simulados)...")
+        est_ids = [
+            est_id for (est_id,) in db.session.query(Estabelecimento.id).filter(
+                Estabelecimento.cnpj.in_(MasterSeeder.DEMO_CNPJS)
+            ).all()
+        ]
+        if est_ids:
+            StatusPedidoLogistica.query.filter(
+                StatusPedidoLogistica.estabelecimento_id.in_(est_ids)
+            ).delete(synchronize_session=False)
+            AuditoriaQuilometragem.query.filter(
+                AuditoriaQuilometragem.estabelecimento_id.in_(est_ids)
+            ).delete(synchronize_session=False)
+            ConfiguracaoLogistica.query.filter(
+                ConfiguracaoLogistica.estabelecimento_id.in_(est_ids)
+            ).delete(synchronize_session=False)
+            TurnoEntregador.query.filter(
+                TurnoEntregador.estabelecimento_id.in_(est_ids)
+            ).delete(synchronize_session=False)
+        Estabelecimento.query.filter(
+            Estabelecimento.cnpj.in_(MasterSeeder.DEMO_CNPJS)
+        ).delete(synchronize_session=False)
+        db.session.commit()
+        print("[CLEANUP] Estrutura demo anterior removida.")
+
+    @staticmethod
+    def run_master_generation(app, months=6, fetch_cosmos=False, reset_demo=False):
         """
         Orquestração Master: HQ, Super Admin e Povoamento Industrial de Cenários.
         fetch_cosmos=True consulta a API Cosmos (1x) para enriquecer os EANs reais.
         """
         print("[MASTER SEEDER] - INICIANDO ENGENHARIA DE DADOS INDUSTRIAL")
+
+        if reset_demo:
+            MasterSeeder.cleanup_demo_data()
         
         # 1. HQ MERCADINHOSYS (RAFAEL MALDIVAS)
         print("[HQ] Criando HQ e Super Admin (Rafael)...")
@@ -32,6 +82,7 @@ class MasterSeeder:
                 email="rafaelmaldivas@gmail.com",
                 telefone="(92) 99999-0000",
                 data_abertura=date(2023, 1, 1), 
+                segmento="generico",
                 plano="Premium Master",
                 plano_status="ativo",
                 **end_hq
@@ -83,27 +134,50 @@ class MasterSeeder:
 
         # 2. TENANTS (CONFIGURAÇÃO INDUSTRIAL)
         tenants_config = [
-            {"id": "admin1", "caixa": "caixa1", "nome": "Mercado Maldivas Elite", "meses": 6, "dna": "ELITE"},
-            {"id": "admin2", "caixa": "caixa2", "nome": "Supermercado Estrela", "meses": 3, "dna": "BOM"},
-            {"id": "admin3", "caixa": "caixa3", "nome": "Vendas do Bairro", "meses": 1, "dna": "RAZOAVEL"},
-            {"id": "admin4", "caixa": "caixa4", "nome": "Mercado Popular", "meses": 1, "dna": "MAL"},
-            {"id": "admin5", "caixa": "caixa5", "nome": "Mini-Mercado Sucata", "meses": 1, "dna": "PESSIMO"}
+            {
+                "id": "admin1",
+                "caixa": "caixa1",
+                "nome": "Mercado Maldivas Elite",
+                "meses": months,
+                "dna": "ELITE",
+                "segmento": "mercearia",
+                "cnpj": "11.222.333/0001-44",
+            },
+            {
+                "id": "admin2",
+                "caixa": "caixa2",
+                "nome": "Boutique Estrela Moda",
+                "meses": months,
+                "dna": "BOM",
+                "segmento": "vestuario",
+                "cnpj": "66.777.888/0001-99",
+            },
+            {
+                "id": "admin3",
+                "caixa": "caixa3",
+                "nome": "Centro Moto Peças Giro Certo",
+                "meses": months,
+                "dna": "RAZOAVEL",
+                "segmento": "autopecas",
+                "cnpj": "77.888.999/0001-11",
+            },
         ]
 
         # Modo LIGHT (SEED_LIGHT=1): volume reduzido para Aiven/rede e teste de sincronização.
-        # 2 lojas, 1 mês cada -> seed conclui pela internet e o sync do settings fica viável.
+        # Mantém os 3 segmentos, mas com janela curta para validação rápida.
         import os as _os
         if _os.environ.get("SEED_LIGHT") == "1":
-            tenants_config = [
-                {"id": "admin1", "caixa": "caixa1", "nome": "Mercado Maldivas Elite", "meses": 1, "dna": "BOM"},
-                {"id": "admin2", "caixa": "caixa2", "nome": "Supermercado Estrela", "meses": 1, "dna": "RAZOAVEL"},
-            ]
-            print("[MASTER] Modo LIGHT ativo: 2 lojas x 1 mes (volume reduzido).")
+            for config in tenants_config:
+                config["meses"] = 1
+            print("[MASTER] Modo LIGHT ativo: 3 segmentos x 1 mes (volume reduzido).")
 
         simulator = ChronicleSimulator(app)
 
         for config in tenants_config:
-            print(f"\n[PROVISIONANDO] {config['nome']} | {config['meses']} meses de história...")
+            print(
+                f"\n[PROVISIONANDO] {config['nome']} | segmento={config['segmento']} | "
+                f"{config['meses']} meses de história..."
+            )
             
             dna = DNAFactory.get_dna(config['dna'])
             end_tenant = RealisticInjector.get_endereco_random()
@@ -113,16 +187,24 @@ class MasterSeeder:
                 est = Estabelecimento(
                     nome_fantasia=config['nome'],
                     razao_social=f"{config['nome']} LTDA",
-                    cnpj=DNAFactory.CNPJ_SIMULACAO.get(config['dna'], f'99.{random.randint(100,999)}.000/0001-00'),
+                    cnpj=config.get("cnpj") or DNAFactory.CNPJ_SIMULACAO.get(
+                        config['dna'], f'99.{random.randint(100,999)}.000/0001-00'
+                    ),
                     telefone=f"(92) 3{random.randint(100,999)}-{random.randint(1000,9999)}",
                     email=f"contato@{config['id']}.com.br",
                     data_abertura=date.today() - timedelta(days=config['meses']*30),
+                    segmento=config["segmento"],
                     plano=dna.plano,
                     plano_status="ativo",
                     **end_tenant
                 )
                 db.session.add(est)
                 db.session.flush()
+            else:
+                est.segmento = config["segmento"]
+                est.data_abertura = date.today() - timedelta(days=config['meses'] * 30)
+                est.plano = dna.plano
+                est.plano_status = "ativo"
             
             # Dono (Owner)
             dono = Funcionario.query.filter_by(username=config['id']).first()
