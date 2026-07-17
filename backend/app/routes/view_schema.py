@@ -49,17 +49,31 @@ def obter_view_schema():
     try:
         estabelecimento = _estabelecimento_atual()
         quer_base = request.args.get("base") in ("1", "true")
+        familia_produto = request.args.get("familia_produto")
+        tipo_item = request.args.get("tipo_item") or "produto"
         if estabelecimento is None:
             # Super admin na visão global: schema por segmento explícito, sem overrides
-            schema = resolver_view_schema(segmento=request.args.get("segmento"))
+            schema = resolver_view_schema(
+                segmento=request.args.get("segmento"),
+                familia_produto=familia_produto,
+                tipo_item=tipo_item,
+            )
             return jsonify({"success": True, "schema": schema}), 200
 
         if quer_base:
-            base = resolver_view_schema(segmento=estabelecimento.segmento)
+            base = resolver_view_schema(
+                segmento=estabelecimento.segmento,
+                familia_produto=familia_produto,
+                tipo_item=tipo_item,
+            )
             overrides = (estabelecimento.configuracoes or {}).get("view_schema") or {}
             return jsonify({"success": True, "schema": base, "overrides": overrides}), 200
 
-        schema = resolver_view_schema(estabelecimento)
+        schema = resolver_view_schema(
+            estabelecimento,
+            familia_produto=familia_produto,
+            tipo_item=tipo_item,
+        )
         return jsonify({"success": True, "schema": schema}), 200
     except Exception as e:
         current_app.logger.error(f"Erro ao resolver view schema: {e}")

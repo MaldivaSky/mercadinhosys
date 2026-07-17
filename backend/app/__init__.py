@@ -503,6 +503,7 @@ def create_app(config_name=None):
                     ("configuracoes", "impressao_automatica",       "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "tipo_impressora",            "VARCHAR(20) DEFAULT 'termica_80mm'"),
                     ("configuracoes", "exibir_preco_tela",          "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "mostrar_foto_produto_pdv",   "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
                     ("configuracoes", "desconto_maximo_funcionario","NUMERIC(5,2) DEFAULT 10.00"),
@@ -541,6 +542,8 @@ def create_app(config_name=None):
                     ("produtos", "data_validade",                   "DATE"),
                     ("produtos", "lote",                            "VARCHAR(50)"),
                     ("produtos", "imagem_url",                      "VARCHAR(255)"),
+                    ("produtos", "familia_produto",                 "VARCHAR(40)"),
+                    ("produtos", "perfil_fiscal",                   "VARCHAR(40)"),
                     ("produtos", "classificacao_abc",               "VARCHAR(1)"),
                     # Vendas
                     ("vendas", "valor_recebido",                    "NUMERIC(10,2) DEFAULT 0"),

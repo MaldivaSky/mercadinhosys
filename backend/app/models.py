@@ -483,6 +483,7 @@ class Configuracao(db.Model, MultiTenantMixin, SerializableMixin):
     impressao_automatica = db.Column(db.Boolean, default=False)
     tipo_impressora = db.Column(db.String(20), default="termica_80mm")
     exibir_preco_tela = db.Column(db.Boolean, default=True)
+    mostrar_foto_produto_pdv = db.Column(db.Boolean, default=False)
     permitir_venda_sem_estoque = db.Column(db.Boolean, default=False)
     desconto_maximo_percentual = db.Column(db.Numeric(5, 2), default=10.00)
     desconto_maximo_funcionario = db.Column(db.Numeric(5, 2), default=10.00)
@@ -1077,6 +1078,8 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     # ---- Motor de renderização contextual (nível Produto da cascata) ----
     tipo_item = db.Column(db.String(10), default="produto")   # produto | servico
     controlar_estoque = db.Column(db.Boolean, default=True)   # False p/ serviços: venda não movimenta estoque
+    familia_produto = db.Column(db.String(40))
+    perfil_fiscal = db.Column(db.String(40))
     atributos_json = db.Column(db.Text, default="{}")         # atributos dinâmicos por segmento (cor, tamanho, dimensões...)
     ativo = db.Column(db.Boolean, default=True)
     deleted_at = db.Column(db.DateTime, nullable=True)

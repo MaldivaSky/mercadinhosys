@@ -377,6 +377,7 @@ def obter_configuracoes_pdv():
             "dias_alerta_validade": cached_config.get("dias_alerta_validade", 30) if cached_config else 30,
             "estoque_minimo_padrao": cached_config.get("estoque_minimo_padrao", 10) if cached_config else 10,
             "exibe_preco_tela": bool(cached_config.get("exibir_preco_tela", True)) if cached_config else True,
+            "mostrar_foto_produto_pdv": bool(cached_config.get("mostrar_foto_produto_pdv", False)) if cached_config else False,
             "exige_observacao_desconto": True,
         }
         
@@ -693,6 +694,7 @@ def buscar_produtos_pdv():
                 p.codigo_barras,
                 p.codigo_interno,
                 p.marca,
+                p.imagem_url,
                 p.preco_venda,
                 p.quantidade AS quantidade_estoque,
                 p.unidade_medida,
@@ -722,6 +724,7 @@ def buscar_produtos_pdv():
                 "codigo_barras": row_map["codigo_barras"] or "",
                 "codigo_interno": row_map["codigo_interno"] or "",
                 "marca": row_map["marca"] or "",
+                "imagem_url": row_map["imagem_url"] or "",
                 "preco_venda": float(row_map["preco_venda"]) if row_map["preco_venda"] else 0.0,
                 "preco_venda_efetivo": float(row_map["preco_venda"]) if row_map["preco_venda"] else 0.0,
                 "quantidade_estoque": float(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0.0,

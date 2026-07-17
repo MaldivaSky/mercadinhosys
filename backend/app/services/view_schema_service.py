@@ -124,6 +124,94 @@ for _seg in SEGMENTOS.values():
 
 SEGMENTO_PADRAO = "mercearia"
 
+FAMILIAS_PRODUTO = {
+    "alimento": {
+        "nome": "Alimento",
+        "descricao": "Item alimentar com foco em estoque, validade e rastreabilidade.",
+        "segmento_base": "mercearia",
+    },
+    "bebida": {
+        "nome": "Bebida",
+        "descricao": "Bebidas frias, quentes ou alcoólicas dentro do mix da loja.",
+        "segmento_base": "mercearia",
+        "flags_override": {"usa_lotes": False},
+        "exemplos": {"nome": "Ex: Refrigerante Cola 2L"},
+    },
+    "embalagem_descartavel": {
+        "nome": "Embalagem Descartável",
+        "descricao": "Descartáveis para lanchonete, hamburgueria e conveniência.",
+        "segmento_base": "mercearia",
+        "flags_override": {"usa_validade": False, "usa_lotes": False},
+        "campos_ocultos": ["controlar_validade"],
+        "exemplos": {
+            "nome": "Ex: Embalagem Hambúrguer Kraft G",
+            "categoria": "Ex: Delivery, Marmitas, Copos...",
+            "marca": "Ex: Wyda",
+        },
+    },
+    "bazar": {
+        "nome": "Bazar",
+        "descricao": "Utilidades domésticas, cozinha e presentes.",
+        "segmento_base": "generico",
+        "flags_override": {"usa_validade": False, "usa_lotes": False, "usa_embalagens": True},
+        "campos_ocultos": ["controlar_validade"],
+        "exemplos": {
+            "nome": "Ex: Assadeira Redonda Antiaderente",
+            "categoria": "Ex: Panelas, Formas, Organização...",
+            "marca": "Ex: Tramontina",
+        },
+    },
+    "construcao_leve": {
+        "nome": "Construção Leve",
+        "descricao": "Itens leves de manutenção e construção vendidos em balcão de bairro.",
+        "segmento_base": "construcao",
+        "flags_override": {"usa_validade": False, "usa_lotes": False, "usa_servicos": False},
+        "campos_ocultos": ["controlar_validade"],
+        "exemplos": {
+            "nome": "Ex: Fita Isolante 20m",
+            "categoria": "Ex: Elétrica, Hidráulica, Ferragens...",
+            "marca": "Ex: Tigre",
+        },
+    },
+    "vestuario": {
+        "nome": "Vestuário",
+        "descricao": "Roupas, calçados e acessórios com grade e atributos têxteis.",
+        "segmento_base": "vestuario",
+    },
+    "servico": {
+        "nome": "Serviço",
+        "descricao": "Itens não estocáveis cobrados como prestação de serviço.",
+        "segmento_base": "generico",
+        "flags_override": {"usa_validade": False, "usa_lotes": False, "usa_servicos": True},
+        "campos_ocultos": ["controlar_validade"],
+        "campos_habilitados": ["duracao_minutos", "garantia_dias", "exige_agendamento"],
+    },
+    "autopecas": {
+        "nome": "Autopeças",
+        "descricao": "Peças e componentes automotivos ou de moto em tenant dedicado.",
+        "segmento_base": "autopecas",
+    },
+}
+
+MIX_PADRAO_POR_SEGMENTO = {
+    "mercearia": ["alimento", "bebida", "embalagem_descartavel", "bazar", "construcao_leve"],
+    "vestuario": ["vestuario", "bebida"],
+    "construcao": ["construcao_leve"],
+    "autopecas": ["autopecas", "servico"],
+    "generico": ["alimento", "bebida", "embalagem_descartavel", "bazar", "construcao_leve", "vestuario", "servico"],
+}
+
+PERFIL_FISCAL_PADRAO_POR_FAMILIA = {
+    "alimento": "mercearia_padrao",
+    "bebida": "mercearia_padrao",
+    "embalagem_descartavel": "embalagem_descartavel",
+    "bazar": "bazar_padrao",
+    "construcao_leve": "construcao_leve",
+    "vestuario": "vestuario_padrao",
+    "servico": "servico",
+    "autopecas": "autopecas_padrao",
+}
+
 # ==============================================================================
 # CATÁLOGO GLOBAL DE CAMPOS (seed do view_registry, escopo='campo')
 #
@@ -264,7 +352,10 @@ def invalidar_cache_view_schema(estabelecimento_id=None):
     if estabelecimento_id is None:
         _schema_cache.clear()
     else:
-        _schema_cache.pop(int(estabelecimento_id), None)
+        estabelecimento_id = int(estabelecimento_id)
+        chaves = [chave for chave in _schema_cache if isinstance(chave, tuple) and chave[0] == estabelecimento_id]
+        for chave in chaves:
+            _schema_cache.pop(chave, None)
 
 
 def garantir_registry_seed():
@@ -299,6 +390,73 @@ def _overrides_do_tenant(estabelecimento) -> dict:
         return {}
 
 
+def normalizar_segmento(segmento: str = None) -> str:
+    segmento = (segmento or SEGMENTO_PADRAO).lower().strip()
+    if segmento not in SEGMENTOS:
+        return SEGMENTO_PADRAO
+    return segmento
+
+
+def listar_familias_disponiveis(segmento: str = None, mix: list | None = None) -> list:
+    segmento = normalizar_segmento(segmento)
+    familias = mix or MIX_PADRAO_POR_SEGMENTO.get(segmento, MIX_PADRAO_POR_SEGMENTO[SEGMENTO_PADRAO])
+    resultado = []
+    for chave in familias:
+        info = FAMILIAS_PRODUTO.get(chave)
+        if not info:
+            continue
+        resultado.append({
+            "chave": chave,
+            "nome": info["nome"],
+            "descricao": info["descricao"],
+            "segmento_base": info["segmento_base"],
+        })
+    return resultado
+
+
+def mix_permitido_para_estabelecimento(estabelecimento: Estabelecimento | None = None, segmento: str = None) -> list:
+    segmento = normalizar_segmento(estabelecimento.segmento if estabelecimento is not None else segmento)
+    mix = []
+    if estabelecimento is not None:
+        try:
+            configuracoes = estabelecimento.configuracoes or {}
+            mix = configuracoes.get("mix_produtos") or []
+        except Exception:
+            mix = []
+    if not isinstance(mix, list) or not mix:
+        mix = MIX_PADRAO_POR_SEGMENTO.get(segmento, MIX_PADRAO_POR_SEGMENTO[SEGMENTO_PADRAO])
+    normalizado = []
+    for familia in mix:
+        chave = str(familia or "").strip().lower()
+        if chave in FAMILIAS_PRODUTO and chave not in normalizado:
+            normalizado.append(chave)
+    return normalizado or list(MIX_PADRAO_POR_SEGMENTO[SEGMENTO_PADRAO])
+
+
+def normalizar_familia_produto(
+    familia_produto: str = None,
+    estabelecimento: Estabelecimento | None = None,
+    segmento: str = None,
+    tipo_item: str = "produto",
+) -> str:
+    if str(tipo_item or "produto").lower() == "servico":
+        return "servico"
+    familia = str(familia_produto or "").strip().lower()
+    mix = mix_permitido_para_estabelecimento(estabelecimento, segmento)
+    if familia in mix:
+        return familia
+    if familia in FAMILIAS_PRODUTO and estabelecimento is None:
+        return familia
+    return mix[0]
+
+
+def inferir_perfil_fiscal_padrao(familia_produto: str = None, tipo_item: str = "produto") -> str:
+    if str(tipo_item or "produto").lower() == "servico":
+        return "servico"
+    familia = str(familia_produto or "").strip().lower()
+    return PERFIL_FISCAL_PADRAO_POR_FAMILIA.get(familia, "padrao")
+
+
 def _linha_vale_para(linha: ViewRegistry, segmento: str, habilitados: set, ocultos: set) -> bool:
     if not linha.ativo:
         return False
@@ -310,13 +468,20 @@ def _linha_vale_para(linha: ViewRegistry, segmento: str, habilitados: set, ocult
     return "*" in segmentos or segmento in segmentos
 
 
-def resolver_view_schema(estabelecimento: Estabelecimento = None, segmento: str = None) -> dict:
+def resolver_view_schema(
+    estabelecimento: Estabelecimento = None,
+    segmento: str = None,
+    familia_produto: str = None,
+    tipo_item: str = "produto",
+) -> dict:
     """
     Resolve a cascata Global → Tenant e devolve o View Schema pronto p/ renderizar.
     Sem estabelecimento (ex.: super admin na visão 'all'), resolve só o nível
     Global para o segmento informado, sem overrides e sem cache.
     """
-    cache_key = int(estabelecimento.id) if estabelecimento is not None else None
+    cache_key = None
+    if estabelecimento is not None:
+        cache_key = (int(estabelecimento.id), str(familia_produto or "").lower().strip(), str(tipo_item or "produto").lower())
     if cache_key is not None:
         em_cache = _schema_cache.get(cache_key)
         if em_cache and (time.time() - em_cache[0]) < _CACHE_TTL_SEGUNDOS:
@@ -326,14 +491,23 @@ def resolver_view_schema(estabelecimento: Estabelecimento = None, segmento: str 
 
     if estabelecimento is not None:
         segmento = estabelecimento.segmento
-    segmento = (segmento or SEGMENTO_PADRAO).lower()
-    if segmento not in SEGMENTOS:
-        segmento = SEGMENTO_PADRAO
+    segmento_tenant = normalizar_segmento(segmento)
+    mix_permitido = mix_permitido_para_estabelecimento(estabelecimento, segmento_tenant)
+    familia_produto = normalizar_familia_produto(
+        familia_produto=familia_produto,
+        estabelecimento=estabelecimento,
+        segmento=segmento_tenant,
+        tipo_item=tipo_item,
+    )
+    info_familia = FAMILIAS_PRODUTO.get(familia_produto, FAMILIAS_PRODUTO[mix_permitido[0]])
+    segmento = normalizar_segmento(info_familia.get("segmento_base") or segmento_tenant)
     info_segmento = SEGMENTOS[segmento]
 
     overrides = _overrides_do_tenant(estabelecimento) if estabelecimento is not None else {}
     campos_ocultos = set(overrides.get("campos_ocultos") or [])
+    campos_ocultos.update(info_familia.get("campos_ocultos") or [])
     campos_habilitados = set(overrides.get("campos_habilitados") or [])
+    campos_habilitados.update(info_familia.get("campos_habilitados") or [])
     metricas_ocultas = set(overrides.get("metricas_ocultas") or [])
     metricas_habilitadas = set(overrides.get("metricas_habilitadas") or [])
     obrigatorios = overrides.get("obrigatorios") or {}
@@ -363,15 +537,33 @@ def resolver_view_schema(estabelecimento: Estabelecimento = None, segmento: str 
             metricas.append(metrica)
 
     flags = dict(info_segmento["flags"])
+    flags.update(info_familia.get("flags_override") or {})
     # Validade some do segmento? Então o campo/painel não sobrevive nem por override de flag.
     unidades = overrides.get("unidades") if isinstance(overrides.get("unidades"), list) else None
+    exemplos = dict(info_segmento["exemplos"])
+    exemplos.update(info_familia.get("exemplos") or {})
 
     schema = {
         "segmento": {"chave": segmento, "nome": info_segmento["nome"],
                      "descricao": info_segmento["descricao"], "icone": info_segmento["icone"],
-                     "exemplos": info_segmento["exemplos"]},
+                     "exemplos": exemplos},
+        "segmento_tenant": {
+            "chave": segmento_tenant,
+            "nome": SEGMENTOS[segmento_tenant]["nome"],
+            "descricao": SEGMENTOS[segmento_tenant]["descricao"],
+            "icone": SEGMENTOS[segmento_tenant]["icone"],
+        },
+        "familia_produto": {
+            "chave": familia_produto,
+            "nome": info_familia["nome"],
+            "descricao": info_familia["descricao"],
+            "segmento_base": info_familia["segmento_base"],
+            "perfil_fiscal_padrao": inferir_perfil_fiscal_padrao(familia_produto, tipo_item=tipo_item),
+        },
+        "mix_permitido": mix_permitido,
+        "familias_disponiveis": listar_familias_disponiveis(segmento_tenant, mix_permitido),
         "flags": flags,
-        "unidades": unidades or info_segmento["unidades"],
+        "unidades": unidades or info_familia.get("unidades") or info_segmento["unidades"],
         "tipos_item": (["produto", "servico"] if flags.get("usa_servicos") else ["produto"]),
         "campos": campos,
         "metricas": metricas,

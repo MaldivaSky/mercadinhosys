@@ -34,7 +34,13 @@ from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import quota_required, permission_required
 from app.decorators.rbac import gerente_required, resource_required
-from app.services.view_schema_service import resolver_view_schema, sanitizar_atributos
+from app.services.view_schema_service import (
+    inferir_perfil_fiscal_padrao,
+    mix_permitido_para_estabelecimento,
+    normalizar_familia_produto,
+    resolver_view_schema,
+    sanitizar_atributos,
+)
 
 def to_decimal(value, precision=2):
     """Converte qualquer valor numérico para Decimal de forma segura com precisão variável"""
@@ -128,12 +134,17 @@ def _serialize_lote(lote: ProdutoLote):
 def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
     """Valida todos os dados do produto antes de salvar"""
     erros = []
+    tipo_item = "servico" if data.get("tipo_item") == "servico" else "produto"
+    estabelecimento = _resolver_estabelecimento(estabelecimento_id)
 
     # Campos obrigatórios
-    campos_obrigatorios = ["nome", "categoria", "preco_custo", "preco_venda"]
+    campos_obrigatorios = ["nome", "categoria", "preco_venda"]
     for campo in campos_obrigatorios:
-        if not data.get(campo):
+        valor = data.get(campo)
+        if valor is None or str(valor).strip() == "":
             erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
+    if data.get("preco_custo") in (None, ""):
+        erros.append("O campo Preco Custo é obrigatório")
 
     # Validação de código de barras único (apenas se estabelecimento_id for fornecido)
     if estabelecimento_id and data.get("codigo_barras"):
@@ -145,15 +156,6 @@ def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
 
         if produto_existente and produto_existente.id != produto_id:
             erros.append("Código de barras já cadastrado para outro produto")
-
-
-def _resolver_schema_estabelecimento(estabelecimento_id):
-    if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
-        return resolver_view_schema()
-    estabelecimento = Estabelecimento.query.get(int(estabelecimento_id))
-    if estabelecimento is None:
-        return resolver_view_schema()
-    return resolver_view_schema(estabelecimento)
 
     # Validação de código interno único (apenas se estabelecimento_id for fornecido)
     if estabelecimento_id and data.get("codigo_interno"):
@@ -167,7 +169,7 @@ def _resolver_schema_estabelecimento(estabelecimento_id):
             erros.append("Código interno já cadastrado para outro produto")
 
     # Validação de preços
-    if data.get("preco_custo"):
+    if data.get("preco_custo") not in (None, ""):
         try:
             preco_custo = Decimal(str(data["preco_custo"]))
             if preco_custo < 0:
@@ -175,7 +177,7 @@ def _resolver_schema_estabelecimento(estabelecimento_id):
         except:
             erros.append("Preço de custo inválido")
 
-    if data.get("preco_venda"):
+    if data.get("preco_venda") not in (None, ""):
         try:
             preco_venda = Decimal(str(data["preco_venda"]))
             if preco_venda < 0:
@@ -184,11 +186,14 @@ def _resolver_schema_estabelecimento(estabelecimento_id):
             erros.append("Preço de venda inválido")
 
     # Validação se preço de venda é maior que custo
-    if data.get("preco_custo") and data.get("preco_venda"):
+    if data.get("preco_custo") not in (None, "") and data.get("preco_venda") not in (None, ""):
         try:
             preco_custo = Decimal(str(data["preco_custo"]))
             preco_venda = Decimal(str(data["preco_venda"]))
-            if preco_venda <= preco_custo:
+            if tipo_item == "servico":
+                if preco_venda <= 0:
+                    erros.append("Preço de venda deve ser maior que zero")
+            elif preco_venda <= preco_custo:
                 erros.append("Preço de venda deve ser maior que o preço de custo")
         except:
             pass
@@ -217,7 +222,67 @@ def _resolver_schema_estabelecimento(estabelecimento_id):
         if len(ncm) != 8:
             erros.append("NCM deve conter 8 dígitos")
 
+    if estabelecimento is not None:
+        mix_permitido = mix_permitido_para_estabelecimento(estabelecimento)
+        familia_informada = str(data.get("familia_produto") or "").strip().lower()
+        familia_resolvida = normalizar_familia_produto(
+            familia_produto=familia_informada,
+            estabelecimento=estabelecimento,
+            tipo_item=tipo_item,
+        )
+        if familia_informada and familia_informada not in mix_permitido:
+            erros.append("Família de produto não é permitida para este estabelecimento")
+        if tipo_item == "servico" and familia_resolvida != "servico":
+            erros.append("Serviços devem usar a família de produto 'servico'")
+
     return erros
+
+
+def _resolver_estabelecimento(estabelecimento_id):
+    if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
+        return None
+    return Estabelecimento.query.get(int(estabelecimento_id))
+
+
+def _resolver_schema_estabelecimento(estabelecimento_id, familia_produto=None, tipo_item="produto"):
+    estabelecimento = _resolver_estabelecimento(estabelecimento_id)
+    if estabelecimento is None:
+        return resolver_view_schema(familia_produto=familia_produto, tipo_item=tipo_item)
+    return resolver_view_schema(
+        estabelecimento,
+        familia_produto=familia_produto,
+        tipo_item=tipo_item,
+    )
+
+
+def _resolver_contexto_produto(estabelecimento_id, data, tipo_item="produto", produto_atual=None):
+    estabelecimento = _resolver_estabelecimento(estabelecimento_id)
+    familia_bruta = None
+    if isinstance(data, dict):
+        familia_bruta = data.get("familia_produto")
+    if not familia_bruta and produto_atual is not None:
+        familia_bruta = produto_atual.familia_produto
+    familia_resolvida = normalizar_familia_produto(
+        familia_produto=familia_bruta,
+        estabelecimento=estabelecimento,
+        tipo_item=tipo_item,
+    )
+    schema = _resolver_schema_estabelecimento(
+        estabelecimento_id,
+        familia_produto=familia_resolvida,
+        tipo_item=tipo_item,
+    )
+    perfil_fiscal = None
+    if isinstance(data, dict):
+        perfil_fiscal = data.get("perfil_fiscal")
+    if not perfil_fiscal and produto_atual is not None:
+        perfil_fiscal = produto_atual.perfil_fiscal
+    perfil_fiscal = (
+        str(perfil_fiscal).strip().lower()
+        if perfil_fiscal not in (None, "")
+        else inferir_perfil_fiscal_padrao(familia_resolvida, tipo_item=tipo_item)
+    )
+    return estabelecimento, familia_resolvida, schema, perfil_fiscal
 
 
 def calcular_classificacao_abc(produto):
@@ -1416,10 +1481,15 @@ def criar_produto():
             )
 
         tipo_item = "servico" if data.get("tipo_item") == "servico" else "produto"
-        schema = _resolver_schema_estabelecimento(estabelecimento_id)
+        _, familia_produto, schema, perfil_fiscal = _resolver_contexto_produto(
+            estabelecimento_id,
+            data,
+            tipo_item=tipo_item,
+        )
         atributos_limpos = sanitizar_atributos(
             schema, data.get("atributos"), tipo_item=tipo_item
         )
+        usa_validade = bool(schema.get("flags", {}).get("usa_validade", True))
 
         categoria_id = None
         if data.get("categoria"):
@@ -1575,8 +1645,14 @@ def criar_produto():
             controlar_estoque=(
                 False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))
             ),
+            familia_produto=familia_produto,
+            perfil_fiscal=perfil_fiscal,
         )
         produto.atributos = atributos_limpos
+        if tipo_item == "servico" or not usa_validade:
+            produto.controlar_validade = False
+            produto.data_validade = None
+            produto.lote = ""
 
         db.session.add(produto)
         db.session.flush()
@@ -1699,7 +1775,13 @@ def atualizar_produto(id):
             if data.get("tipo_item") == "servico"
             else (produto.tipo_item or "produto")
         )
-        schema = _resolver_schema_estabelecimento(estabelecimento_id)
+        _, familia_produto, schema, perfil_fiscal = _resolver_contexto_produto(
+            estabelecimento_id,
+            data,
+            tipo_item=tipo_item,
+            produto_atual=produto,
+        )
+        usa_validade = bool(schema.get("flags", {}).get("usa_validade", True))
 
         def clean_nullable_str(val, max_len=None):
             if val is None:
@@ -1727,11 +1809,15 @@ def atualizar_produto(id):
 
         if "tipo_item" in data:
             produto.tipo_item = tipo_item
+        if "familia_produto" in data or "tipo_item" in data:
+            produto.familia_produto = familia_produto
+        if "perfil_fiscal" in data or "familia_produto" in data or "tipo_item" in data:
+            produto.perfil_fiscal = perfil_fiscal
         if "controlar_estoque" in data or "tipo_item" in data:
             produto.controlar_estoque = (
                 False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))
             )
-        if "atributos" in data or "tipo_item" in data:
+        if "atributos" in data or "tipo_item" in data or "familia_produto" in data:
             produto.atributos = sanitizar_atributos(
                 schema, data.get("atributos"), tipo_item=tipo_item
             )
@@ -1834,6 +1920,10 @@ def atualizar_produto(id):
         if tipo_item == "servico":
             produto.controlar_validade = False
             produto.quantidade_minima = 0
+        if tipo_item == "servico" or not usa_validade:
+            produto.controlar_validade = False
+            produto.data_validade = None
+            produto.lote = None
 
         # Recalcular margem de lucro
         if produto.preco_custo and produto.preco_venda and produto.preco_custo > 0:
