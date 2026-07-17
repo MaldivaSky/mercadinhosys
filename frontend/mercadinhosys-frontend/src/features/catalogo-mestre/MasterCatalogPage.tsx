@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Database, Search, RefreshCw, Package } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { showToast } from '../../utils/toast';
