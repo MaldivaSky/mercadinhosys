@@ -227,38 +227,95 @@ class RealisticInjector:
         O Admin (dono) e o Caixa já são criados pelo MasterSeeder.
         """
         time_config = [
-            {"cargo": "Gerente",      "role": "GERENTE",    "user": "gerente",    "sal": 3500},
-            {"cargo": "Estoquista",   "role": "ESTOQUE",    "user": "estoque",    "sal": 1700},
-            {"cargo": "Analista RH",  "role": "RH",         "user": "rh",         "sal": 2800},
-            {"cargo": "Entregador",   "role": "ENTREGADOR", "user": "entregador", "sal": 1600},
+            {
+                "cargo": "Gerente",
+                "role": "GERENTE",
+                "user": f"gerente{est_id}",
+                "legacy_user": f"est{est_id}_gerente",
+                "senha": "gerente123",
+                "sal": 3500,
+            },
+            {
+                "cargo": "Estoquista",
+                "role": "ESTOQUE",
+                "user": f"estoque{est_id}",
+                "legacy_user": f"est{est_id}_estoque",
+                "senha": "estoque123",
+                "sal": 1700,
+            },
+            {
+                "cargo": "Analista RH",
+                "role": "RH",
+                "user": f"rh{est_id}",
+                "legacy_user": f"est{est_id}_rh",
+                "senha": "rh123",
+                "sal": 2800,
+            },
+            {
+                "cargo": "Entregador",
+                "role": "ENTREGADOR",
+                "user": f"entrega{est_id}",
+                "legacy_user": f"est{est_id}_entregador",
+                "senha": "entrega123",
+                "sal": 1600,
+            },
         ]
         for cfg in time_config:
-            username = f"est{est_id}_{cfg['user']}"
-            if Funcionario.query.filter_by(estabelecimento_id=est_id, username=username).first():
-                continue
-            f = Funcionario(
-                estabelecimento_id=est_id,
-                nome=f"{cfg['cargo']} {est_id}",
-                username=username,
-                cargo=cfg["cargo"],
-                role=cfg["role"],
-                nivel_acesso=ROLE_TO_NIVEL.get(cfg["role"], 3),
-                cpf=cls.generate_cpf(),
-                email=f"{username}@mercadinho.com.br",
-                celular=f"(92) 9{random.randint(8000,9999)}-{random.randint(1000,9999)}",
-                data_nascimento=date(random.randint(1980, 2000), random.randint(1, 12), random.randint(1, 28)),
-                data_admissao=date.today() - timedelta(days=random.randint(180, 700)),
-                salario_base=Decimal(str(cfg["sal"])),
-                salario=Decimal(str(cfg["sal"])),
-                status="ativo", ativo=True
-            )
-            f.set_password("senha123")
-            db.session.add(f)
+            username = cfg["user"]
+            legacy_username = cfg.get("legacy_user")
+            f = Funcionario.query.filter_by(estabelecimento_id=est_id, username=username).first()
+            if f is None and legacy_username:
+                f = Funcionario.query.filter_by(estabelecimento_id=est_id, username=legacy_username).first()
+
+            if f is None:
+                f = Funcionario(
+                    estabelecimento_id=est_id,
+                    nome=f"{cfg['cargo']} {est_id}",
+                    username=username,
+                    cargo=cfg["cargo"],
+                    role=cfg["role"],
+                    nivel_acesso=ROLE_TO_NIVEL.get(cfg["role"], 3),
+                    cpf=cls.generate_cpf(),
+                    email=f"{username}@mercadinho.com.br",
+                    celular=f"(92) 9{random.randint(8000,9999)}-{random.randint(1000,9999)}",
+                    data_nascimento=date(random.randint(1980, 2000), random.randint(1, 12), random.randint(1, 28)),
+                    data_admissao=date.today() - timedelta(days=random.randint(180, 700)),
+                    salario_base=Decimal(str(cfg["sal"])),
+                    salario=Decimal(str(cfg["sal"])),
+                    status="ativo",
+                    ativo=True,
+                )
+                db.session.add(f)
+            else:
+                f.username = username
+                f.cargo = cfg["cargo"]
+                f.role = cfg["role"]
+                f.nivel_acesso = ROLE_TO_NIVEL.get(cfg["role"], 3)
+                f.salario_base = Decimal(str(cfg["sal"]))
+                f.salario = Decimal(str(cfg["sal"]))
+                f.status = "ativo"
+                f.ativo = True
+                if not f.email:
+                    f.email = f"{username}@mercadinho.com.br"
+                if not f.celular:
+                    f.celular = f"(92) 9{random.randint(8000,9999)}-{random.randint(1000,9999)}"
+                if not f.data_nascimento:
+                    f.data_nascimento = date(random.randint(1980, 2000), random.randint(1, 12), random.randint(1, 28))
+                if not f.data_admissao:
+                    f.data_admissao = date.today() - timedelta(days=random.randint(180, 700))
+
+            f.set_password(cfg["senha"])
             db.session.flush()
-            db.session.add(FuncionarioPreferencias(
-                estabelecimento_id=est_id, funcionario_id=f.id,
-                tema_escuro=True, idioma="pt-BR", sidebar_colapsada=False
-            ))
+
+            pref = FuncionarioPreferencias.query.filter_by(funcionario_id=f.id).first()
+            if pref is None:
+                db.session.add(FuncionarioPreferencias(
+                    estabelecimento_id=est_id,
+                    funcionario_id=f.id,
+                    tema_escuro=True,
+                    idioma="pt-BR",
+                    sidebar_colapsada=False,
+                ))
 
         # Sincroniza nivel_acesso de quem já existia (dono/caixa do MasterSeeder)
         for f in Funcionario.query.filter_by(estabelecimento_id=est_id).all():
