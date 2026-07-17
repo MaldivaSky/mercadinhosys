@@ -25,6 +25,7 @@ export interface ConfiguracoesPDV {
     dias_alerta_validade: number;
     estoque_minimo_padrao: number;
     exibe_preco_tela: boolean;
+    mostrar_foto_produto_pdv: boolean;
     exige_observacao_desconto: boolean;
 }
 

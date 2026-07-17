@@ -71,6 +71,21 @@ export interface SegmentoFlags {
 
 export interface ViewSchema {
     segmento: SegmentoInfo;
+    segmento_tenant?: SegmentoInfo;
+    familia_produto?: {
+        chave: string;
+        nome: string;
+        descricao: string;
+        segmento_base: string;
+        perfil_fiscal_padrao?: string;
+    };
+    mix_permitido?: string[];
+    familias_disponiveis?: Array<{
+        chave: string;
+        nome: string;
+        descricao: string;
+        segmento_base: string;
+    }>;
     flags: SegmentoFlags;
     unidades: string[];
     tipos_item: TipoItem[];

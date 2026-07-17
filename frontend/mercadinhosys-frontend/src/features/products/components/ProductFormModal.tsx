@@ -45,6 +45,7 @@ const emptyForm = {
     categoria: '',
     marca: '',
     fabricante: '',
+    familia_produto: '',
     ncm: '',
     cest: '',
     cfop_padrao: '5102',
@@ -77,7 +78,7 @@ const ProductFormModal = ({
     const [showForceSync, setShowForceSync] = useState(false);
 
     // Motor de Renderização Contextual: o schema decide campos, unidades e grupos
-    const { schema } = useViewSchema();
+    const { schema } = useViewSchema(formData.familia_produto || undefined, formData.tipo_item);
     const ehServico = formData.tipo_item === 'servico';
     const visivel = (chave: string) => schemaHelpers.campoVisivel(schema, chave);
 
@@ -88,6 +89,11 @@ const ProductFormModal = ({
 
     // Placeholders contextuais: o dono de loja de roupas não deve ver "Ex: Arroz Tio João"
     const exemplos = schema?.segmento?.exemplos || EXEMPLOS_FALLBACK;
+    const familiasDisponiveis = useMemo(() => {
+        const familias = schema?.familias_disponiveis || [];
+        if (ehServico) return familias.filter(f => f.chave === 'servico');
+        return familias.filter(f => f.chave !== 'servico');
+    }, [schema, ehServico]);
 
     const gruposAtributos = useMemo(() => {
         if (!schema) return [];
@@ -110,6 +116,7 @@ const ProductFormModal = ({
                 categoria: produto.categoria || '',
                 marca: produto.marca || '',
                 fabricante: produto.fabricante || '',
+                familia_produto: produto.familia_produto || '',
                 ncm: (produto as any).ncm || '',
                 cest: (produto as any).cest || '',
                 cfop_padrao: (produto as any).cfop_padrao || '5102',
@@ -130,6 +137,21 @@ const ProductFormModal = ({
             setFormData({ ...emptyForm });
         }
     }, [show, editMode, produto]);
+
+    useEffect(() => {
+        if (!show || !schema) return;
+        const familiaAtual = formData.familia_produto;
+        const familiaSchema = schema.familia_produto?.chave;
+        if (ehServico) {
+            if (familiaAtual !== 'servico') {
+                setFormData(prev => ({ ...prev, familia_produto: 'servico' }));
+            }
+            return;
+        }
+        if (!familiaAtual && familiaSchema) {
+            setFormData(prev => ({ ...prev, familia_produto: familiaSchema }));
+        }
+    }, [show, schema, ehServico, formData.familia_produto]);
 
     const handleScanCodigo = async (codigo: string, force: boolean = false) => {
         setShowScanner(false);
@@ -288,7 +310,15 @@ const ProductFormModal = ({
                             const Icone = t === 'servico' ? Wrench : Package;
                             return (
                                 <button key={t} type="button" disabled={editMode}
-                                    onClick={() => field('tipo_item', t)}
+                                    onClick={() => setFormData(prev => ({
+                                        ...prev,
+                                        tipo_item: t,
+                                        familia_produto: t === 'servico'
+                                            ? 'servico'
+                                            : (prev.familia_produto && prev.familia_produto !== 'servico'
+                                                ? prev.familia_produto
+                                                : (schema?.familias_disponiveis?.find(f => f.chave !== 'servico')?.chave || '')),
+                                    }))}
                                     className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 font-bold transition-all ${ativo
                                         ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
                                         : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-blue-300'
@@ -330,6 +360,23 @@ const ProductFormModal = ({
                                     className={inputClass}
                                     placeholder={ehServico ? exemplos.nome_servico : exemplos.nome} />
                             </div>
+                            {familiasDisponiveis.length > 0 && (
+                                <div>
+                                    <label className={labelClass}>Família do Item *</label>
+                                    <select
+                                        value={formData.familia_produto}
+                                        onChange={e => field('familia_produto', e.target.value)}
+                                        className={inputClass}
+                                        disabled={editMode && ehServico}
+                                    >
+                                        {familiasDisponiveis.map(familia => (
+                                            <option key={familia.chave} value={familia.chave}>
+                                                {familia.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             {!ehServico && visivel('codigo_barras') && (
                                 <div>
                                     <label className={labelClass}>Código de Barras</label>

@@ -138,7 +138,7 @@ const SwitchField = ({ label, checked, onChange, description }: SwitchFieldProps
 const defaultConfig: Configuracao = {
     id: 0, estabelecimento_id: 0, cor_principal: '#2563eb', tema_escuro: false,
     emitir_nfe: false, emitir_nfce: true, impressao_automatica: false, tipo_impressora: 'termica_80mm',
-    exibir_preco_tela: true, permitir_venda_sem_estoque: false, desconto_maximo_percentual: 10,
+    exibir_preco_tela: true, mostrar_foto_produto_pdv: false, permitir_venda_sem_estoque: false, desconto_maximo_percentual: 10,
     desconto_maximo_funcionario: 10, arredondamento_valores: true, formas_pagamento: [],
     motivos_estorno: ["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"],
     controlar_validade: true, alerta_estoque_minimo: true, dias_alerta_validade: 30, estoque_minimo_padrao: 10,
@@ -823,6 +823,13 @@ const SettingsPage: React.FC = () => {
                                     description="Mostrar preço unitário grande na tela de venda"
                                     checked={config.exibir_preco_tela}
                                     onChange={(val: boolean) => setConfig({ ...config, exibir_preco_tela: val })}
+                                />
+
+                                <SwitchField
+                                    label="Mostrar Foto do Produto no PDV"
+                                    description="Exibir thumbnail do item nos resultados de busca e seleção do caixa"
+                                    checked={config.mostrar_foto_produto_pdv}
+                                    onChange={(val: boolean) => setConfig({ ...config, mostrar_foto_produto_pdv: val })}
                                 />
 
                                 <SwitchField

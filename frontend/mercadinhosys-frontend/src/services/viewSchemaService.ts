@@ -7,6 +7,12 @@ let schemaCache: ViewSchema | null = null;
 let schemaPromise: Promise<ViewSchema> | null = null;
 const listeners = new Set<(schema: ViewSchema) => void>();
 
+interface SchemaRequestParams {
+    forceRefresh?: boolean;
+    familiaProduto?: string;
+    tipoItem?: string;
+}
+
 function notificar(schema: ViewSchema) {
     schemaCache = schema;
     listeners.forEach(l => l(schema));
@@ -25,6 +31,19 @@ export const viewSchemaService = {
                 .finally(() => { schemaPromise = null; });
         }
         return schemaPromise;
+    },
+
+    getSchemaForContext: async ({ forceRefresh = false, familiaProduto, tipoItem = 'produto' }: SchemaRequestParams = {}): Promise<ViewSchema> => {
+        if (!familiaProduto && tipoItem === 'produto') {
+            return viewSchemaService.getSchema(forceRefresh);
+        }
+        const res = await apiClient.get<{ success: boolean; schema: ViewSchema }>('/view-schema/', {
+            params: {
+                familia_produto: familiaProduto,
+                tipo_item: tipoItem,
+            },
+        });
+        return res.data.schema;
     },
 
     invalidate: () => {
@@ -61,11 +80,21 @@ export const viewSchemaService = {
  * Hook do Motor de Renderização Contextual: entrega o View Schema resolvido
  * pelo backend e re-renderiza quando o segmento/overrides mudarem.
  */
-export function useViewSchema(): { schema: ViewSchema | null; loading: boolean } {
-    const [schema, setSchema] = useState<ViewSchema | null>(schemaCache);
-    const [loading, setLoading] = useState(!schemaCache);
+export function useViewSchema(familiaProduto?: string, tipoItem: string = 'produto'): { schema: ViewSchema | null; loading: boolean } {
+    const usaContextoCustom = !!familiaProduto || tipoItem !== 'produto';
+    const [schema, setSchema] = useState<ViewSchema | null>(usaContextoCustom ? null : schemaCache);
+    const [loading, setLoading] = useState(usaContextoCustom ? true : !schemaCache);
 
     useEffect(() => {
+        if (usaContextoCustom) {
+            setLoading(true);
+            viewSchemaService.getSchemaForContext({ familiaProduto, tipoItem })
+                .then(setSchema)
+                .catch(err => console.error('Erro ao carregar view schema contextual:', err))
+                .finally(() => setLoading(false));
+            return;
+        }
+
         const listener = (s: ViewSchema) => setSchema(s);
         listeners.add(listener);
         if (!schemaCache) {
@@ -75,7 +104,7 @@ export function useViewSchema(): { schema: ViewSchema | null; loading: boolean }
                 .finally(() => setLoading(false));
         }
         return () => { listeners.delete(listener); };
-    }, []);
+    }, [familiaProduto, tipoItem, usaContextoCustom]);
 
     return { schema, loading };
 }

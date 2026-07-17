@@ -25,6 +25,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const mostrarValidade = config?.controlar_validade ?? true;
     const mostrarAlertaEstoque = config?.alerta_estoque_minimo ?? true;
     const diasAlertaValidade = config?.dias_alerta_validade ?? 30;
+    const mostrarFotoProduto = config?.mostrar_foto_produto_pdv ?? false;
 
     useEffect(() => {
         if (!query.trim()) {
@@ -226,6 +227,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                         const estq: number = (produto as any).quantidade_estoque ?? (produto as any).estoque_atual ?? 0;
                         const dvStr = (produto as any).data_validade || produto.data_validade;
                         const preco = (produto as any).preco_venda_efetivo ?? produto.preco_venda ?? 0;
+                        const imagemUrl = (produto as any).imagem_url || produto.imagem_url;
 
                         return (
                             <div
@@ -234,13 +236,21 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                 className="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors"
                             >
                                 <div className="flex items-center gap-3">
-                                    {/* Badge de unidade */}
-                                    <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
-                                        ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                        }`}>
-                                        {isPeso ? un : <Package className="w-5 h-5" />}
-                                    </div>
+                                    {mostrarFotoProduto && imagemUrl ? (
+                                        <img
+                                            src={imagemUrl}
+                                            alt={produto.nome}
+                                            loading="lazy"
+                                            className="w-12 h-12 flex-shrink-0 rounded-xl object-cover border border-gray-200 dark:border-gray-700 bg-white"
+                                        />
+                                    ) : (
+                                        <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
+                                            ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                                            }`}>
+                                            {isPeso ? un : <Package className="w-5 h-5" />}
+                                        </div>
+                                    )}
 
                                     {/* Nome + badges */}
                                     <div className="flex-1 min-w-0">

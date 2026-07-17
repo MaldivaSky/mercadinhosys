@@ -183,6 +183,8 @@ export interface Produto {
     imagem_url?: string;
     tipo_item?: 'produto' | 'servico';
     controlar_estoque?: boolean;
+    familia_produto?: string;
+    perfil_fiscal?: string;
     atributos?: Record<string, any>;
     alerta_validade?: boolean;
     alerta_estoque?: boolean;

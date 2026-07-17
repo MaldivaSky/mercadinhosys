@@ -39,6 +39,7 @@ export interface Configuracao {
     impressao_automatica: boolean;
     tipo_impressora: 'termica_80mm' | 'termica_58mm' | 'a4';
     exibir_preco_tela: boolean;
+    mostrar_foto_produto_pdv: boolean;
     permitir_venda_sem_estoque: boolean;
     desconto_maximo_percentual: number;
     desconto_maximo_funcionario: number;
