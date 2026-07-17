@@ -143,6 +143,12 @@ def sync(estab_id=None):
 
     print("  " + "-" * 46)
     print(f"  ✅ +{total} registros novos no Aiven.\n")
+
+    # Upsert com id explícito nunca avança a sequence -> corrige aqui para o
+    # próximo INSERT normal da app não colidir (duplicate key).
+    from scripts.fix_sequences import fix_sequences
+    fix_sequences(conn=ac, silent=False)
+
     lc.close(); ac.close()
     return 0
 

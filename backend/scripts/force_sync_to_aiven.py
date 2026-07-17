@@ -217,10 +217,15 @@ def force_sync(app=None, silent=False):
 
     log("  " + "-"*55)
     log(f"  🏆 TOTAL SINCRONIZADO: {total_records} registros.\n")
-    
+
+    # Upsert com id explícito nunca avança a sequence -> corrige aqui para o
+    # próximo INSERT normal da app não colidir (duplicate key).
+    from scripts.fix_sequences import fix_sequences
+    fix_sequences(conn=aconn, silent=silent)
+
     lcur.close(); lconn.close()
     acur.close(); aconn.close()
-    
+
     return {"success": True, "total_registros": total_records}
 
 if __name__ == "__main__":

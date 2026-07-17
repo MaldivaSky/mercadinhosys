@@ -208,6 +208,12 @@ def robust_sync(silent=False):
 
     log("-" * 58)
     log(f"  TOTAL ENVIADO: {total}")
+
+    # Upsert com id explícito nunca avança a sequence -> corrige aqui para o
+    # próximo INSERT normal da app não colidir (duplicate key).
+    from scripts.fix_sequences import fix_sequences
+    fix_sequences(conn=aconn, silent=silent)
+
     aconn.close()
     return {"success": True, "total_registros": total}
 
