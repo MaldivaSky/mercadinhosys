@@ -98,12 +98,10 @@ backend/*.log
 seed_*.py
 verify_system_*.py
 
-# ── Seed v2 "Gêmeo Digital" e artefatos sensíveis (revelam o sistema) ──
-# Ficam APENAS locais; nunca sobem para o repositório.
-backend/app/simulation/v2/
-backend/app/simulation/realistic_generator.py
-backend/app/simulation/validated_seeder.py
-backend/app/simulation/validators.py
+# ── Seed / Simulação "Gêmeo Digital" e artefatos sensíveis (revelam o sistema) ──
+# Ficam APENAS locais; nunca sobem para o repositório (decisão do Rafael, 2026-07-17:
+# a exceção anterior que mantinha backend/app/simulation/ v1 versionado foi revogada).
+backend/app/simulation/
 backend/app/utils/filter_validator.py
 backend/generate_seed_audit_logs.py
 backend/restore_admin_access.py
