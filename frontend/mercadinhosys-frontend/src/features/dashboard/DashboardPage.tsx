@@ -11,6 +11,7 @@ import { authService } from '../auth/authService';
 import { isPlanoGratis } from '../../utils/permissions';
 import { InsightCard } from '../../components/consultor/InsightCard';
 import AlertsPanel from './components/AlertsPanel';
+import { useSuperAdmin } from '../../contexts/SuperAdminContext';
 
 export default function DashboardPageV2() {
   const [activeTab, setActiveTab] = useState('executive');
@@ -19,12 +20,16 @@ export default function DashboardPageV2() {
   const [daysFilter, setDaysFilter] = useState<number | 'custom'>(30);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const { selectedTenantId } = useSuperAdmin();
 
   useEffect(() => {
     if (daysFilter !== 'custom') {
       loadData();
     }
-  }, [daysFilter]);
+    // selectedTenantId: modo espelho do super admin troca de loja sem navegar
+    // para outra página — sem essa dependência, o dashboard ficava preso nos
+    // dados (somados) carregados na montagem inicial.
+  }, [daysFilter, selectedTenantId]);
 
   const loadData = async () => {
     if (daysFilter === 'custom' && (!startDate || !endDate)) {
