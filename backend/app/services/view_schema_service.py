@@ -416,21 +416,27 @@ def listar_familias_disponiveis(segmento: str = None, mix: list | None = None) -
 
 def mix_permitido_para_estabelecimento(estabelecimento: Estabelecimento | None = None, segmento: str = None) -> list:
     segmento = normalizar_segmento(estabelecimento.segmento if estabelecimento is not None else segmento)
+    mix_padrao = MIX_PADRAO_POR_SEGMENTO.get(segmento, MIX_PADRAO_POR_SEGMENTO[SEGMENTO_PADRAO])
+    familias_permitidas = set(mix_padrao)
     mix = []
     if estabelecimento is not None:
         try:
             configuracoes = estabelecimento.configuracoes or {}
-            mix = configuracoes.get("mix_produtos") or []
+            mix = (
+                configuracoes.get("mix_produtos")
+                or ((configuracoes.get("view_schema") or {}).get("mix_produtos"))
+                or []
+            )
         except Exception:
             mix = []
     if not isinstance(mix, list) or not mix:
-        mix = MIX_PADRAO_POR_SEGMENTO.get(segmento, MIX_PADRAO_POR_SEGMENTO[SEGMENTO_PADRAO])
+        mix = mix_padrao
     normalizado = []
     for familia in mix:
         chave = str(familia or "").strip().lower()
-        if chave in FAMILIAS_PRODUTO and chave not in normalizado:
+        if chave in familias_permitidas and chave not in normalizado:
             normalizado.append(chave)
-    return normalizado or list(MIX_PADRAO_POR_SEGMENTO[SEGMENTO_PADRAO])
+    return normalizado or list(mix_padrao)
 
 
 def normalizar_familia_produto(
@@ -440,7 +446,8 @@ def normalizar_familia_produto(
     tipo_item: str = "produto",
 ) -> str:
     if str(tipo_item or "produto").lower() == "servico":
-        return "servico"
+        mix = mix_permitido_para_estabelecimento(estabelecimento, segmento)
+        return "servico" if "servico" in mix else mix[0]
     familia = str(familia_produto or "").strip().lower()
     mix = mix_permitido_para_estabelecimento(estabelecimento, segmento)
     if familia in mix:
@@ -561,10 +568,15 @@ def resolver_view_schema(
             "perfil_fiscal_padrao": inferir_perfil_fiscal_padrao(familia_produto, tipo_item=tipo_item),
         },
         "mix_permitido": mix_permitido,
+        "familias_configuraveis": listar_familias_disponiveis(segmento_tenant),
         "familias_disponiveis": listar_familias_disponiveis(segmento_tenant, mix_permitido),
         "flags": flags,
         "unidades": unidades or info_familia.get("unidades") or info_segmento["unidades"],
-        "tipos_item": (["produto", "servico"] if flags.get("usa_servicos") else ["produto"]),
+        "tipos_item": (
+            ["produto", "servico"]
+            if flags.get("usa_servicos") and "servico" in mix_permitido
+            else ["produto"]
+        ),
         "campos": campos,
         "metricas": metricas,
         "grupos": [

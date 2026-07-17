@@ -80,6 +80,12 @@ export interface ViewSchema {
         perfil_fiscal_padrao?: string;
     };
     mix_permitido?: string[];
+    familias_configuraveis?: Array<{
+        chave: string;
+        nome: string;
+        descricao: string;
+        segmento_base: string;
+    }>;
     familias_disponiveis?: Array<{
         chave: string;
         nome: string;
@@ -102,4 +108,5 @@ export interface ViewSchemaOverrides {
     obrigatorios?: Record<string, boolean>;
     opcoes?: Record<string, string[]>;
     unidades?: string[];
+    mix_produtos?: string[];
 }

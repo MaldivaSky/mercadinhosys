@@ -23,6 +23,7 @@ const SegmentSettings = () => {
     // Overrides em edição (chaves ocultas localmente antes de salvar)
     const [camposOcultos, setCamposOcultos] = useState<string[]>([]);
     const [metricasOcultas, setMetricasOcultas] = useState<string[]>([]);
+    const [mixProdutos, setMixProdutos] = useState<string[]>([]);
 
     // O painel edita sobre o schema-BASE do segmento (sem overrides aplicados):
     // assim um campo oculto continua listado e pode ser religado.
@@ -31,6 +32,7 @@ const SegmentSettings = () => {
         setSchema(base);
         setCamposOcultos(overrides.campos_ocultos || []);
         setMetricasOcultas(overrides.metricas_ocultas || []);
+        setMixProdutos(overrides.mix_produtos || base.mix_permitido || []);
     };
 
     useEffect(() => {
@@ -64,6 +66,15 @@ const SegmentSettings = () => {
         setMetricasOcultas(prev => prev.includes(chave) ? prev.filter(c => c !== chave) : [...prev, chave]);
     };
 
+    const alternarFamilia = (chave: string) => {
+        setSalvo(false);
+        setMixProdutos(prev => {
+            const existe = prev.includes(chave);
+            if (existe) return prev.filter(item => item !== chave);
+            return [...prev, chave];
+        });
+    };
+
     const [salvo, setSalvo] = useState(true);
 
     const salvarOverrides = async () => {
@@ -72,6 +83,7 @@ const SegmentSettings = () => {
             await viewSchemaService.saveOverrides({
                 campos_ocultos: camposOcultos,
                 metricas_ocultas: metricasOcultas,
+                mix_produtos: mixProdutos,
             });
             setSalvo(true);
             showToast.success('Preferências de exibição salvas.');
@@ -85,6 +97,10 @@ const SegmentSettings = () => {
     // Campos configuráveis: os de atributo do segmento + campos núcleo opcionais
     const camposConfiguraveis = useMemo(
         () => (schema?.campos || []).filter(c => c.chave !== 'fiscal').sort((a, b) => a.ordem - b.ordem),
+        [schema],
+    );
+    const familiasConfiguraveis = useMemo(
+        () => schema?.familias_configuraveis || [],
         [schema],
     );
 
@@ -136,6 +152,47 @@ const SegmentSettings = () => {
                         );
                     })}
                 </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                <div className="flex items-center gap-2 mb-1">
+                    <Layers className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Mix de Produtos Permitido</h3>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Defina quais famílias podem ser cadastradas neste tenant. O formulário de produto e o schema contextual respeitam essa governança.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {familiasConfiguraveis.map(familia => {
+                        const ativa = mixProdutos.includes(familia.chave);
+                        return (
+                            <button
+                                key={familia.chave}
+                                onClick={() => alternarFamilia(familia.chave)}
+                                className={`flex items-center justify-between px-4 py-3 rounded-lg border transition-all text-left ${ativa
+                                    ? 'border-blue-200 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-900/10'
+                                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 opacity-70'
+                                    }`}
+                            >
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{familia.nome}</p>
+                                    <p className="text-[11px] text-gray-400">{familia.descricao}</p>
+                                </div>
+                                <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${ativa
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300'
+                                    }`}>
+                                    {ativa ? 'Ativa' : 'Oculta'}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+                {mixProdutos.length === 0 && (
+                    <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                        Nenhuma família selecionada. Ao salvar, o sistema volta automaticamente para o mix padrão do segmento.
+                    </p>
+                )}
             </div>
 
             {/* Campos exibidos (overrides do tenant) */}

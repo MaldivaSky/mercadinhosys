@@ -14,6 +14,7 @@ from app.models import Estabelecimento
 from app.services.view_schema_service import (
     SEGMENTOS,
     invalidar_cache_view_schema,
+    mix_permitido_para_estabelecimento,
     resolver_view_schema,
 )
 from app.utils.query_helpers import get_authorized_establishment_id
@@ -67,6 +68,12 @@ def obter_view_schema():
                 tipo_item=tipo_item,
             )
             overrides = (estabelecimento.configuracoes or {}).get("view_schema") or {}
+            overrides = dict(overrides) if isinstance(overrides, dict) else {}
+            overrides["mix_produtos"] = (
+                (estabelecimento.configuracoes or {}).get("mix_produtos")
+                or base.get("mix_permitido")
+                or []
+            )
             return jsonify({"success": True, "schema": base, "overrides": overrides}), 200
 
         schema = resolver_view_schema(
@@ -110,6 +117,19 @@ def definir_segmento():
             return jsonify({"success": False, "error": f"Segmento inválido: {segmento}"}), 400
 
         estabelecimento.segmento = segmento
+        configuracoes = estabelecimento.configuracoes or {}
+        mix_atual = configuracoes.get("mix_produtos") or []
+        if mix_atual:
+            mix_padrao_novo = resolver_view_schema(segmento=segmento).get("mix_permitido") or []
+            mix_sanitizado = [
+                familia for familia in [str(v or "").strip().lower() for v in mix_atual]
+                if familia in mix_padrao_novo
+            ]
+            if mix_sanitizado and mix_sanitizado != mix_padrao_novo:
+                configuracoes["mix_produtos"] = mix_sanitizado
+            else:
+                configuracoes.pop("mix_produtos", None)
+            estabelecimento.configuracoes = configuracoes
         db.session.commit()
         invalidar_cache_view_schema(estabelecimento.id)
 
@@ -137,6 +157,17 @@ def salvar_overrides():
             return jsonify({"success": False, "error": "Ação não permitida na visão global (all)."}), 403
 
         data = request.get_json() or {}
+        base_padrao = resolver_view_schema(segmento=estabelecimento.segmento)
+        mix_padrao = base_padrao.get("mix_permitido") or []
+        mix_solicitado = data.get("mix_produtos")
+        mix_customizado = None
+        if isinstance(mix_solicitado, list):
+            mix_customizado = []
+            for familia in mix_solicitado:
+                chave = str(familia or "").strip().lower()
+                if chave in mix_padrao and chave not in mix_customizado:
+                    mix_customizado.append(chave)
+
         overrides = {}
         for chave_lista in ("campos_ocultos", "campos_habilitados", "metricas_ocultas",
                             "metricas_habilitadas", "unidades"):
@@ -150,6 +181,11 @@ def salvar_overrides():
 
         configuracoes = estabelecimento.configuracoes
         configuracoes["view_schema"] = overrides
+        if mix_customizado is not None:
+            if mix_customizado and mix_customizado != mix_padrao:
+                configuracoes["mix_produtos"] = mix_customizado
+            else:
+                configuracoes.pop("mix_produtos", None)
         estabelecimento.configuracoes = configuracoes
         db.session.commit()
         invalidar_cache_view_schema(estabelecimento.id)
