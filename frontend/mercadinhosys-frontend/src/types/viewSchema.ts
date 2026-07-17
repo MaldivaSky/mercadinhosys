@@ -69,6 +69,14 @@ export interface SegmentoFlags {
     usa_embalagens: boolean;
 }
 
+export interface SugestaoFiscal {
+    csosn_sugerido: string;
+    cst_icms_sugerido: string;
+    cfop_padrao_sugerido: string;
+    icms_aliquota_sugerida: number;
+    observacao_fiscal: string;
+}
+
 export interface ViewSchema {
     segmento: SegmentoInfo;
     segmento_tenant?: SegmentoInfo;
@@ -79,6 +87,7 @@ export interface ViewSchema {
         segmento_base: string;
         perfil_fiscal_padrao?: string;
     };
+    sugestao_fiscal?: SugestaoFiscal;
     mix_permitido?: string[];
     familias_configuraveis?: Array<{
         chave: string;

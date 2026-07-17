@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Camera, Sparkles, Package, Wrench } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Camera, Sparkles, Package, Wrench, HelpCircle } from 'lucide-react';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 import SchemaField from '../../../components/schema/SchemaField';
 import { showToast } from '../../../utils/toast';
@@ -38,6 +38,34 @@ const LABEL_UNIDADE: Record<string, string> = {
     m: 'Metro (m)', m2: 'Metro² (m²)', m3: 'Metro³ (m³)', t: 'Tonelada (t)', milheiro: 'Milheiro',
 };
 
+/**
+ * Ícone de ajuda contextual (?) ao lado de labels — sobretudo nos campos
+ * fiscais, onde o lojista raramente sabe de cor o que é NCM/CFOP/CSOSN.
+ * Tooltip próprio (não usa `title` nativo: aparece com atraso e não é
+ * estilizável, o que destoa do resto do formulário).
+ */
+const CampoAjuda = ({ texto }: { texto: string }) => (
+    <span className="relative inline-flex group/ajuda align-middle">
+        <button
+            type="button"
+            tabIndex={-1}
+            className="text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+            aria-label="Ajuda sobre este campo"
+        >
+            <HelpCircle className="w-3.5 h-3.5" />
+        </button>
+        <span
+            className="pointer-events-none absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 w-56
+                       rounded-lg bg-gray-900 dark:bg-gray-700 px-3 py-2 text-[11px] leading-snug text-white
+                       opacity-0 scale-95 origin-bottom transition-all duration-150
+                       group-hover/ajuda:opacity-100 group-hover/ajuda:scale-100 shadow-xl"
+        >
+            {texto}
+            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700" />
+        </span>
+    </span>
+);
+
 const emptyForm = {
     nome: '',
     codigo_barras: '',
@@ -48,8 +76,8 @@ const emptyForm = {
     familia_produto: '',
     ncm: '',
     cest: '',
-    cfop_padrao: '5102',
-    csosn: '102',
+    cfop_padrao: '',
+    csosn: '',
     tipo: '',
     tipo_item: 'produto' as TipoItem,
     unidade_medida: 'un',
@@ -119,8 +147,8 @@ const ProductFormModal = ({
                 familia_produto: produto.familia_produto || '',
                 ncm: (produto as any).ncm || '',
                 cest: (produto as any).cest || '',
-                cfop_padrao: (produto as any).cfop_padrao || '5102',
-                csosn: (produto as any).csosn || '102',
+                cfop_padrao: (produto as any).cfop_padrao || '',
+                csosn: (produto as any).csosn || '',
                 tipo: produto.tipo || '',
                 tipo_item: (produto.tipo_item as TipoItem) || 'produto',
                 unidade_medida: produto.unidade_medida || 'un',
@@ -152,6 +180,29 @@ const ProductFormModal = ({
             setFormData(prev => ({ ...prev, familia_produto: familiaSchema }));
         }
     }, [show, schema, ehServico, formData.familia_produto]);
+
+    // Sugestão fiscal por família: preenche/atualiza CFOP e CSOSN enquanto o
+    // valor em tela ainda for exatamente o que a própria sugestão colocou lá
+    // (rastreado em ultimaSugestaoAplicada). No instante em que o usuário
+    // digita algo diferente, o campo "sai do modo automático" e passa a ser
+    // preservado mesmo trocando de família de novo.
+    const ultimaSugestaoAplicada = useRef<{ cfop: string; csosn: string } | null>(null);
+    useEffect(() => {
+        if (!show || !schema?.sugestao_fiscal) return;
+        const sugestao = schema.sugestao_fiscal;
+        setFormData(prev => {
+            const aindaAuto = ultimaSugestaoAplicada.current;
+            const cfopAuto = !prev.cfop_padrao || prev.cfop_padrao === aindaAuto?.cfop;
+            const csosnAuto = !prev.csosn || prev.csosn === aindaAuto?.csosn;
+            if (!cfopAuto && !csosnAuto) return prev;
+            return {
+                ...prev,
+                cfop_padrao: cfopAuto ? sugestao.cfop_padrao_sugerido : prev.cfop_padrao,
+                csosn: csosnAuto ? sugestao.csosn_sugerido : prev.csosn,
+            };
+        });
+        ultimaSugestaoAplicada.current = { cfop: sugestao.cfop_padrao_sugerido, csosn: sugestao.csosn_sugerido };
+    }, [show, schema]);
 
     const handleScanCodigo = async (codigo: string, force: boolean = false) => {
         setShowScanner(false);
@@ -353,18 +404,16 @@ const ProductFormModal = ({
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Identificação</h4>
                     <div className={sectionClass}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="sm:col-span-2">
-                                <label className={labelClass}>{ehServico ? 'Nome do Serviço *' : 'Nome do Produto *'}</label>
-                                <input type="text" value={formData.nome} required
-                                    onChange={e => field('nome', e.target.value)}
-                                    className={inputClass}
-                                    placeholder={ehServico ? exemplos.nome_servico : exemplos.nome} />
-                            </div>
-                            {/* Toggle só aparece quando há 2+ famílias no mix do tenant — com 1 só,
-                                a família é fixa pelo segmento (sem escolha no cadastro). */}
+                            {/* Família vem primeiro: é ela que decide os campos, exemplos e
+                                sugestão fiscal do resto do formulário — faz sentido perguntar
+                                antes do nome, não depois. Só aparece quando há 2+ famílias no
+                                mix do tenant; com 1 só, fica fixa pelo segmento (sem escolha). */}
                             {familiasDisponiveis.length > 1 && (
-                                <div>
-                                    <label className={labelClass}>Família do Item *</label>
+                                <div className="sm:col-span-2">
+                                    <label className={`${labelClass} flex items-center gap-1`}>
+                                        Família do Item *
+                                        <CampoAjuda texto="Define que tipo de item é este (alimento, bebida, peça, etc). A partir daqui o formulário se adapta: campos, exemplos e até a sugestão fiscal (CFOP/CSOSN) mudam de acordo com a família escolhida." />
+                                    </label>
                                     <select
                                         value={formData.familia_produto}
                                         onChange={e => field('familia_produto', e.target.value)}
@@ -379,6 +428,13 @@ const ProductFormModal = ({
                                     </select>
                                 </div>
                             )}
+                            <div className="sm:col-span-2">
+                                <label className={labelClass}>{ehServico ? 'Nome do Serviço *' : 'Nome do Produto *'}</label>
+                                <input type="text" value={formData.nome} required
+                                    onChange={e => field('nome', e.target.value)}
+                                    className={inputClass}
+                                    placeholder={ehServico ? exemplos.nome_servico : exemplos.nome} />
+                            </div>
                             {!ehServico && visivel('codigo_barras') && (
                                 <div>
                                     <label className={labelClass}>Código de Barras</label>
@@ -459,9 +515,22 @@ const ProductFormModal = ({
                     <div>
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tributação (NFC-e / NF-e)</h4>
                         <div className={sectionClass}>
+                            {schema?.sugestao_fiscal && (
+                                <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                                    <span className="font-bold shrink-0">⚠ Sugestão automática por segmento</span>
+                                    <span>
+                                        CFOP/CSOSN pré-preenchidos pela família do item — revise com seu contador antes
+                                        de emitir em produção.
+                                        {schema.sugestao_fiscal.observacao_fiscal ? ` ${schema.sugestao_fiscal.observacao_fiscal}` : ''}
+                                    </span>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                                 <div>
-                                    <label className={labelClass}>NCM</label>
+                                    <label className={`${labelClass} flex items-center gap-1`}>
+                                        NCM
+                                        <CampoAjuda texto="Código fiscal de 8 dígitos que classifica o produto perante a Receita (Nomenclatura Comum do Mercosul). Se você escaneou o código de barras, geralmente já vem preenchido pela Cosmos. Sem ele, a nota fiscal não pode ser emitida." />
+                                    </label>
                                     <input type="text" inputMode="numeric" maxLength={8} value={formData.ncm}
                                         onChange={e => field('ncm', e.target.value.replace(/\D/g, '').slice(0, 8))}
                                         className={`${inputClass} ${formData.ncm && formData.ncm.length !== 8 ? 'border-amber-400' : ''}`}
@@ -471,19 +540,28 @@ const ProductFormModal = ({
                                     )}
                                 </div>
                                 <div>
-                                    <label className={labelClass}>CEST</label>
+                                    <label className={`${labelClass} flex items-center gap-1`}>
+                                        CEST
+                                        <CampoAjuda texto="Código Especificador da Substituição Tributária — só é obrigatório se o seu produto está sujeito a ICMS-ST (o aviso acima indica quando isso é comum). Se não souber, deixe em branco e confirme com seu contador." />
+                                    </label>
                                     <input type="text" inputMode="numeric" maxLength={7} value={formData.cest}
                                         onChange={e => field('cest', e.target.value.replace(/\D/g, '').slice(0, 7))}
                                         className={inputClass} placeholder="7 dígitos" />
                                 </div>
                                 <div>
-                                    <label className={labelClass}>CFOP Padrão</label>
+                                    <label className={`${labelClass} flex items-center gap-1`}>
+                                        CFOP Padrão
+                                        <CampoAjuda texto="Código Fiscal de Operações e Prestações — identifica o tipo de operação na nota (ex.: 5102 = venda de mercadoria comprada de terceiros dentro do seu estado). Já vem sugerido pela família do item; normalmente não precisa mudar." />
+                                    </label>
                                     <input type="text" inputMode="numeric" maxLength={4} value={formData.cfop_padrao}
                                         onChange={e => field('cfop_padrao', e.target.value.replace(/\D/g, '').slice(0, 4))}
                                         className={inputClass} placeholder="Ex: 5102" />
                                 </div>
                                 <div>
-                                    <label className={labelClass}>CSOSN (Simples)</label>
+                                    <label className={`${labelClass} flex items-center gap-1`}>
+                                        CSOSN (Simples)
+                                        <CampoAjuda texto="Código de Situação da Operação no Simples Nacional — define como o ICMS é tratado na nota para quem está no Simples. Se seu regime tributário não é Simples Nacional, o sistema usa o CST em vez deste campo (configurável em Configurações → Fiscal)." />
+                                    </label>
                                     <input type="text" inputMode="numeric" maxLength={3} value={formData.csosn}
                                         onChange={e => field('csosn', e.target.value.replace(/\D/g, '').slice(0, 3))}
                                         className={inputClass} placeholder="Ex: 102" />

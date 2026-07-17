@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { LoginApiResponse } from '../../types';
 import { API_CONFIG } from '../../api/apiConfig';
+import { viewSchemaService } from '../../services/viewSchemaService';
 
 const API_URL = API_CONFIG.BASE_URL;
 
@@ -65,6 +66,8 @@ class AuthService {
                 localStorage.setItem('estabelecimento_data', JSON.stringify(data.data.estabelecimento));
             }
 
+            // Schema contextual é por tenant/segmento — nunca reaproveitar entre logins.
+            viewSchemaService.invalidate();
             // Dispara evento para atualizar estado de autenticação
             window.dispatchEvent(new Event('auth-change'));
 
@@ -229,6 +232,7 @@ class AuthService {
             sessionStorage.removeItem(key);
         });
 
+        viewSchemaService.invalidate();
         // Dispara evento para atualizar estado de autenticação
         window.dispatchEvent(new Event('auth-change'));
 
@@ -261,6 +265,7 @@ class AuthService {
                 const userData = response.data.data;
                 sessionStorage.setItem('user_data', JSON.stringify(userData));
 
+                viewSchemaService.invalidate();
                 // Dispara evento para o usePlanGate e outros hooks
                 window.dispatchEvent(new Event('auth-change'));
                 return userData;

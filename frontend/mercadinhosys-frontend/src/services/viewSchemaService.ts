@@ -111,8 +111,12 @@ export function useViewSchema(familiaProduto?: string, tipoItem: string = 'produ
 
 /** Helpers de consulta — o "if validade" mora aqui, alimentado pelo schema. */
 export const schemaHelpers = {
+    // Fail-closed: enquanto o schema do tenant/segmento atual não chegou (null),
+    // nada schema-dependente aparece. Fail-open aqui já causou um bug real: um
+    // painel de outro segmento (ex.: Monitor de Validade em loja de moto peças)
+    // ficava visível durante a janela entre trocar de tenant e o fetch resolver.
     campoVisivel: (schema: ViewSchema | null, chave: string): boolean =>
-        !schema || schema.campos.some(c => c.chave === chave),
+        !!schema && schema.campos.some(c => c.chave === chave),
 
     campo: (schema: ViewSchema | null, chave: string) =>
         schema?.campos.find(c => c.chave === chave),
@@ -127,8 +131,8 @@ export const schemaHelpers = {
         (schema?.metricas || []).filter(m => m.escopo_ui === 'card').sort((a, b) => a.ordem - b.ordem),
 
     metricaPainelVisivel: (schema: ViewSchema | null, chave: string): boolean =>
-        !schema || schema.metricas.some(m => m.chave === chave && m.escopo_ui === 'painel'),
+        !!schema && schema.metricas.some(m => m.chave === chave && m.escopo_ui === 'painel'),
 
-    usaValidade: (schema: ViewSchema | null): boolean => !schema || !!schema.flags?.usa_validade,
+    usaValidade: (schema: ViewSchema | null): boolean => !!schema?.flags?.usa_validade,
     usaServicos: (schema: ViewSchema | null): boolean => !!schema?.flags?.usa_servicos,
 };
