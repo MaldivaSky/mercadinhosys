@@ -146,7 +146,7 @@ export function getDefaultRoute(user?: UsuarioLogado | null): string {
  */
 export function getSettingsTabs(user?: UsuarioLogado | null): string[] {
     const todas = [
-        'geral', 'conta', 'estabelecimento', 'fiscal', 'vendas', 'estoque',
+        'geral', 'conta', 'segmento', 'estabelecimento', 'fiscal', 'vendas', 'estoque',
         'ponto', 'sistema', 'sincronizacao', 'assinatura',
     ];
     if (user?.is_super_admin) return [...todas, 'lojas'];
@@ -159,7 +159,7 @@ export function getSettingsTabs(user?: UsuarioLogado | null): string[] {
         tabs = ['geral', 'conta'];
     }
     if (isPlanoGratis(user)) {
-        const permitidasGratis = ['geral', 'conta', 'estabelecimento', 'assinatura'];
+        const permitidasGratis = ['geral', 'conta', 'segmento', 'estabelecimento', 'assinatura'];
         tabs = tabs.filter(t => permitidasGratis.includes(t));
     }
     return tabs;

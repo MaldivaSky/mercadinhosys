@@ -360,7 +360,9 @@ const ProductFormModal = ({
                                     className={inputClass}
                                     placeholder={ehServico ? exemplos.nome_servico : exemplos.nome} />
                             </div>
-                            {familiasDisponiveis.length > 0 && (
+                            {/* Toggle só aparece quando há 2+ famílias no mix do tenant — com 1 só,
+                                a família é fixa pelo segmento (sem escolha no cadastro). */}
+                            {familiasDisponiveis.length > 1 && (
                                 <div>
                                     <label className={labelClass}>Família do Item *</label>
                                     <select
