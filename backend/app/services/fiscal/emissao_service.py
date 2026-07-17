@@ -36,6 +36,35 @@ def _ncm_valido(ncm) -> bool:
     return len(digits) == 8 and digits != "00000000"
 
 
+def _cfop_valido(cfop) -> bool:
+    digits = re.sub(r"\D", "", str(cfop or ""))
+    return len(digits) == 4 and digits != "0000"
+
+
+def _origem_valida(origem) -> bool:
+    try:
+        valor = int(origem)
+    except (TypeError, ValueError):
+        return False
+    return 0 <= valor <= 8
+
+
+def _codigo_icms_valido(prod, estab: Estabelecimento) -> bool:
+    regime = (getattr(estab, "regime_tributario", "") or "").upper()
+    if "SIMPLES" in regime:
+        codigo = re.sub(r"\D", "", str(getattr(prod, "csosn", "") or ""))
+        return len(codigo) == 3
+    codigo = re.sub(r"\D", "", str(getattr(prod, "cst_icms", "") or ""))
+    return len(codigo) in (2, 3)
+
+
+def _codigo_icms_payload(prod, estab: Estabelecimento) -> str:
+    regime = (getattr(estab, "regime_tributario", "") or "").upper()
+    if "SIMPLES" in regime:
+        return re.sub(r"\D", "", str(getattr(prod, "csosn", "") or ""))
+    return re.sub(r"\D", "", str(getattr(prod, "cst_icms", "") or ""))
+
+
 def _validar_ncm_producao(venda: Venda) -> None:
     """Em produção, recusa emitir se algum item não tiver NCM válido — em vez de
     usar o NCM-default e gerar nota com classificação fiscal errada."""
@@ -52,13 +81,47 @@ def _validar_ncm_producao(venda: Venda) -> None:
         )
 
 
+def _validar_cadastro_fiscal_producao(venda: Venda, estab: Estabelecimento) -> None:
+    itens_invalidos = []
+    for item in venda.itens:
+        prod = item.produto
+        nome = item.produto_nome or (f"produto #{prod.id}" if prod else "item")
+        if prod is None:
+            itens_invalidos.append(f"{nome}: item sem vinculo de produto")
+            continue
+
+        erros = []
+        if not _ncm_valido(getattr(prod, "ncm", None)):
+            erros.append("NCM invalido")
+        if not _cfop_valido(getattr(prod, "cfop_padrao", None)):
+            erros.append("CFOP invalido")
+        if not _origem_valida(getattr(prod, "origem", None)):
+            erros.append("origem invalida")
+        if not _codigo_icms_valido(prod, estab):
+            regime = (getattr(estab, "regime_tributario", "") or "").upper()
+            erros.append("CSOSN ausente/invalido" if "SIMPLES" in regime else "CST ICMS ausente/invalido")
+
+        if erros:
+            itens_invalidos.append(f"{nome}: {', '.join(erros)}")
+
+    if itens_invalidos:
+        raise EmissaoError(
+            "Não é possível emitir em produção: existem produtos com cadastro fiscal "
+            f"incompleto ou inválido. Corrija antes de emitir: {'; '.join(itens_invalidos)}."
+        )
+
+
 def _build_payload(venda: Venda, estab: Estabelecimento, numero: int, serie: int) -> Dict[str, Any]:
     itens = []
     for i, item in enumerate(venda.itens, start=1):
         prod = item.produto
         cfop = (getattr(prod, "cfop_padrao", None) or "5102")
-        csosn = (getattr(prod, "csosn", None) or "102")
+        codigo_icms = _codigo_icms_payload(prod, estab) or "102"
         unidade = (item.produto_unidade or getattr(prod, "unidade_medida", None) or "UN")
+        unidade_tributavel = (
+            getattr(prod, "unidade_tributavel", None)
+            or unidade
+        )
         qtd = float(item.quantidade or 0)
         v_unit = float(item.preco_unitario or 0)
         v_bruto = round(float(item.total_item or (qtd * v_unit)), 2)
@@ -71,15 +134,18 @@ def _build_payload(venda: Venda, estab: Estabelecimento, numero: int, serie: int
             "quantidade_comercial": qtd,
             "valor_unitario_comercial": v_unit,
             "valor_bruto": v_bruto,
-            "unidade_tributavel": unidade[:6],
+            "unidade_tributavel": unidade_tributavel[:6],
             "quantidade_tributavel": qtd,
             "valor_unitario_tributavel": v_unit,
-            "codigo_ncm": (getattr(prod, "ncm", None) or "22021000"),
+            "codigo_ncm": getattr(prod, "ncm", None) or "22021000",
             "icms_origem": str(getattr(prod, "origem", 0) or 0),
-            "icms_situacao_tributaria": csosn,
+            "icms_situacao_tributaria": codigo_icms,
             "pis_situacao_tributaria": "49",
             "cofins_situacao_tributaria": "49",
         })
+        cest = re.sub(r"\D", "", str(getattr(prod, "cest", "") or ""))
+        if len(cest) == 7:
+            itens[-1]["codigo_cest"] = cest
 
     pagamentos = []
     if venda.pagamentos:
@@ -141,6 +207,7 @@ def emitir_nfce(venda: Venda, estab: Estabelecimento, funcionario_id: int) -> Do
     # Em produção, NCM válido por item é obrigatório (não emitir nota com NCM errado).
     if ambiente == "producao":
         _validar_ncm_producao(venda)
+        _validar_cadastro_fiscal_producao(venda, estab)
 
     payload = _build_payload(venda, estab, numero, serie)
 

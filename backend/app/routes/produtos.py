@@ -140,6 +140,13 @@ def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
         codigo_barras = data["codigo_barras"].strip()
         produto_existente = Produto.query.filter_by(
             codigo_barras=codigo_barras,
+            estabelecimento_id=estabelecimento_id,
+        ).first()
+
+        if produto_existente and produto_existente.id != produto_id:
+            erros.append("Código de barras já cadastrado para outro produto")
+
+
 def _resolver_schema_estabelecimento(estabelecimento_id):
     if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
         return resolver_view_schema()
@@ -147,13 +154,6 @@ def _resolver_schema_estabelecimento(estabelecimento_id):
     if estabelecimento is None:
         return resolver_view_schema()
     return resolver_view_schema(estabelecimento)
-
-
-            estabelecimento_id=estabelecimento_id,
-        ).first()
-
-        if produto_existente and produto_existente.id != produto_id:
-            erros.append("Código de barras já cadastrado para outro produto")
 
     # Validação de código interno único (apenas se estabelecimento_id for fornecido)
     if estabelecimento_id and data.get("codigo_interno"):
@@ -1399,20 +1399,13 @@ def criar_produto():
     claims = {}
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
-        current_app.logger.info("Tentando obter claims em criar_produto...")
-        try:
-            claims = get_jwt()
-            current_app.logger.info(f"Claims obtidas: {list(claims.keys()) if claims else 'None'}")
-        except Exception as je:
-            current_app.logger.error(f"Erro ao obter get_jwt(): {str(je)}")
-            claims = {}
-        
-        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
-        estabelecimento_id = get_authorized_establishment_id()
-        
-        data = request.get_json()
 
-        # Validação dos dados
+        claims = get_jwt() or {}
+        from app.utils.query_helpers import get_authorized_establishment_id
+
+        estabelecimento_id = get_authorized_establishment_id()
+        data = request.get_json() or {}
+
         erros = validar_dados_produto(data, estabelecimento_id=estabelecimento_id)
         if erros:
             return (
@@ -1422,147 +1415,172 @@ def criar_produto():
                 400,
             )
 
-        # Encontrar categoria_id baseado no nome da categoria
+        tipo_item = "servico" if data.get("tipo_item") == "servico" else "produto"
+        schema = _resolver_schema_estabelecimento(estabelecimento_id)
+        atributos_limpos = sanitizar_atributos(
+            schema, data.get("atributos"), tipo_item=tipo_item
+        )
+
         categoria_id = None
         if data.get("categoria"):
             categoria_nome = CategoriaProduto.normalizar_nome_categoria(data["categoria"])
-            current_app.logger.info(f"Procurando categoria normalizada: {categoria_nome}")
             categoria_obj = CategoriaProduto.query.filter_by(
                 nome=categoria_nome,
-                estabelecimento_id=estabelecimento_id
+                estabelecimento_id=estabelecimento_id,
             ).first()
             if categoria_obj:
                 categoria_id = categoria_obj.id
-                current_app.logger.info(f"Categoria encontrada: {categoria_obj.id}")
             else:
-                current_app.logger.info(f"Categoria não encontrada, criando nova: {categoria_nome}")
-                # Se categoria não existe, criar uma nova
                 nova_categoria = CategoriaProduto(
                     nome=categoria_nome,
-                    estabelecimento_id=estabelecimento_id
-        tipo_item = "servico" if (data.get("tipo_item") == "servico") else "produto"
-        schema = _resolver_schema_estabelecimento(estabelecimento_id)
-        atributos_limpos = sanitizar_atributos(schema, data.get("atributos"), tipo_item=tipo_item)
-
+                    estabelecimento_id=estabelecimento_id,
                 )
                 db.session.add(nova_categoria)
                 db.session.flush()
                 categoria_id = nova_categoria.id
-                current_app.logger.info(f"Nova categoria criada: {categoria_id}")
-        else:
-            current_app.logger.info("Nenhuma categoria fornecida")
-
-        # Calcular preços e margem
-        try:
-            preco_custo = Decimal(str(data.get("preco_custo", 0) or 0))
-            preco_venda = Decimal(str(data.get("preco_venda", 0) or 0))
-        except (ValueError, TypeError, DecimalException):
-            preco_custo = Decimal("0")
-            preco_venda = Decimal("0")
-        
-        # Calcular margem de lucro
-        if preco_custo > 0:
-            margem = (preco_venda - preco_custo) / preco_custo * 100
-        else:
-            margem = Decimal("0")
 
         def safe_int(val, default=0):
             try:
-                if val is None or val == "": return default
+                if val in (None, ""):
+                    return default
                 return int(float(str(val)))
             except (ValueError, TypeError):
                 return default
 
-        # VERIFICACAO ANTI-DUPLICACAO: checar EAN antes do INSERT para evitar
-        # UniqueViolation silenciosa que consumia IDs e retornava 500.
-            tipo_item=tipo_item,
-            controlar_estoque=(False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))),
-        codigo_barras_novo = (data.get('codigo_barras') or '').strip() or None
-        codigo_interno_novo = (data.get('codigo_interno') or '').strip() or None
+        def safe_decimal(val, default="0"):
+            try:
+                if val in (None, ""):
+                    return Decimal(str(default))
+                return Decimal(str(val))
+            except (ValueError, TypeError, DecimalException):
+                return Decimal(str(default))
+
+        def clean_nullable_str(val, max_len=None):
+            if val is None:
+                return None
+            texto = str(val).strip()
+            if not texto:
+                return None
+            return texto[:max_len] if max_len else texto
+
+        preco_custo = safe_decimal(data.get("preco_custo"), "0")
+        preco_venda = safe_decimal(data.get("preco_venda"), "0")
+        margem = (
+            ((preco_venda - preco_custo) / preco_custo * 100)
+            if preco_custo > 0
+            else Decimal("0")
+        )
+
+        codigo_barras_novo = clean_nullable_str(data.get("codigo_barras"))
+        codigo_interno_novo = clean_nullable_str(data.get("codigo_interno"))
 
         if codigo_barras_novo:
-        produto.atributos = atributos_limpos
             produto_existente_ean = Produto.query.filter_by(
                 estabelecimento_id=estabelecimento_id,
-                codigo_barras=codigo_barras_novo
+                codigo_barras=codigo_barras_novo,
             ).first()
             if produto_existente_ean:
-                return jsonify({
-                    'success': False,
-                    'code': 'PRODUTO_DUPLICADO_EAN',
-                    'message': f'EAN {codigo_barras_novo} ja cadastrado como produto: {produto_existente_ean.nome}. Edite o produto existente.',
-                    'produto_existente': {
-                        'id': produto_existente_ean.id,
-                        'nome': produto_existente_ean.nome,
-                        'codigo_barras': produto_existente_ean.codigo_barras,
-                        'preco_venda': float(produto_existente_ean.preco_venda or 0),
-                        'quantidade': float(produto_existente_ean.quantidade or 0),
-                    }
-                }), 409
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "code": "PRODUTO_DUPLICADO_EAN",
+                            "message": (
+                                f"EAN {codigo_barras_novo} ja cadastrado como produto: "
+                                f"{produto_existente_ean.nome}. Edite o produto existente."
+                            ),
+                            "produto_existente": {
+                                "id": produto_existente_ean.id,
+                                "nome": produto_existente_ean.nome,
+                                "codigo_barras": produto_existente_ean.codigo_barras,
+                                "preco_venda": float(produto_existente_ean.preco_venda or 0),
+                                "quantidade": float(produto_existente_ean.quantidade or 0),
+                            },
+                        }
+                    ),
+                    409,
+                )
 
         if codigo_interno_novo:
             produto_existente_cod = Produto.query.filter_by(
                 estabelecimento_id=estabelecimento_id,
-                codigo_interno=codigo_interno_novo
+                codigo_interno=codigo_interno_novo,
             ).first()
             if produto_existente_cod:
-                return jsonify({
-                    'success': False,
-                    'code': 'PRODUTO_DUPLICADO_CODIGO',
-                    'message': f'Codigo interno ja cadastrado como: {produto_existente_cod.nome}. Edite o produto existente.',
-                    'produto_existente': {
-                        'id': produto_existente_cod.id,
-                        'nome': produto_existente_cod.nome,
-                        'preco_venda': float(produto_existente_cod.preco_venda or 0),
-                        'quantidade': float(produto_existente_cod.quantidade or 0),
-                    }
-                }), 409
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "code": "PRODUTO_DUPLICADO_CODIGO",
+                            "message": (
+                                f"Codigo interno ja cadastrado como: "
+                                f"{produto_existente_cod.nome}. Edite o produto existente."
+                            ),
+                            "produto_existente": {
+                                "id": produto_existente_cod.id,
+                                "nome": produto_existente_cod.nome,
+                                "preco_venda": float(produto_existente_cod.preco_venda or 0),
+                                "quantidade": float(produto_existente_cod.quantidade or 0),
+                            },
+                        }
+                    ),
+                    409,
+                )
 
-        # Criar produto
+        quantidade_inicial = 0 if tipo_item == "servico" else safe_int(data.get("quantidade"), 0)
+        quantidade_minima = 0 if tipo_item == "servico" else safe_int(data.get("quantidade_minima"), 10)
+
         produto = Produto(
             estabelecimento_id=estabelecimento_id,
             categoria_id=categoria_id,
-            fornecedor_id=data.get("fornecedor_id") if data.get("fornecedor_id") else None,
-            # Vazio vira NULL: há unique (estab, codigo_interno) e (estab, codigo_barras).
-            # Com "" o 2º produto sem código colidia (500). NULLs não conflitam no Postgres.
-            codigo_barras=((data.get("codigo_barras") or "").strip() or None),
-            codigo_interno=((data.get("codigo_interno") or "").strip() or None),
+            fornecedor_id=safe_int(data.get("fornecedor_id"), None),
+            codigo_barras=codigo_barras_novo,
+            codigo_interno=codigo_interno_novo,
             nome=data["nome"].strip(),
-            descricao=data.get("descricao", "").strip(),
-            marca=data.get("marca", "").strip(),
-            fabricante=data.get("fabricante", "").strip(),
-            subcategoria=data.get("subcategoria", "").strip() if data.get("subcategoria") else "",
-            unidade_medida=data.get("unidade_medida", "UN") or "UN",
-            quantidade=safe_int(data.get("quantidade"), 0),
-            quantidade_minima=safe_int(data.get("quantidade_minima"), 10),
+            descricao=(data.get("descricao", "") or "").strip(),
+            marca=(data.get("marca", "") or "").strip(),
+            fabricante=(data.get("fabricante", "") or "").strip(),
+            subcategoria=(data.get("subcategoria", "") or "").strip(),
+            unidade_medida=(data.get("unidade_medida", "UN") or "UN").strip(),
+            quantidade=quantidade_inicial,
+            quantidade_minima=quantidade_minima,
             preco_custo=preco_custo,
             preco_venda=preco_venda,
             margem_lucro=margem,
-            ncm=data.get("ncm", "").strip() if data.get("ncm") else "",
+            ncm=clean_nullable_str(re.sub(r"\D", "", data.get("ncm", "")), 8) or "",
             origem=safe_int(data.get("origem"), 0),
-            controlar_validade=(False if tipo_item == "servico" else data.get("controlar_validade", False)),
+            cest=clean_nullable_str(re.sub(r"\D", "", data.get("cest", "")), 7),
+            cfop_padrao=clean_nullable_str(re.sub(r"\D", "", data.get("cfop_padrao", "")), 4) or "5102",
+            cst_icms=clean_nullable_str(re.sub(r"\D", "", data.get("cst_icms", "")), 3),
+            csosn=clean_nullable_str(re.sub(r"\D", "", data.get("csosn", "")), 3) or "102",
+            unidade_tributavel=clean_nullable_str(data.get("unidade_tributavel"), 6),
+            icms_aliquota=safe_decimal(data.get("icms_aliquota"), "0"),
+            pis_aliquota=safe_decimal(data.get("pis_aliquota"), "0"),
+            cofins_aliquota=safe_decimal(data.get("cofins_aliquota"), "0"),
+            controlar_validade=(
+                False if tipo_item == "servico" else bool(data.get("controlar_validade", False))
+            ),
             data_validade=(
                 datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
                 if data.get("data_validade")
                 else None
             ),
-            lote=data.get("lote", "").strip(),
-            imagem_url=data.get("imagem_url", "").strip(),
-            ativo=data.get("ativo", True),
+            lote=(data.get("lote", "") or "").strip(),
+            imagem_url=(data.get("imagem_url", "") or "").strip(),
+            ativo=bool(data.get("ativo", True)),
             total_vendido=0.0,
             quantidade_vendida=0,
             ultima_venda=None,
+            tipo_item=tipo_item,
+            controlar_estoque=(
+                False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))
+            ),
         )
+        produto.atributos = atributos_limpos
 
         db.session.add(produto)
-        db.session.flush()  # Para obter o ID do produto
+        db.session.flush()
 
-        # Registrar histórico inicial de preços
-        current_app.logger.warning(f"DEBUG: Criando HistoricoPrecos para produto {produto.id}")
-        current_app.logger.warning(f"DEBUG: preco_custo={produto.preco_custo} ({type(produto.preco_custo)})")
-        current_app.logger.warning(f"DEBUG: preco_venda={produto.preco_venda} ({type(produto.preco_venda)})")
-        current_app.logger.warning(f"DEBUG: margem_nova={produto.margem_lucro} ({type(produto.margem_lucro)})")
-        
         historico_inicial = HistoricoPrecos(
             estabelecimento_id=estabelecimento_id,
             produto_id=produto.id,
@@ -1574,22 +1592,20 @@ def criar_produto():
             preco_venda_novo=produto.preco_venda,
             margem_nova=produto.margem_lucro,
             motivo="Cadastro inicial do produto",
-            observacoes=f"Produto cadastrado por {get_jwt().get('nome')}"
+            observacoes=f"Produto cadastrado por {claims.get('nome')}",
         )
         db.session.add(historico_inicial)
 
-        # Criar movimentação inicial de estoque com CMP
         if produto.quantidade > 0:
-            # Aplicar CMP na criação se houver quantidade inicial
             produto.recalcular_preco_custo_ponderado(
                 quantidade_entrada=produto.quantidade,
                 custo_unitario_entrada=preco_custo,
                 estoque_atual=0,
-                registrar_historico=False,  # Já registramos no histórico acima
+                registrar_historico=False,
                 funcionario_id=int(get_jwt_identity()),
-                motivo="Cadastro inicial do produto"
+                motivo="Cadastro inicial do produto",
             )
-            
+
             movimentacao = MovimentacaoEstoque(
                 estabelecimento_id=estabelecimento_id,
                 produto_id=produto.id,
@@ -1601,27 +1617,28 @@ def criar_produto():
                 custo_unitario=produto.preco_custo,
                 valor_total=produto.quantidade * produto.preco_custo,
                 motivo="Cadastro inicial do produto",
-                observacoes=f"Produto cadastrado por {get_jwt().get('nome')}",
+                observacoes=f"Produto cadastrado por {claims.get('nome')}",
             )
             db.session.add(movimentacao)
 
-        # Auditoria Global (SaaS Monitor)
         Auditoria.registrar(
             estabelecimento_id=estabelecimento_id,
             tipo_evento="produto_criado",
             descricao=f"Produto '{produto.nome}' cadastrado",
             usuario_id=int(get_jwt_identity()),
-        tipo_item = "servico" if (data.get("tipo_item") == "servico") else (produto.tipo_item or "produto")
-        schema = _resolver_schema_estabelecimento(estabelecimento_id)
-
             valor=produto.preco_venda,
-            detalhes={"id": produto.id, "nome": produto.nome, "preco_venda": float(produto.preco_venda)}
+            detalhes={
+                "id": produto.id,
+                "nome": produto.nome,
+                "preco_venda": float(produto.preco_venda),
+                "tipo_item": produto.tipo_item,
+            },
         )
 
         db.session.commit()
 
         current_app.logger.info(
-            f"Produto criado: {produto.id} - {produto.nome} por {get_jwt().get('username')}"
+            f"Produto criado: {produto.id} - {produto.nome} por {claims.get('username')}"
         )
 
         return (
@@ -1636,17 +1653,19 @@ def criar_produto():
         )
 
     except Exception as e:
-            "tipo_item",
         db.session.rollback()
         import traceback
+
         error_details = traceback.format_exc()
         current_app.logger.error(f"Erro ao criar produto: {str(e)}\n{error_details}")
         return (
-            jsonify({
-                "success": False, 
-                "message": f"Erro interno ao criar produto: {str(e)}",
-                "traceback": error_details
-            }),
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Erro interno ao criar produto: {str(e)}",
+                    "traceback": error_details,
+                }
+            ),
             500,
         )
 
@@ -1659,32 +1678,63 @@ def atualizar_produto(id):
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
         claims = get_jwt()
-        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
+        from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        
+
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
-        data = request.get_json()
+        data = request.get_json() or {}
         current_app.logger.info(f"Dados recebidos para atualização: {data}")
-
-        # Validação dos dados (passando ID para verificação de unicidade)
-        # erros = validar_dados_produto(data, produto.id)
-        # if erros:
-        #     current_app.logger.error(f"Erros de validação: {erros}")
-        #     return (
-        #         jsonify(
-        #             {"success": False, "message": "Erros de validação", "errors": erros}
-        #         ),
-        #         400,
-        #     )
 
         # Guardar valores antigos para auditoria
         quantidade_anterior = produto.quantidade
         preco_custo_anterior = produto.preco_custo
         preco_venda_anterior = produto.preco_venda
         margem_anterior = produto.margem_lucro
+
+        tipo_item = (
+            "servico"
+            if data.get("tipo_item") == "servico"
+            else (produto.tipo_item or "produto")
+        )
+        schema = _resolver_schema_estabelecimento(estabelecimento_id)
+
+        def clean_nullable_str(val, max_len=None):
+            if val is None:
+                return None
+            texto = str(val).strip()
+            if not texto:
+                return None
+            return texto[:max_len] if max_len else texto
+
+        def clean_numeric_code(val, max_len):
+            if val is None:
+                return None
+            digits = re.sub(r"\D", "", str(val))
+            if not digits:
+                return None
+            return digits[:max_len]
+
+        def safe_decimal(val, default=None):
+            if val in (None, ""):
+                return default
+            try:
+                return Decimal(str(val))
+            except (ValueError, TypeError, DecimalException):
+                raise ValueError(f"Valor decimal inválido: {val}")
+
+        if "tipo_item" in data:
+            produto.tipo_item = tipo_item
+        if "controlar_estoque" in data or "tipo_item" in data:
+            produto.controlar_estoque = (
+                False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))
+            )
+        if "atributos" in data or "tipo_item" in data:
+            produto.atributos = sanitizar_atributos(
+                schema, data.get("atributos"), tipo_item=tipo_item
+            )
 
         # Atualizar campos
         campos_atualizaveis = [
@@ -1693,21 +1743,22 @@ def atualizar_produto(id):
             "codigo_interno",
             "nome",
             "descricao",
-                    elif campo == "tipo_item":
-                        produto.tipo_item = tipo_item
             "marca",
             "categoria",
             "subcategoria",
             "unidade_medida",
             "quantidade_minima",
             "preco_custo",
-        if "controlar_estoque" in data or "tipo_item" in data:
-            produto.controlar_estoque = False if tipo_item == "servico" else bool(data.get("controlar_estoque", True))
-        if "atributos" in data or "tipo_item" in data:
-            produto.atributos = sanitizar_atributos(schema, data.get("atributos"), tipo_item=tipo_item)
-
             "preco_venda",
             "ncm",
+            "cest",
+            "cfop_padrao",
+            "cst_icms",
+            "csosn",
+            "unidade_tributavel",
+            "icms_aliquota",
+            "pis_aliquota",
+            "cofins_aliquota",
             "origem",
             "controlar_validade",
             "data_validade",
@@ -1723,16 +1774,10 @@ def atualizar_produto(id):
             if campo in data and data[campo] is not None:
                 current_app.logger.info(f"Atualizando campo {campo}: {data[campo]} (tipo: {type(data[campo])})")
                 try:
-                    if campo == "preco_custo":
-                        if data[campo] == "" or data[campo] is None:
-                            produto.preco_custo = 0
-                        else:
-                            produto.preco_custo = Decimal(str(data[campo]))
-                    elif campo == "preco_venda":
-                        if data[campo] == "" or data[campo] is None:
-                            produto.preco_venda = 0
-                        else:
-                            produto.preco_venda = Decimal(str(data[campo]))
+                    if campo in ["preco_custo", "preco_venda"]:
+                        setattr(produto, campo, safe_decimal(data[campo], Decimal("0")) or Decimal("0"))
+                    elif campo in ["icms_aliquota", "pis_aliquota", "cofins_aliquota"]:
+                        setattr(produto, campo, safe_decimal(data[campo], Decimal("0")) or Decimal("0"))
                     elif campo in ["data_validade", "data_fabricacao"]:
                         if data[campo] and data[campo] != "":
                             setattr(produto, campo, datetime.strptime(data[campo], "%Y-%m-%d").date())
@@ -1767,15 +1812,28 @@ def atualizar_produto(id):
                         else:
                             produto.categoria_id = None
                     elif campo in ["codigo_barras", "codigo_interno"]:
-                        # Vazio vira NULL p/ não colidir nas unique constraints
-                        # (estab, codigo_interno) / (estab, codigo_barras).
-                        valor = (str(data[campo]).strip() if data[campo] is not None else "")
-                        setattr(produto, campo, valor or None)
+                        setattr(produto, campo, clean_nullable_str(data[campo]))
+                    elif campo == "ncm":
+                        produto.ncm = clean_numeric_code(data[campo], 8) or ""
+                    elif campo == "cest":
+                        produto.cest = clean_numeric_code(data[campo], 7)
+                    elif campo == "cfop_padrao":
+                        produto.cfop_padrao = clean_numeric_code(data[campo], 4)
+                    elif campo in ["cst_icms", "csosn"]:
+                        setattr(produto, campo, clean_numeric_code(data[campo], 3))
+                    elif campo == "unidade_tributavel":
+                        produto.unidade_tributavel = clean_nullable_str(data[campo], 6)
+                    elif campo == "unidade_medida":
+                        produto.unidade_medida = clean_nullable_str(data[campo], 20) or "UN"
                     else:
                         setattr(produto, campo, data[campo])
                 except Exception as field_error:
                     current_app.logger.error(f"Erro específico no campo {campo}: {data[campo]} - Tipo: {type(data[campo])} - Erro: {str(field_error)}")
                     raise field_error
+
+        if tipo_item == "servico":
+            produto.controlar_validade = False
+            produto.quantidade_minima = 0
 
         # Recalcular margem de lucro
         if produto.preco_custo and produto.preco_venda and produto.preco_custo > 0:
@@ -1821,7 +1879,7 @@ def atualizar_produto(id):
         # Se quantidade foi alterada, criar movimentação
         if "quantidade" in data:
             try:
-                nova_quantidade = int(data["quantidade"])
+                nova_quantidade = 0 if tipo_item == "servico" else int(data["quantidade"])
                 diferenca = nova_quantidade - quantidade_anterior
 
                 if diferenca != 0:
