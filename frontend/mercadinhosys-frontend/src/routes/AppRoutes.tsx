@@ -36,6 +36,7 @@ const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/Est
 const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
 const FiscalPage = lazy(() => import('../features/fiscal/FiscalPage'));
 const MonitorPage = lazy(() => import('../features/monitor/MonitorPage'));
+const MasterCatalogPage = lazy(() => import('../features/catalogo-mestre/MasterCatalogPage'));
 const ConsultorPage = lazy(() => import('../pages/ConsultorPage').then(module => ({ default: module.ConsultorPage })));
 
 // Páginas públicas institucionais (legais / ajuda)
@@ -116,6 +117,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="estabelecimentos" element={<SuperAdminRoute><EstabelecimentosPage /></SuperAdminRoute>} />
                     <Route path="monitor" element={<SuperAdminRoute><SystemMonitorPage /></SuperAdminRoute>} />
                     <Route path="leads" element={<SuperAdminRoute><LeadDashboard /></SuperAdminRoute>} />
+                    <Route path="catalogo-mestre" element={<SuperAdminRoute><MasterCatalogPage /></SuperAdminRoute>} />
                 </Route>
 
                 <Route path="*" element={<Navigate to={isAuthenticated ? getTargetRoute() : "/"} replace />} />

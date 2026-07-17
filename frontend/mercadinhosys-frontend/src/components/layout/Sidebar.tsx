@@ -24,7 +24,8 @@ import {
     MapPin,
     ShoppingBag,
     Sparkles,
-    Play
+    Play,
+    Database
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 import { canAccessRoute } from '../../utils/permissions';
@@ -53,6 +54,7 @@ const menuItems = [
     { to: '/estabelecimentos', icon: Building2, label: 'Estabelecimentos' },
     { to: '/monitor', icon: Activity, label: 'Monitor Sistema' },
     { to: '/leads', icon: Target, label: 'Leads SaaS' },
+    { to: '/catalogo-mestre', icon: Database, label: 'Catálogo Mestre' },
 ];
 
 interface SidebarProps {
@@ -79,7 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                         const isSuperAdmin = user?.is_super_admin || false;
 
                         // Rotas de administração global do SaaS: só Super Admin
-                        if (['/estabelecimentos', '/leads', '/monitor'].includes(item.to)) {
+                        if (['/estabelecimentos', '/leads', '/monitor', '/catalogo-mestre'].includes(item.to)) {
                             return isSuperAdmin;
                         }
 

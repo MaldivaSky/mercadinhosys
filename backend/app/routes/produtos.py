@@ -34,6 +34,7 @@ from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import quota_required, permission_required
 from app.decorators.rbac import gerente_required, resource_required
+from app.services.catalogo_mestre_service import registrar_produto_se_novo
 from app.services.view_schema_service import (
     inferir_perfil_fiscal_padrao,
     mix_permitido_para_estabelecimento,
@@ -1667,6 +1668,8 @@ def criar_produto():
 
         db.session.add(produto)
         db.session.flush()
+
+        registrar_produto_se_novo(produto, _resolver_estabelecimento(estabelecimento_id), via="modal")
 
         historico_inicial = HistoricoPrecos(
             estabelecimento_id=estabelecimento_id,

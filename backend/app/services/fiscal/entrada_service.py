@@ -20,8 +20,9 @@ from typing import Any, Dict, List, Optional
 
 from app.models import (
     db, Produto, Fornecedor, CategoriaProduto, MovimentacaoEstoque,
-    ContaPagar, NotaFiscalEntrada, utcnow,
+    ContaPagar, NotaFiscalEntrada, Estabelecimento, utcnow,
 )
+from app.services.catalogo_mestre_service import registrar_produto_se_novo
 
 CATEGORIA_IMPORTACAO = "Importação NF-e"
 
@@ -146,6 +147,7 @@ def importar(parsed: Dict[str, Any], xml_text: str, estab_id: int, funcionario_i
 
     forn = _upsert_fornecedor(estab_id, parsed["emitente"])
     categoria = None
+    estabelecimento = Estabelecimento.query.get(estab_id)
 
     produtos_criados = 0
     produtos_atualizados = 0
@@ -177,6 +179,7 @@ def importar(parsed: Dict[str, Any], xml_text: str, estab_id: int, funcionario_i
             )
             db.session.add(prod)
             db.session.flush()
+            registrar_produto_se_novo(prod, estabelecimento, via="xml")
             produtos_criados += 1
         else:
             # Recalcula custo médio ponderado e registra no histórico de preços

@@ -14,6 +14,7 @@ from app.models import (
     DashboardMetrica,
     Auditoria,
     LoginHistory,
+    CatalogoMestre,
 )
 from app.decorators.rbac import super_admin_required
 from datetime import datetime, timedelta
@@ -412,6 +413,46 @@ def logs_auditoria():
         })
     except Exception as e:
         logger.error(f"Erro em logs_auditoria: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@super_admin_dashboard_bp.route("/catalogo-mestre", methods=["GET"])
+@super_admin_required
+def catalogo_mestre():
+    """Navegação do Catálogo Mestre global (todos os itens, de todas as fontes)."""
+    try:
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = min(request.args.get("por_pagina", 50, type=int), 200)
+        categoria = request.args.get("categoria")
+        fonte = request.args.get("fonte")
+        busca = request.args.get("busca")
+        segmento_origem = request.args.get("segmento_origem")
+
+        q = db.session.query(CatalogoMestre)
+        if segmento_origem:
+            q = q.join(
+                Estabelecimento,
+                Estabelecimento.id == CatalogoMestre.descoberto_por_estabelecimento_id,
+            ).filter(Estabelecimento.segmento == segmento_origem)
+        if categoria:
+            q = q.filter(CatalogoMestre.categoria == categoria)
+        if fonte:
+            q = q.filter(CatalogoMestre.fonte == fonte)
+        if busca:
+            termo = f"%{busca}%"
+            q = q.filter(or_(CatalogoMestre.nome.ilike(termo), CatalogoMestre.ean.ilike(termo)))
+
+        q = q.order_by(CatalogoMestre.updated_at.desc())
+        total = q.count()
+        itens = q.limit(por_pagina).offset((pagina - 1) * por_pagina).all()
+
+        return jsonify({
+            "success": True,
+            "data": [c.to_dict() for c in itens],
+            "total": total, "pagina": pagina, "por_pagina": por_pagina,
+        })
+    except Exception as e:
+        logger.error(f"Erro em catalogo_mestre: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 

@@ -1360,6 +1360,10 @@ class CatalogoMestre(db.Model):
     consultado_em = db.Column(db.DateTime, default=utcnow)
     created_at = db.Column(db.DateTime, default=utcnow)
     updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+    # Rastreabilidade mínima de quem descobriu o item (fonte="tenant"): sem FK rígida
+    # pois o catálogo é global e não deve quebrar se o estabelecimento for removido.
+    descoberto_por_estabelecimento_id = db.Column(db.Integer, nullable=True)
+    descoberto_via = db.Column(db.String(20), nullable=True)  # 'modal' | 'xml'
     __table_args__ = (db.Index("ix_catalogo_status", "status"), db.Index("ix_catalogo_categoria", "categoria"))
 
     def to_dict(self):
@@ -1370,6 +1374,8 @@ class CatalogoMestre(db.Model):
             "preco_referencia": float(self.preco_referencia) if self.preco_referencia else None,
             "imagem_url": self.imagem_url, "fonte": self.fonte, "status": self.status,
             "consultado_em": self.consultado_em.isoformat() if self.consultado_em else None,
+            "descoberto_por_estabelecimento_id": self.descoberto_por_estabelecimento_id,
+            "descoberto_via": self.descoberto_via,
         }
 
 
