@@ -176,15 +176,15 @@ def get_configuracao_safe(estab_id):
         try:
             # Tenta buscar todas as colunas conhecidas de uma vez
             sql_fast = """
-                SELECT 
-                    id, estabelecimento_id, 
-                    logo_url, logo_base64, cor_principal, tema_escuro, 
+                SELECT
+                    id, estabelecimento_id,
+                    logo_url, logo_base64, cor_principal, tema_escuro,
                     emitir_nfe, emitir_nfce, formas_pagamento,
                     controlar_validade, alerta_estoque_minimo, dias_alerta_validade, estoque_minimo_padrao,
                     exibir_preco_tela, permitir_venda_sem_estoque, desconto_maximo_percentual,
                     desconto_maximo_funcionario, arredondamento_valores, tempo_sessao_minutos,
                     tentativas_senha_bloqueio, alertas_email, alertas_whatsapp,
-                    motivos_estorno
+                    motivos_estorno, mostrar_foto_produto_pdv
                 FROM configuracoes
                 WHERE estabelecimento_id = :eid
                 LIMIT 1
@@ -231,7 +231,8 @@ def get_configuracao_safe(estab_id):
                     "tentativas_senha_bloqueio": row[19],
                     "alertas_email": bool(row[20]),
                     "alertas_whatsapp": bool(row[21]),
-                    "motivos_estorno": motivos_estorno
+                    "motivos_estorno": motivos_estorno,
+                    "mostrar_foto_produto_pdv": bool(row[23]),
                 }
         except Exception as e_fast:
             # logger.debug(f"Fast path config falhou (provável schema drift): {e_fast}")
@@ -281,6 +282,7 @@ def get_configuracao_safe(estab_id):
         
         # PDV
         res["exibir_preco_tela"] = _fetch_col("exibir_preco_tela", True)
+        res["mostrar_foto_produto_pdv"] = _fetch_col("mostrar_foto_produto_pdv", False)
         res["permitir_venda_sem_estoque"] = _fetch_col("permitir_venda_sem_estoque", False)
         res["desconto_maximo_percentual"] = float(_fetch_col("desconto_maximo_percentual", 10.0))
         res["desconto_maximo_funcionario"] = float(_fetch_col("desconto_maximo_funcionario", 10.0))

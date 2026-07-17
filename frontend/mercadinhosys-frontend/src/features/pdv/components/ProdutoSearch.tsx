@@ -18,6 +18,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const [loading, setLoading] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
     const [scannerAberto, setScannerAberto] = useState(false);
+    const [fotosComErro, setFotosComErro] = useState<Set<number>>(new Set());
     const inputRef = useRef<HTMLInputElement>(null);
 
     const { config } = useConfig();
@@ -236,15 +237,16 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                 className="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors"
                             >
                                 <div className="flex items-center gap-3">
-                                    {mostrarFotoProduto && imagemUrl ? (
+                                    {mostrarFotoProduto && imagemUrl && !fotosComErro.has(produto.id) ? (
                                         <img
                                             src={imagemUrl}
                                             alt={produto.nome}
                                             loading="lazy"
+                                            onError={() => setFotosComErro(prev => new Set(prev).add(produto.id))}
                                             className="w-12 h-12 flex-shrink-0 rounded-xl object-cover border border-gray-200 dark:border-gray-700 bg-white"
                                         />
                                     ) : (
-                                        <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
+                                        <div className={`w-12 h-12 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
                                             ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
                                             : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                                             }`}>
