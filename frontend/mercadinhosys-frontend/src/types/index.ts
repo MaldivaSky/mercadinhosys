@@ -181,6 +181,9 @@ export interface Produto {
     ncm?: string;
     lote?: string;
     imagem_url?: string;
+    tipo_item?: 'produto' | 'servico';
+    controlar_estoque?: boolean;
+    atributos?: Record<string, any>;
     alerta_validade?: boolean;
     alerta_estoque?: boolean;
     ativo: boolean;

@@ -15,6 +15,7 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
 import { apiClient } from '../../api/apiClient';
 import SubscriptionSettings from './SubscriptionSettings';
+import SegmentSettings from './SegmentSettings';
 import SyncManager from '../../components/sync/SyncManager';
 import { SyncDataButton } from './SyncDataButton';
 import { useTheme } from '../../theme/useTheme';
@@ -517,6 +518,7 @@ const SettingsPage: React.FC = () => {
     const todasAsTabs = [
         { id: 'geral', label: 'Geral', icon: Settings },
         { id: 'conta', label: 'Minha Conta', icon: User },
+        { id: 'segmento', label: 'Segmento & Exibição', icon: Store },
         { id: 'estabelecimento', label: 'Estabelecimento', icon: Building2 },
         { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: Printer },
         { id: 'vendas', label: 'Vendas & PDV', icon: ShoppingCart },
@@ -745,6 +747,9 @@ const SettingsPage: React.FC = () => {
 
                     {/* ABA MINHA CONTA */}
                     {activeTab === 'conta' && <AccountSettings />}
+
+                    {/* ABA SEGMENTO & EXIBIÇÃO — nível Tenant do Motor de Renderização Contextual */}
+                    {activeTab === 'segmento' && <SegmentSettings />}
 
                     {/* ABA VENDAS */}
                     {activeTab === 'fiscal' && (

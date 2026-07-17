@@ -11,16 +11,20 @@ import {
     Zap,
     Clock,
     Target,
+    Wrench,
     X
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatters';
 import { Produto } from '../../../types';
+import { MetricaSchema } from '../../../types/viewSchema';
+import { useViewSchema, schemaHelpers } from '../../../services/viewSchemaService';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend as RechartsLegend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 interface ProductAnalyticsDashboardProps {
     produtos: Produto[];
     stats: {
         total_produtos: number;
+        total_servicos?: number;
         produtos_baixo_estoque: number;
         produtos_esgotados: number;
         produtos_normal: number;
@@ -35,6 +39,78 @@ interface ProductAnalyticsDashboardProps {
     onCardClick: (filterType: string) => void;
     onAdvancedAnalyticsClick: (type: string) => void;
     onProductClick: (produto: Produto) => void;
+}
+
+// ==================== MOTOR DE RENDERIZAÇÃO CONTEXTUAL ====================
+// Os cards NÃO são fixos: vêm do catálogo de métricas (view_registry) resolvido
+// pelo backend por segmento. Aqui só mapeamos ícone/tema e formatamos valores.
+const ICONES_METRICA: Record<string, React.ComponentType<any>> = {
+    package: Package, target: Target, alert: AlertTriangle, activity: Activity,
+    dollar: DollarSign, pie: PieChart, wrench: Wrench, bar: BarChart3, zap: Zap, clock: Clock,
+};
+
+interface TemaMetrica {
+    icone: string; borda: string; hover: string; valor: string; dot: string; subtitulo: string;
+    modal: { header: string; text: string; button: string; stroke: string; shadow: string };
+}
+
+const TEMAS_METRICA: Record<string, TemaMetrica> = {
+    blue: {
+        icone: 'text-blue-500', borda: 'border-slate-800', hover: 'hover:border-blue-500/50',
+        valor: 'text-white', dot: 'bg-blue-500', subtitulo: 'text-slate-500',
+        modal: { header: 'bg-blue-600', text: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700', stroke: '#3b82f6', shadow: 'shadow-blue-600/30' },
+    },
+    emerald: {
+        icone: 'text-emerald-500', borda: 'border-slate-800', hover: 'hover:border-emerald-500/50',
+        valor: 'text-white', dot: 'bg-emerald-500', subtitulo: 'text-slate-500',
+        modal: { header: 'bg-emerald-600', text: 'text-emerald-600 dark:text-emerald-400', button: 'bg-emerald-600 hover:bg-emerald-700', stroke: '#10b981', shadow: 'shadow-emerald-600/30' },
+    },
+    amber: {
+        icone: 'text-amber-500', borda: 'border-amber-500/30', hover: 'hover:border-amber-500/60',
+        valor: 'text-amber-400', dot: 'bg-amber-500', subtitulo: 'text-amber-500/70',
+        modal: { header: 'bg-amber-500', text: 'text-amber-500 dark:text-amber-400', button: 'bg-amber-500 hover:bg-amber-600', stroke: '#f59e0b', shadow: 'shadow-amber-500/30' },
+    },
+    rose: {
+        icone: 'text-rose-500', borda: 'border-rose-500/40', hover: 'hover:border-rose-500/70',
+        valor: 'text-rose-500', dot: 'bg-rose-500 animate-ping', subtitulo: 'text-rose-500/80',
+        modal: { header: 'bg-rose-500', text: 'text-rose-500 dark:text-rose-400', button: 'bg-rose-500 hover:bg-rose-600', stroke: '#f43f5e', shadow: 'shadow-rose-500/30' },
+    },
+    purple: {
+        icone: 'text-purple-500', borda: 'border-slate-800', hover: 'hover:border-purple-500/50',
+        valor: 'text-white', dot: 'bg-purple-500', subtitulo: 'text-slate-500',
+        modal: { header: 'bg-purple-600', text: 'text-purple-500 dark:text-purple-400', button: 'bg-purple-600 hover:bg-purple-700', stroke: '#a855f7', shadow: 'shadow-purple-600/30' },
+    },
+    indigo: {
+        icone: 'text-indigo-500', borda: 'border-slate-800', hover: 'hover:border-indigo-500/50',
+        valor: 'text-white', dot: 'bg-indigo-500', subtitulo: 'text-slate-500',
+        modal: { header: 'bg-indigo-600', text: 'text-indigo-500 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700', stroke: '#6366f1', shadow: 'shadow-indigo-600/30' },
+    },
+    cyan: {
+        icone: 'text-cyan-500', borda: 'border-slate-800', hover: 'hover:border-cyan-500/50',
+        valor: 'text-white', dot: 'bg-cyan-500', subtitulo: 'text-slate-500',
+        modal: { header: 'bg-cyan-600', text: 'text-cyan-500 dark:text-cyan-400', button: 'bg-cyan-600 hover:bg-cyan-700', stroke: '#06b6d4', shadow: 'shadow-cyan-600/30' },
+    },
+};
+
+// Fallback exibido enquanto o schema carrega (mesma composição do registro global)
+const METRICAS_FALLBACK: MetricaSchema[] = [
+    { chave: 'total_produtos', titulo: 'Total Produtos', subtitulo: 'Catálogo completo', escopo_ui: 'card', fonte: 'total_produtos', formato: 'int', icone: 'package', tema: 'blue', filtro: 'all', ordem: 10 },
+    { chave: 'estoque_normal', titulo: 'Estoque Normal', subtitulo: '% do total', escopo_ui: 'card', fonte: 'produtos_normal', formato: 'int', icone: 'target', tema: 'emerald', filtro: 'normal', ordem: 20 },
+    { chave: 'baixo_estoque', titulo: 'Baixo Estoque', subtitulo: 'Requer atenção', escopo_ui: 'card', fonte: 'produtos_baixo_estoque', formato: 'int', icone: 'alert', tema: 'amber', filtro: 'baixo', ordem: 30 },
+    { chave: 'esgotados', titulo: 'Esgotados', subtitulo: 'Crítico', escopo_ui: 'card', fonte: 'produtos_esgotados', formato: 'int', icone: 'activity', tema: 'rose', filtro: 'esgotado', ordem: 40 },
+    { chave: 'valor_estoque', titulo: 'Valor Estoque', subtitulo: 'Capital investido', escopo_ui: 'card', fonte: 'valor_total_estoque', formato: 'moeda', icone: 'dollar', tema: 'purple', filtro: 'valor', ordem: 50 },
+    { chave: 'margem_media', titulo: 'Margem Média', subtitulo: 'Rentabilidade', escopo_ui: 'card', fonte: 'margem_media', formato: 'percent', icone: 'pie', tema: 'indigo', filtro: 'margem', ordem: 60 },
+];
+
+function valorDaFonte(stats: any, fonte: string): number {
+    const bruto = fonte.split('.').reduce((acc: any, parte) => (acc == null ? acc : acc[parte]), stats);
+    return typeof bruto === 'number' ? bruto : 0;
+}
+
+function formatarValor(valor: number, formato: MetricaSchema['formato']): string {
+    if (formato === 'moeda') return formatCurrency(valor);
+    if (formato === 'percent') return `${valor.toFixed(1)}%`;
+    return String(Math.round(valor));
 }
 
 interface ClassificacaoABC {
@@ -56,6 +132,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
     onAdvancedAnalyticsClick,
     onProductClick
 }) => {
+    // Motor de Renderização Contextual: schema resolvido pelo backend por segmento
+    const { schema } = useViewSchema();
+
     const [classificacaoABC, setClassificacaoABC] = useState<ClassificacaoABC>({ A: 0, B: 0, C: 0 });
     const [statusGiro, setStatusGiro] = useState<StatusGiro>({ rapido: 0, normal: 0, lento: 0 });
     const [validadeState, setValidadeState] = useState({ vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 });
@@ -283,125 +362,56 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
     };
 
 
+    // Motor contextual: cards vindos do catálogo de métricas resolvido por segmento
+    const metricasCards = schema ? schemaHelpers.metricasCard(schema) : METRICAS_FALLBACK;
+    // Tailwind JIT exige classes literais — mapa estático por quantidade de cards
+    const GRID_XL: Record<number, string> = {
+        3: 'xl:grid-cols-3', 4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6', 7: 'xl:grid-cols-7',
+    };
+    const gridXl = GRID_XL[Math.min(Math.max(metricasCards.length, 3), 7)];
+
     return (
         <div className="space-y-6">
-            {/* Cards Principais - Grid Responsivo (Carrossel no Mobile) */}
-            <div className="flex overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 snap-x snap-mandatory hide-scrollbar">
-                {/* Total de Produtos */}
-                <div
-                    onClick={() => setActiveMetricModal({ 
-                        id: 'all', title: 'Total Produtos', value: stats.total_produtos, formattedValue: stats.total_produtos.toString(), isCurrency: false, icon: Package, 
-                        theme: { header: 'bg-blue-600', text: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700', stroke: '#3b82f6', shadow: 'shadow-blue-600/30' } 
-                    })}
-                    className="w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        <Package className="w-8 h-8 text-blue-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">Total Produtos</p>
-                    </div>
-                    <p className="text-2xl md:text-3xl font-black text-white">{stats.total_produtos}</p>
-                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Catálogo completo
-                    </p>
-                </div>
-
-                {/* Produtos Normais */}
-                <div
-                    onClick={() => setActiveMetricModal({ 
-                        id: 'normal', title: 'Estoque Normal', value: stats.produtos_normal, formattedValue: stats.produtos_normal.toString(), isCurrency: false, icon: Target, 
-                        theme: { header: 'bg-emerald-600', text: 'text-emerald-600 dark:text-emerald-400', button: 'bg-emerald-600 hover:bg-emerald-700', stroke: '#10b981', shadow: 'shadow-emerald-600/30' } 
-                    })}
-                    className="w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        <Target className="w-8 h-8 text-emerald-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">Estoque Normal</p>
-                    </div>
-                    <p className="text-2xl md:text-3xl font-black text-white">{stats.produtos_normal}</p>
-                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
-                        {stats.total_produtos > 0 ? ((stats.produtos_normal / stats.total_produtos) * 100).toFixed(0) : '0'}% do total
-                    </p>
-                </div>
-
-                {/* Baixo Estoque */}
-                <div
-                    onClick={() => setActiveMetricModal({ 
-                        id: 'baixo', title: 'Baixo Estoque', value: stats.produtos_baixo_estoque, formattedValue: stats.produtos_baixo_estoque.toString(), isCurrency: false, icon: AlertTriangle, 
-                        theme: { header: 'bg-amber-500', text: 'text-amber-500 dark:text-amber-400', button: 'bg-amber-500 hover:bg-amber-600', stroke: '#f59e0b', shadow: 'shadow-amber-500/30' } 
-                    })}
-                    className="w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.1)] p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-amber-500/60 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        <AlertTriangle className="w-8 h-8 text-amber-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">Baixo Estoque</p>
-                    </div>
-                    <p className="text-2xl md:text-3xl font-black text-amber-400">{stats.produtos_baixo_estoque}</p>
-                    <p className="text-xs text-amber-500/70 mt-2 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Requer atenção
-                    </p>
-                </div>
-
-                {/* Esgotados */}
-                <div
-                    onClick={() => setActiveMetricModal({ 
-                        id: 'esgotado', title: 'Esgotados', value: stats.produtos_esgotados, formattedValue: stats.produtos_esgotados.toString(), isCurrency: false, icon: Activity, 
-                        theme: { header: 'bg-rose-500', text: 'text-rose-500 dark:text-rose-400', button: 'bg-rose-500 hover:bg-rose-600', stroke: '#f43f5e', shadow: 'shadow-rose-500/30' } 
-                    })}
-                    className="w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-rose-500/40 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.15)] p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-rose-500/70 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        <Activity className="w-8 h-8 text-rose-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">Esgotados</p>
-                    </div>
-                    <p className="text-2xl md:text-3xl font-black text-rose-500">{stats.produtos_esgotados}</p>
-                    <p className="text-xs text-rose-500/80 mt-2 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> Crítico
-                    </p>
-                </div>
-
-                {/* Valor Total */}
-                <div
-                    onClick={() => setActiveMetricModal({ 
-                        id: 'valor', title: 'Valor em Estoque', value: stats.valor_total_estoque, formattedValue: formatCurrency(stats.valor_total_estoque), isCurrency: true, icon: DollarSign, 
-                        theme: { header: 'bg-purple-600', text: 'text-purple-500 dark:text-purple-400', button: 'bg-purple-600 hover:bg-purple-700', stroke: '#a855f7', shadow: 'shadow-purple-600/30' } 
-                    })}
-                    className="w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-purple-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        <DollarSign className="w-8 h-8 text-purple-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">Valor Estoque</p>
-                    </div>
-                    <p className="text-xl lg:text-xl xl:text-2xl font-black text-white break-words leading-none" title={formatCurrency(stats.valor_total_estoque)}>
-                        {formatCurrency(stats.valor_total_estoque)}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Capital investido
-                    </p>
-                </div>
-
-                {/* Margem Média */}
-                <div
-                    onClick={() => setActiveMetricModal({ 
-                        id: 'margem', title: 'Margem Média', value: stats.margem_media, formattedValue: `${stats.margem_media.toFixed(1)}%`, isCurrency: false, icon: PieChart, 
-                        theme: { header: 'bg-indigo-600', text: 'text-indigo-500 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700', stroke: '#6366f1', shadow: 'shadow-indigo-600/30' } 
-                    })}
-                    className="w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        <PieChart className="w-8 h-8 text-indigo-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">Margem Média</p>
-                    </div>
-                    <p className="text-2xl md:text-3xl font-black text-white">{stats.margem_media.toFixed(1)}%</p>
-                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Rentabilidade
-                    </p>
-                </div>
+            {/* Cards Principais — dirigidos pelo registro de métricas (view_registry) */}
+            <div className={`flex overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 ${gridXl} snap-x snap-mandatory hide-scrollbar`}>
+                {metricasCards.map(metrica => {
+                    const tema = TEMAS_METRICA[metrica.tema] || TEMAS_METRICA.blue;
+                    const Icone = ICONES_METRICA[metrica.icone] || Package;
+                    const valor = valorDaFonte(stats, metrica.fonte);
+                    const valorFormatado = formatarValor(valor, metrica.formato);
+                    const subtitulo = metrica.chave === 'estoque_normal' && stats.total_produtos > 0
+                        ? `${((valor / stats.total_produtos) * 100).toFixed(0)}% do total`
+                        : metrica.subtitulo || '';
+                    return (
+                        <div
+                            key={metrica.chave}
+                            onClick={() => setActiveMetricModal({
+                                id: metrica.filtro || metrica.chave, title: metrica.titulo, value: valor,
+                                formattedValue: valorFormatado, isCurrency: metrica.formato === 'moeda',
+                                icon: Icone, theme: tema.modal,
+                            })}
+                            className={`w-[200px] min-w-[200px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border ${tema.borda} rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer ${tema.hover} hover:bg-slate-800 transition-all duration-200 group flex-shrink-0`}
+                        >
+                            <div className="flex items-center gap-3 mb-3">
+                                <Icone className={`w-8 h-8 ${tema.icone} opacity-80 group-hover:opacity-100 transition-opacity`} />
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">{metrica.titulo}</p>
+                            </div>
+                            <p className={`${metrica.formato === 'moeda' ? 'text-xl lg:text-xl xl:text-2xl break-words leading-none' : 'text-2xl md:text-3xl'} font-black ${tema.valor}`}
+                                title={valorFormatado}>
+                                {valorFormatado}
+                            </p>
+                            <p className={`text-xs ${tema.subtitulo} mt-2 flex items-center gap-1`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${tema.dot}`}></span> {subtitulo}
+                            </p>
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Análises Avançadas - Grid 3 Colunas (Carrossel no Mobile) */}
+            {/* Análises Avançadas — painéis também vêm do registro de métricas */}
             <div className="flex overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 gap-4 sm:grid sm:grid-cols-1 lg:grid-cols-3 sm:p-6 snap-x snap-mandatory hide-scrollbar">
                 {/* Classificação ABC */}
+                {schemaHelpers.metricaPainelVisivel(schema, 'analise_abc') && (
                 <div className="w-[280px] min-w-[280px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 sm:p-6 flex-shrink-0">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
@@ -491,8 +501,10 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
                     </div>
                 </div>
+                )}
 
                 {/* Status de Giro */}
+                {schemaHelpers.metricaPainelVisivel(schema, 'analise_giro') && (
                 <div className="w-[280px] min-w-[280px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 sm:p-6 flex-shrink-0">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
@@ -608,8 +620,10 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
                     </div>
                 </div>
+                )}
 
-                {/* Monitor de Validade */}
+                {/* Monitor de Validade — some para segmentos sem validade (vestuário, construção, moto peças) */}
+                {schemaHelpers.metricaPainelVisivel(schema, 'analise_validade') && (
                 <div className="w-[280px] min-w-[280px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 sm:p-6 flex-shrink-0">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
@@ -706,6 +720,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Top Produtos e Produtos Críticos */}

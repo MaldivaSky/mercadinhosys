@@ -1,0 +1,90 @@
+// Tipos do Motor de Renderização Contextual.
+// O frontend NÃO decide o que exibir: renderiza o schema resolvido pelo backend
+// (cascata Global → Tenant → Produto).
+
+export type TipoItem = 'produto' | 'servico';
+
+export type TipoCampo =
+    | 'text'
+    | 'textarea'
+    | 'number'
+    | 'select'
+    | 'multiselect'
+    | 'boolean'
+    | 'date'
+    | 'grupo_fiscal';
+
+export interface CampoSchema {
+    chave: string;
+    label: string;
+    tipo: TipoCampo;
+    grupo: string;              // identificacao | fiscal | precificacao | estoque | atributos | dimensoes | servico | detalhes
+    origem: 'coluna' | 'atributo';
+    obrigatorio?: boolean;
+    opcoes?: string[];
+    permite_custom?: boolean;
+    unidade?: string;           // sufixo p/ number (mm, pol, kg, min...)
+    placeholder?: string;
+    ajuda?: string;
+    aplica_tipo_item?: TipoItem[];
+    ordem: number;
+}
+
+export interface MetricaSchema {
+    chave: string;
+    titulo: string;
+    subtitulo?: string;
+    escopo_ui: 'card' | 'painel';
+    fonte: string;              // caminho no objeto de estatísticas do backend
+    formato: 'int' | 'moeda' | 'percent' | 'painel';
+    icone: string;
+    tema: string;
+    filtro?: string;            // id usado no onCardClick
+    ordem: number;
+}
+
+export interface SegmentoExemplos {
+    nome: string;
+    categoria: string;
+    marca: string;
+    nome_servico: string;
+    categoria_servico: string;
+}
+
+export interface SegmentoInfo {
+    chave: string;
+    nome: string;
+    descricao: string;
+    icone: string;
+    flags?: SegmentoFlags;
+    exemplos?: SegmentoExemplos;
+}
+
+export interface SegmentoFlags {
+    usa_validade: boolean;
+    usa_lotes: boolean;
+    usa_servicos: boolean;
+    usa_grade: boolean;
+    usa_dimensoes: boolean;
+    usa_embalagens: boolean;
+}
+
+export interface ViewSchema {
+    segmento: SegmentoInfo;
+    flags: SegmentoFlags;
+    unidades: string[];
+    tipos_item: TipoItem[];
+    campos: CampoSchema[];
+    metricas: MetricaSchema[];
+    grupos: { chave: string; label: string }[];
+}
+
+export interface ViewSchemaOverrides {
+    campos_ocultos?: string[];
+    campos_habilitados?: string[];
+    metricas_ocultas?: string[];
+    metricas_habilitadas?: string[];
+    obrigatorios?: Record<string, boolean>;
+    opcoes?: Record<string, string[]>;
+    unidades?: string[];
+}

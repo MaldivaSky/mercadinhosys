@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Camera, Sparkles } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Camera, Sparkles, Package, Wrench } from 'lucide-react';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
+import SchemaField from '../../../components/schema/SchemaField';
 import { showToast } from '../../../utils/toast';
 import { Produto } from '../../../types';
+import { TipoItem } from '../../../types/viewSchema';
 import { productsService } from '../productsService';
 import { cosmosService } from '../../../services/cosmosService';
+import { useViewSchema, schemaHelpers } from '../../../services/viewSchemaService';
 import BarcodeScanner from '../../pdv/components/BarcodeScanner';
 
 interface ProductFormModalProps {
@@ -16,17 +19,24 @@ interface ProductFormModalProps {
     onSuccess: () => void;
 }
 
-const UNIDADES = [
-    { value: 'un', label: 'Unidade (un)' },
-    { value: 'kg', label: 'Quilograma (kg)' },
-    { value: 'g',  label: 'Grama (g)' },
-    { value: 'l',  label: 'Litro (l)' },
-    { value: 'ml', label: 'Mililitro (ml)' },
-    { value: 'cx', label: 'Caixa (cx)' },
-    { value: 'pct', label: 'Pacote (pct)' },
-    { value: 'fardo', label: 'Fardo' },
-    { value: 'duzia', label: 'Dúzia' },
-];
+// Fallback exibido só no instante antes do schema do tenant carregar (evita
+// "piscar" texto genérico) — depois disso quem manda são os exemplos do segmento.
+const EXEMPLOS_FALLBACK = {
+    nome: 'Ex: Nome do produto',
+    categoria: 'Ex: Categoria do produto',
+    marca: 'Ex: Marca / Fabricante',
+    nome_servico: 'Ex: Nome do serviço',
+    categoria_servico: 'Ex: Categoria do serviço',
+};
+
+// Rótulos amigáveis p/ unidades vindas do schema (fallback = a própria sigla)
+const LABEL_UNIDADE: Record<string, string> = {
+    un: 'Unidade (un)', kg: 'Quilograma (kg)', g: 'Grama (g)', l: 'Litro (l)', ml: 'Mililitro (ml)',
+    cx: 'Caixa (cx)', pct: 'Pacote (pct)', fardo: 'Fardo', duzia: 'Dúzia', bandeja: 'Bandeja',
+    par: 'Par', conjunto: 'Conjunto', kit: 'Kit', jogo: 'Jogo', tonel: 'Tonel', barrica: 'Barrica',
+    saco: 'Saco', lata: 'Lata', galao: 'Galão', balde: 'Balde', rolo: 'Rolo', barra: 'Barra',
+    m: 'Metro (m)', m2: 'Metro² (m²)', m3: 'Metro³ (m³)', t: 'Tonelada (t)', milheiro: 'Milheiro',
+};
 
 const emptyForm = {
     nome: '',
@@ -40,6 +50,7 @@ const emptyForm = {
     cfop_padrao: '5102',
     csosn: '102',
     tipo: '',
+    tipo_item: 'produto' as TipoItem,
     unidade_medida: 'un',
     preco_custo: 0,
     preco_venda: 0,
@@ -48,6 +59,7 @@ const emptyForm = {
     quantidade_minima: 10,
     ativo: true,
     imagem_url: '',
+    atributos: {} as Record<string, any>,
 };
 
 const ProductFormModal = ({
@@ -55,7 +67,6 @@ const ProductFormModal = ({
     editMode,
     produto,
     categorias,
-    // Removendo fornecedores não utilizado
     onClose,
     onSuccess,
 }: ProductFormModalProps) => {
@@ -64,6 +75,30 @@ const ProductFormModal = ({
     const [showScanner, setShowScanner] = useState(false);
     const [isSearchingCosmos, setIsSearchingCosmos] = useState(false);
     const [showForceSync, setShowForceSync] = useState(false);
+
+    // Motor de Renderização Contextual: o schema decide campos, unidades e grupos
+    const { schema } = useViewSchema();
+    const ehServico = formData.tipo_item === 'servico';
+    const visivel = (chave: string) => schemaHelpers.campoVisivel(schema, chave);
+
+    const unidades = useMemo(() => {
+        const lista = schema?.unidades?.length ? schema.unidades : ['un', 'kg', 'g', 'l', 'ml', 'cx', 'pct', 'fardo', 'duzia'];
+        return lista.map(u => ({ value: u, label: LABEL_UNIDADE[u] || u.toUpperCase() }));
+    }, [schema]);
+
+    // Placeholders contextuais: o dono de loja de roupas não deve ver "Ex: Arroz Tio João"
+    const exemplos = schema?.segmento?.exemplos || EXEMPLOS_FALLBACK;
+
+    const gruposAtributos = useMemo(() => {
+        if (!schema) return [];
+        return ['atributos', 'dimensoes', 'servico']
+            .map(grupo => ({
+                grupo,
+                label: schema.grupos.find(g => g.chave === grupo)?.label || grupo,
+                campos: schemaHelpers.camposDoGrupo(schema, grupo, formData.tipo_item),
+            }))
+            .filter(g => g.campos.length > 0);
+    }, [schema, formData.tipo_item]);
 
     useEffect(() => {
         if (!show) return;
@@ -80,6 +115,7 @@ const ProductFormModal = ({
                 cfop_padrao: (produto as any).cfop_padrao || '5102',
                 csosn: (produto as any).csosn || '102',
                 tipo: produto.tipo || '',
+                tipo_item: (produto.tipo_item as TipoItem) || 'produto',
                 unidade_medida: produto.unidade_medida || 'un',
                 preco_custo: produto.preco_custo || 0,
                 preco_venda: produto.preco_venda || 0,
@@ -88,6 +124,7 @@ const ProductFormModal = ({
                 quantidade_minima: produto.quantidade_minima || 10,
                 ativo: produto.ativo ?? true,
                 imagem_url: produto.imagem_url || '',
+                atributos: produto.atributos || {},
             });
         } else {
             setFormData({ ...emptyForm });
@@ -149,27 +186,41 @@ const ProductFormModal = ({
     const field = (key: keyof typeof emptyForm, value: any) =>
         setFormData(prev => ({ ...prev, [key]: value }));
 
+    const setAtributo = (chave: string, valor: any) =>
+        setFormData(prev => ({ ...prev, atributos: { ...prev.atributos, [chave]: valor } }));
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         // Validações obrigatórias
-        if (!formData.nome.trim()) { showToast.error('Nome do produto é obrigatório'); return; }
+        if (!formData.nome.trim()) { showToast.error(ehServico ? 'Nome do serviço é obrigatório' : 'Nome do produto é obrigatório'); return; }
         if (!formData.categoria.trim()) { showToast.error('Categoria é obrigatória'); return; }
-        if (!formData.preco_custo || formData.preco_custo <= 0) { showToast.error('Preço de custo inválido'); return; }
+        if (!ehServico && (!formData.preco_custo || formData.preco_custo <= 0)) { showToast.error('Preço de custo inválido'); return; }
         if (!formData.preco_venda || formData.preco_venda <= 0) { showToast.error('Preço de venda inválido'); return; }
+
+        const payload: any = {
+            ...formData,
+            controlar_estoque: !ehServico,
+        };
+        if (ehServico) {
+            payload.quantidade = 0;
+            payload.quantidade_minima = 0;
+            // Serviço pode ter custo zero (mão de obra pura)
+            payload.preco_custo = formData.preco_custo || 0;
+        }
 
         setLoading(true);
         try {
             if (editMode && produto) {
-                await showToast.promise(productsService.update(produto.id, formData), {
-                    loading: 'Atualizando produto...',
-                    success: 'Produto atualizado!',
-                    error: 'Erro ao atualizar produto',
+                await showToast.promise(productsService.update(produto.id, payload), {
+                    loading: 'Atualizando...',
+                    success: ehServico ? 'Serviço atualizado!' : 'Produto atualizado!',
+                    error: 'Erro ao atualizar',
                 }, { theme: 'warning' });
                 onSuccess();
             } else {
                 // Criar produto — tratando 409 (EAN duplicado) explicitamente
-                const result = await productsService.create(formData);
+                const result = await productsService.create(payload);
 
                 if (!result.success && (result.code === 'PRODUTO_DUPLICADO_EAN' || result.code === 'PRODUTO_DUPLICADO_CODIGO')) {
                     const existente = result.produto_existente;
@@ -181,15 +232,15 @@ const ProductFormModal = ({
                 }
 
                 if (!result.success) {
-                    showToast.error(result.message || 'Erro ao criar produto');
+                    showToast.error(result.message || 'Erro ao salvar');
                     return;
                 }
 
-                showToast.success('Produto cadastrado com sucesso!');
+                showToast.success(ehServico ? 'Serviço cadastrado com sucesso!' : 'Produto cadastrado com sucesso!');
                 onSuccess();
             }
         } catch (err: any) {
-            showToast.error(err?.response?.data?.message || 'Erro ao salvar produto');
+            showToast.error(err?.response?.data?.message || 'Erro ao salvar');
         } finally {
             setLoading(false);
         }
@@ -201,11 +252,15 @@ const ProductFormModal = ({
     const labelClass = 'block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1';
     const sectionClass = 'p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-4';
 
+    const titulo = editMode
+        ? (ehServico ? 'Editar Serviço' : 'Editar Produto')
+        : (ehServico ? 'Novo Serviço' : 'Novo Produto');
+
     return (
         <ResponsiveModal
             isOpen={show}
             onClose={onClose}
-            title={editMode ? 'Editar Produto' : 'Novo Produto'}
+            title={titulo}
             subtitle={editMode ? `ID: ${produto?.id}` : 'Preencha todos os campos obrigatórios (*)'}
             headerIcon={<Sparkles className="w-6 h-6" />}
             headerColor="blue"
@@ -218,15 +273,36 @@ const ProductFormModal = ({
                     </button>
                     <button onClick={handleSubmit} disabled={loading || isSearchingCosmos}
                         className="flex-1 sm:flex-none px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
-                        {loading ? 'Salvando...' : 'Salvar Produto'}
+                        {loading ? 'Salvando...' : (ehServico ? 'Salvar Serviço' : 'Salvar Produto')}
                     </button>
                 </div>
             }
         >
             <form onSubmit={handleSubmit} className="space-y-8">
 
-                {/* Banner cadastro inteligente */}
-                {!editMode && (
+                {/* Toggle Produto/Serviço — só aparece se o segmento habilita serviços */}
+                {schemaHelpers.usaServicos(schema) && (
+                    <div className="grid grid-cols-2 gap-3">
+                        {(schema?.tipos_item || ['produto']).map(t => {
+                            const ativo = formData.tipo_item === t;
+                            const Icone = t === 'servico' ? Wrench : Package;
+                            return (
+                                <button key={t} type="button" disabled={editMode}
+                                    onClick={() => field('tipo_item', t)}
+                                    className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 font-bold transition-all ${ativo
+                                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                        : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-blue-300'
+                                        } ${editMode ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                                    <Icone className="w-5 h-5" />
+                                    {t === 'servico' ? 'Serviço' : 'Produto'}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Banner cadastro inteligente — só p/ produto físico com código de barras */}
+                {!editMode && !ehServico && visivel('codigo_barras') && (
                     <button type="button" onClick={() => setShowScanner(true)}
                         className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl shadow-md hover:shadow-xl transition-all group relative overflow-hidden">
                         <div className="flex items-center gap-4 z-10">
@@ -242,116 +318,146 @@ const ProductFormModal = ({
                     </button>
                 )}
 
-
-
                 {/* ── Seção 1: Identificação ── */}
                 <div>
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Identificação</h4>
                     <div className={sectionClass}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="sm:col-span-2">
-                                <label className={labelClass}>Nome do Produto *</label>
+                                <label className={labelClass}>{ehServico ? 'Nome do Serviço *' : 'Nome do Produto *'}</label>
                                 <input type="text" value={formData.nome} required
                                     onChange={e => field('nome', e.target.value)}
-                                    className={inputClass} placeholder="Ex: Arroz Tio João 5kg" />
+                                    className={inputClass}
+                                    placeholder={ehServico ? exemplos.nome_servico : exemplos.nome} />
                             </div>
-                            <div>
-                                <label className={labelClass}>Código de Barras</label>
-                                <div className="flex gap-2">
-                                    <input type="text" value={formData.codigo_barras}
-                                        onChange={e => {
-                                            field('codigo_barras', e.target.value);
-                                            setShowForceSync(false);
-                                        }}
-                                        className={`${inputClass} font-mono`} placeholder="EAN-13 / EAN-8" />
-                                    <button type="button" onClick={() => setShowScanner(true)}
-                                        className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 text-blue-600 shadow-sm">
-                                        <Camera className="w-5 h-5" />
-                                    </button>
+                            {!ehServico && visivel('codigo_barras') && (
+                                <div>
+                                    <label className={labelClass}>Código de Barras</label>
+                                    <div className="flex gap-2">
+                                        <input type="text" value={formData.codigo_barras}
+                                            onChange={e => {
+                                                field('codigo_barras', e.target.value);
+                                                setShowForceSync(false);
+                                            }}
+                                            className={`${inputClass} font-mono`} placeholder="EAN-13 / EAN-8" />
+                                        <button type="button" onClick={() => setShowScanner(true)}
+                                            className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 text-blue-600 shadow-sm">
+                                            <Camera className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    {showForceSync && formData.codigo_barras && (
+                                        <button type="button" onClick={() => handleScanCodigo(formData.codigo_barras, true)}
+                                            className="mt-2 w-full py-2 px-3 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                            <Sparkles className="w-4 h-4" />
+                                            Forçar Busca na API Cosmos
+                                        </button>
+                                    )}
                                 </div>
-                                {showForceSync && formData.codigo_barras && (
-                                    <button type="button" onClick={() => handleScanCodigo(formData.codigo_barras, true)}
-                                        className="mt-2 w-full py-2 px-3 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                                        <Sparkles className="w-4 h-4" />
-                                        Forçar Busca na API Cosmos
-                                    </button>
-                                )}
-                            </div>
+                            )}
                             <div>
                                 <label className={labelClass}>Categoria *</label>
                                 <input type="text" list="cat-list" value={formData.categoria} required
                                     onChange={e => field('categoria', e.target.value)}
-                                    className={inputClass} placeholder="Ex: Alimentos, Bebidas..." />
+                                    className={inputClass}
+                                    placeholder={ehServico ? exemplos.categoria_servico : exemplos.categoria} />
                                 <datalist id="cat-list">{categorias.map(c => <option key={c} value={c} />)}</datalist>
                             </div>
-                            <div>
-                                <label className={labelClass}>Marca / Fabricante</label>
-                                <input type="text" value={formData.marca}
-                                    onChange={e => field('marca', e.target.value)}
-                                    className={inputClass} placeholder="Ex: Nestlé" />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Unidade de Medida</label>
-                                <select value={formData.unidade_medida}
-                                    onChange={e => field('unidade_medida', e.target.value)}
-                                    className={inputClass}>
-                                    {UNIDADES.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
-                                </select>
-                            </div>
+                            {visivel('marca') && !ehServico && (
+                                <div>
+                                    <label className={labelClass}>Marca / Fabricante</label>
+                                    <input type="text" value={formData.marca}
+                                        onChange={e => field('marca', e.target.value)}
+                                        className={inputClass} placeholder={exemplos.marca} />
+                                </div>
+                            )}
+                            {!ehServico && visivel('unidade_medida') && (
+                                <div>
+                                    <label className={labelClass}>Unidade de Medida</label>
+                                    <select value={formData.unidade_medida}
+                                        onChange={e => field('unidade_medida', e.target.value)}
+                                        className={inputClass}>
+                                        {unidades.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* ── Seção Tributação ── */}
-                <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tributação (NFC-e / NF-e)</h4>
-                    <div className={sectionClass}>
-                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                            <div>
-                                <label className={labelClass}>NCM</label>
-                                <input type="text" inputMode="numeric" maxLength={8} value={formData.ncm}
-                                    onChange={e => field('ncm', e.target.value.replace(/\D/g, '').slice(0, 8))}
-                                    className={`${inputClass} ${formData.ncm && formData.ncm.length !== 8 ? 'border-amber-400' : ''}`}
-                                    placeholder="8 dígitos" />
-                                {formData.ncm && formData.ncm.length !== 8 && (
-                                    <p className="text-xs text-amber-600 mt-1">Deve ter 8 dígitos.</p>
-                                )}
-                            </div>
-                            <div>
-                                <label className={labelClass}>CEST</label>
-                                <input type="text" inputMode="numeric" maxLength={7} value={formData.cest}
-                                    onChange={e => field('cest', e.target.value.replace(/\D/g, '').slice(0, 7))}
-                                    className={inputClass} placeholder="7 dígitos" />
-                            </div>
-                            <div>
-                                <label className={labelClass}>CFOP Padrão</label>
-                                <input type="text" inputMode="numeric" maxLength={4} value={formData.cfop_padrao}
-                                    onChange={e => field('cfop_padrao', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                                    className={inputClass} placeholder="Ex: 5102" />
-                            </div>
-                            <div>
-                                <label className={labelClass}>CSOSN (Simples)</label>
-                                <input type="text" inputMode="numeric" maxLength={3} value={formData.csosn}
-                                    onChange={e => field('csosn', e.target.value.replace(/\D/g, '').slice(0, 3))}
-                                    className={inputClass} placeholder="Ex: 102" />
+                {/* ── Atributos do Segmento (100% dirigido pelo View Schema) ── */}
+                {gruposAtributos.map(({ grupo, label, campos }) => (
+                    <div key={grupo}>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{label}</h4>
+                        <div className={sectionClass}>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {campos.map(campo => (
+                                    <SchemaField
+                                        key={campo.chave}
+                                        campo={campo}
+                                        value={formData.atributos[campo.chave]}
+                                        onChange={v => setAtributo(campo.chave, v)}
+                                        inputClass={inputClass}
+                                        labelClass={labelClass}
+                                    />
+                                ))}
                             </div>
                         </div>
                     </div>
-                </div>
+                ))}
 
-
+                {/* ── Seção Tributação — schema decide; serviço não emite NFC-e de produto ── */}
+                {!ehServico && visivel('fiscal') && (
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tributação (NFC-e / NF-e)</h4>
+                        <div className={sectionClass}>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                <div>
+                                    <label className={labelClass}>NCM</label>
+                                    <input type="text" inputMode="numeric" maxLength={8} value={formData.ncm}
+                                        onChange={e => field('ncm', e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                        className={`${inputClass} ${formData.ncm && formData.ncm.length !== 8 ? 'border-amber-400' : ''}`}
+                                        placeholder="8 dígitos" />
+                                    {formData.ncm && formData.ncm.length !== 8 && (
+                                        <p className="text-xs text-amber-600 mt-1">Deve ter 8 dígitos.</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className={labelClass}>CEST</label>
+                                    <input type="text" inputMode="numeric" maxLength={7} value={formData.cest}
+                                        onChange={e => field('cest', e.target.value.replace(/\D/g, '').slice(0, 7))}
+                                        className={inputClass} placeholder="7 dígitos" />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>CFOP Padrão</label>
+                                    <input type="text" inputMode="numeric" maxLength={4} value={formData.cfop_padrao}
+                                        onChange={e => field('cfop_padrao', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                        className={inputClass} placeholder="Ex: 5102" />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>CSOSN (Simples)</label>
+                                    <input type="text" inputMode="numeric" maxLength={3} value={formData.csosn}
+                                        onChange={e => field('csosn', e.target.value.replace(/\D/g, '').slice(0, 3))}
+                                        className={inputClass} placeholder="Ex: 102" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Seção 3: Precificação ── */}
                 <div>
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Precificação e Lucro</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100/50 dark:border-blue-900/30">
                         <div>
-                            <label className="block text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">Preço de Custo (R$) *</label>
-                            <input type="number" step="0.01" min="0.01" required
+                            <label className="block text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">
+                                {ehServico ? 'Custo do Serviço (R$)' : 'Preço de Custo (R$) *'}
+                            </label>
+                            <input type="number" step="0.01" min={ehServico ? '0' : '0.01'} required={!ehServico}
                                 value={formData.preco_custo}
                                 onChange={e => field('preco_custo', parseFloat(e.target.value) || 0)}
                                 onBlur={calcularPrecoVenda}
                                 className={`${inputClass} text-lg font-semibold border-blue-200 dark:border-blue-800`} />
+                            {ehServico && <p className="text-xs text-blue-500 mt-1">Peças/insumos consumidos. Pode ser zero.</p>}
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">Margem de Lucro (%)</label>
@@ -362,7 +468,9 @@ const ProductFormModal = ({
                                 className={`${inputClass} text-lg font-semibold border-blue-200 dark:border-blue-800`} />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">Preço de Venda (R$) *</label>
+                            <label className="block text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">
+                                {ehServico ? 'Preço Cobrado (R$) *' : 'Preço de Venda (R$) *'}
+                            </label>
                             <input type="number" step="0.01" min="0.01" required
                                 value={formData.preco_venda}
                                 onChange={e => field('preco_venda', parseFloat(e.target.value) || 0)}
@@ -372,37 +480,43 @@ const ProductFormModal = ({
                     </div>
                 </div>
 
-                {/* ── Seção 4: Estoque Mínimo ── */}
-                <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Controle de Estoque</h4>
-                    <div className={sectionClass}>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelClass}>Qtd. Mínima (Alerta)</label>
-                                <input type="number" min="0" value={formData.quantidade_minima}
-                                    onChange={e => field('quantidade_minima', parseFloat(e.target.value) || 0)}
-                                    className={inputClass} />
+                {/* ── Seção 4: Estoque — serviço não controla estoque ── */}
+                {!ehServico && (
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Controle de Estoque</h4>
+                        <div className={sectionClass}>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {visivel('quantidade_minima') && (
+                                    <div>
+                                        <label className={labelClass}>Qtd. Mínima (Alerta)</label>
+                                        <input type="number" min="0" value={formData.quantidade_minima}
+                                            onChange={e => field('quantidade_minima', parseFloat(e.target.value) || 0)}
+                                            className={inputClass} />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* ── Seção 5: Imagem e descrição ── */}
                 <div>
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Imagem e Detalhes</h4>
                     <div className={sectionClass}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelClass}>URL da Imagem</label>
-                                <input type="url" value={formData.imagem_url}
-                                    onChange={e => field('imagem_url', e.target.value)}
-                                    className={inputClass} placeholder="https://..." />
-                                {formData.imagem_url && (
-                                    <img src={formData.imagem_url} alt="preview"
-                                        className="mt-2 h-20 w-20 object-cover rounded-xl border border-gray-200 dark:border-gray-700"
-                                        onError={e => (e.currentTarget.style.display = 'none')} />
-                                )}
-                            </div>
+                            {visivel('imagem_url') && (
+                                <div>
+                                    <label className={labelClass}>URL da Imagem</label>
+                                    <input type="url" value={formData.imagem_url}
+                                        onChange={e => field('imagem_url', e.target.value)}
+                                        className={inputClass} placeholder="https://..." />
+                                    {formData.imagem_url && (
+                                        <img src={formData.imagem_url} alt="preview"
+                                            className="mt-2 h-20 w-20 object-cover rounded-xl border border-gray-200 dark:border-gray-700"
+                                            onError={e => (e.currentTarget.style.display = 'none')} />
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <label className={labelClass}>Descrição / Observações</label>
                                 <textarea value={formData.descricao} rows={3}
@@ -415,7 +529,7 @@ const ProductFormModal = ({
                                 onChange={e => field('ativo', e.target.checked)}
                                 className="w-4 h-4 text-blue-600 rounded" />
                             <label htmlFor="ativo-check" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Produto ativo (visível no PDV)
+                                {ehServico ? 'Serviço ativo (visível no PDV)' : 'Produto ativo (visível no PDV)'}
                             </label>
                         </div>
                     </div>

@@ -8,6 +8,7 @@ import {
     Package,
     Clock,
 } from 'lucide-react';
+import { useViewSchema, schemaHelpers } from '../../../services/viewSchemaService';
 
 interface QuickFiltersPanelProps {
     activeFilter: string | null;
@@ -31,6 +32,10 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
     onFilterChange,
     counts,
 }) => {
+    // Motor contextual: chips de validade só existem se o segmento controla validade
+    const { schema } = useViewSchema();
+    const usaValidade = schemaHelpers.usaValidade(schema);
+
     const filters = [
         {
             id: 'classe_a',
@@ -48,24 +53,26 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
             count: counts.classe_c,
             description: 'Baixo faturamento',
         },
-        {
-            id: 'vencimento_proximo',
-            label: 'Vence em 30 dias',
-            icon: <Clock className="w-4 h-4" />,
-            color: 'yellow',
-            count: counts.vencimento_proximo,
-            description: 'Atenção à validade',
-            pulse: counts.vencimento_proximo > 0,
-        },
-        {
-            id: 'vencido',
-            label: 'Vencidos',
-            icon: <AlertTriangle className="w-4 h-4" />,
-            color: 'red',
-            count: counts.vencido,
-            description: 'Remover do estoque',
-            pulse: counts.vencido > 0,
-        },
+        ...(usaValidade ? [
+            {
+                id: 'vencimento_proximo',
+                label: 'Vence em 30 dias',
+                icon: <Clock className="w-4 h-4" />,
+                color: 'yellow',
+                count: counts.vencimento_proximo,
+                description: 'Atenção à validade',
+                pulse: counts.vencimento_proximo > 0,
+            },
+            {
+                id: 'vencido',
+                label: 'Vencidos',
+                icon: <AlertTriangle className="w-4 h-4" />,
+                color: 'red',
+                count: counts.vencido,
+                description: 'Remover do estoque',
+                pulse: counts.vencido > 0,
+            },
+        ] : []),
         {
             id: 'giro_rapido',
             label: 'Giro Rápido',
