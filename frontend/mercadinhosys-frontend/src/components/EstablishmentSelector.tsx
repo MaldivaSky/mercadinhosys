@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Building, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../api/apiClient';
 import toast from 'react-hot-toast';
+import { useSuperAdmin } from '../contexts/SuperAdminContext';
 
 interface Establishment {
   id: number;
@@ -26,13 +27,15 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [internalSelectedId, setInternalSelectedId] = useState<number | string | null>(() => {
-    const stored = sessionStorage.getItem('selected_establishment_id');
-    if (stored === 'all') return 'all';
-    return stored ? parseInt(stored) : null;
-  });
+  // Fonte única de verdade para impersonation: SuperAdminContext (mercadinhosys_superadmin_tenant
+  // -> header X-Impersonate-Tenant-Id). Esse header tem prioridade sobre X-Establishment-ID no
+  // backend (get_authorized_establishment_id), então usar uma chave própria aqui deixava esse
+  // seletor sem nenhum efeito real — a loja escolhida nunca chegava a filtrar nada.
+  const { selectedTenantId, setSelectedTenantId } = useSuperAdmin();
+  const internalSelectedId: number | string | null =
+    selectedTenantId === 'all' ? 'all' : parseInt(selectedTenantId);
 
-  // Use either the controlled prop or the internal state
+  // Use either the controlled prop or o contexto compartilhado
   const selectedId = selectedEstablishment !== undefined ? selectedEstablishment : internalSelectedId;
 
   useEffect(() => {
@@ -66,8 +69,7 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
     if (onEstablishmentChange && typeof id === 'number') {
       onEstablishmentChange(id);
     } else {
-      setInternalSelectedId(id);
-      sessionStorage.setItem('selected_establishment_id', stringId);
+      setSelectedTenantId(stringId);
       toast.success(id === 'all' ? 'Contexto alterado para Visão Global' : 'Contexto de auditoria alterado');
 
       // Forçar recarregamento apenas para modo não-controlado
