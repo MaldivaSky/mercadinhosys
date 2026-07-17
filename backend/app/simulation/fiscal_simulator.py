@@ -33,14 +33,16 @@ class FiscalSimulator:
             venda_id=venda.id,
             referencia=f"NFE-{venda.codigo}",
             tipo="nfe",
+            modelo="55",
             status="autorizado",
             ambiente="producao",
+            gateway="simulado",
             chave_acesso=chave,
             protocolo=f"135{random.randint(10000000000, 99999999999)}",
             valor_total=venda.total,
-            xml_autorizado="<xml>Mock NFe Produção</xml>",
+            xml_content="<xml>Mock NFe Produção</xml>",
             danfe_url=f"https://nfe.fazenda.gov.br/portal/danfe?chave={chave}",
-            data_emissao=ts
+            autorizado_em=ts,
         )
         db.session.add(doc)
 
@@ -55,14 +57,16 @@ class FiscalSimulator:
             venda_id=venda.id,
             referencia=f"NFCE-{venda.codigo}",
             tipo="nfce",
+            modelo="65",
             status="autorizado",
             ambiente="producao",
+            gateway="simulado",
             chave_acesso=chave,
             protocolo=f"135{random.randint(10000000000, 99999999999)}",
             valor_total=venda.total,
-            xml_autorizado="<xml>Mock NFCe Produção</xml>",
+            xml_content="<xml>Mock NFCe Produção</xml>",
             danfe_url=f"https://nfce.fazenda.gov.br/portal/danfe?chave={chave}",
-            data_emissao=ts
+            autorizado_em=ts,
         )
         db.session.add(doc)
 

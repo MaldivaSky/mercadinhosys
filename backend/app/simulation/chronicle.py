@@ -3,8 +3,9 @@ from sqlalchemy import func
 from decimal import Decimal
 import random
 import uuid
+import os
 from app.models import (
-    db, Estabelecimento, Funcionario, Cliente, Produto, Venda, VendaItem, 
+    db, Estabelecimento, Funcionario, Cliente, Produto, Venda, VendaItem, Fornecedor,
     Pagamento, MovimentacaoEstoque, RegistroPonto, Despesa, 
     DashboardMetrica, HistoricoPrecos, ContaReceber,
     FuncionarioBeneficio, ProdutoLote, Caixa, MovimentacaoCaixa,
@@ -56,7 +57,9 @@ class ChronicleSimulator:
         
         print(f"   [...] Gerando {months*30} dias de transações...")
         
-        batch_size = 30
+        batch_size = int(os.getenv("SIM_BATCH_DAYS", "30"))
+        if os.getenv("SEED_LIGHT") == "1":
+            batch_size = min(batch_size, 7)
         days_to_simulate = months * 30
         
         for i in range(0, days_to_simulate, batch_size):
@@ -155,11 +158,14 @@ class ChronicleSimulator:
                 ))
 
         # 5. VENDAS: Transações Reais
-        products = Produto.query.filter_by(estabelecimento_id=est.id).all()
+        products = Produto.query.filter_by(estabelecimento_id=est.id, ativo=True).all()
         clients = Cliente.query.filter_by(estabelecimento_id=est.id).all()
         if products:
+            sales_scale = float(os.getenv("SIM_SALES_SCALE", "1.0"))
+            if os.getenv("SEED_LIGHT") == "1" and "SIM_SALES_SCALE" not in os.environ:
+                sales_scale = 0.12
             speed = 1.0 if any(s.nome in est.nome_fantasia for s in DNAFactory.SCENARIOS.values()) else 0.2
-            qty = int(dna.giro_velocidade * speed * random.uniform(0.7, 1.3))
+            qty = max(1, int(dna.giro_velocidade * sales_scale * speed * random.uniform(0.7, 1.3)))
             
             for _ in range(qty):
                 ts = datetime.combine(dt.date(), time(random.randint(7, 21), random.randint(0, 59)))
@@ -273,7 +279,8 @@ class ChronicleSimulator:
         """Simula a recompra de mercadorias quando o estoque baixa."""
         low_stock_prods = Produto.query.filter(
             Produto.estabelecimento_id == est.id,
-            Produto.quantidade < 20
+            Produto.quantidade < 20,
+            Produto.controlar_estoque.is_(True)
         ).limit(10).all()
 
         if not low_stock_prods: return
@@ -340,14 +347,21 @@ class ChronicleSimulator:
         total = Decimal("0.00")
         items_count = random.randint(10, 50) if is_b2b else random.randint(1, 5)
         for p in random.sample(products, min(len(products), items_count)):
-            qty = Decimal(str(random.uniform(10, 100))) if is_b2b else Decimal(str(random.uniform(1, 3)))
+            if (p.tipo_item or "produto") == "servico":
+                qty = Decimal("1")
+            else:
+                qty = Decimal(str(random.uniform(10, 100))) if is_b2b else Decimal(str(random.uniform(1, 3)))
             
             # Negociação SFA: Vendedor dá desconto em atacado até o preco_minimo
             preco_aplicado = p.preco_venda
             if is_b2b:
-                desconto_maximo = float(p.preco_venda - p.preco_minimo)
-                desconto_aplicado = random.uniform(0, desconto_maximo)
-                preco_aplicado = p.preco_venda - Decimal(str(desconto_aplicado))
+                piso_negociacao = max(
+                    Decimal(str(p.preco_custo or 0)) * Decimal("1.08"),
+                    Decimal(str(p.preco_venda or 0)) * Decimal("0.88"),
+                )
+                desconto_maximo = max(float((p.preco_venda or 0) - piso_negociacao), 0.0)
+                desconto_aplicado = random.uniform(0, desconto_maximo) if desconto_maximo > 0 else 0.0
+                preco_aplicado = (p.preco_venda or 0) - Decimal(str(desconto_aplicado))
                 
             item_total = preco_aplicado * qty
             custo_unit = Decimal(str(p.preco_custo or 0))
