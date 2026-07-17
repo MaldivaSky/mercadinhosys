@@ -5,6 +5,7 @@ import { pdvService } from '../pdvService';
 import { buscarOffline } from '../offlineCatalog';
 import { useConfig } from '../../../contexts/ConfigContext';
 import BarcodeScanner from './BarcodeScanner';
+import ImageZoomModal from '../../../components/ui/ImageZoomModal';
 
 interface ProdutoSearchProps {
     onProdutoSelecionado: (produto: Produto) => void;
@@ -27,6 +28,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const mostrarAlertaEstoque = config?.alerta_estoque_minimo ?? true;
     const diasAlertaValidade = config?.dias_alerta_validade ?? 30;
     const mostrarFotoProduto = config?.mostrar_foto_produto_pdv ?? false;
+    const [zoomSrc, setZoomSrc] = useState<{ src: string; alt: string } | null>(null);
 
     useEffect(() => {
         if (!query.trim()) {
@@ -238,15 +240,22 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                             >
                                 <div className="flex items-center gap-3">
                                     {mostrarFotoProduto && imagemUrl && !fotosComErro.has(produto.id) ? (
-                                        <img
-                                            src={imagemUrl}
-                                            alt={produto.nome}
-                                            loading="lazy"
-                                            onError={() => setFotosComErro(prev => new Set(prev).add(produto.id))}
-                                            className="w-12 h-12 flex-shrink-0 rounded-xl object-cover border border-gray-200 dark:border-gray-700 bg-white"
-                                        />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setZoomSrc({ src: imagemUrl, alt: produto.nome }); }}
+                                            className="flex-shrink-0"
+                                            title="Ampliar foto"
+                                        >
+                                            <img
+                                                src={imagemUrl}
+                                                alt={produto.nome}
+                                                loading="lazy"
+                                                onError={() => setFotosComErro(prev => new Set(prev).add(produto.id))}
+                                                className="w-14 h-14 rounded-xl object-cover border border-gray-200 dark:border-gray-700 bg-white"
+                                            />
+                                        </button>
                                     ) : (
-                                        <div className={`w-12 h-12 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
+                                        <div className={`w-14 h-14 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
                                             ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
                                             : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                                             }`}>
@@ -344,6 +353,11 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                     onClose={() => setScannerAberto(false)}
                 />
             )}
+            <ImageZoomModal
+                src={zoomSrc?.src ?? null}
+                alt={zoomSrc?.alt}
+                onClose={() => setZoomSrc(null)}
+            />
         </div>
     );
 };

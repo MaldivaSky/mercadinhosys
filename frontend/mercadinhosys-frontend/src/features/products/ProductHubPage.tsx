@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { ArrowLeft, TrendingUp, DollarSign, Activity, Truck, AlertTriangle, Percent, Clock, Package, CheckCircle } from 'lucide-react';
 import { showToast } from '../../utils/toast';
+import ImageZoomModal from '../../components/ui/ImageZoomModal';
 import './ProductHubPage.css';
 
 export default function ProductHubPage() {
@@ -26,6 +27,8 @@ export default function ProductHubPage() {
         data_fabricacao: string;
         data_validade: string;
     }>>({});
+    const [fotoComErro, setFotoComErro] = useState(false);
+    const [fotoZoomAberto, setFotoZoomAberto] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -269,30 +272,58 @@ export default function ProductHubPage() {
         <div className="product-hub-container">
             {/* Cabeçalho do Produto */}
             <header className="hub-header">
-                <div className="product-title-group">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                        <button onClick={() => navigate('/products')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                            <ArrowLeft size={24} />
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                    {produto.imagem_url && !fotoComErro ? (
+                        <button
+                            type="button"
+                            onClick={() => setFotoZoomAberto(true)}
+                            title="Ampliar foto"
+                            style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0 }}
+                        >
+                            <img
+                                src={produto.imagem_url}
+                                alt={produto.nome}
+                                onError={() => setFotoComErro(true)}
+                                style={{
+                                    width: 96, height: 96, objectFit: 'cover',
+                                    borderRadius: 16, border: '1px solid #1e293b', background: '#fff',
+                                }}
+                            />
                         </button>
-                        <span className="meta-badge" style={{ background: produto.ativo ? '#dcfce7' : '#fee2e2', color: produto.ativo ? '#166534' : '#991b1b' }}>
-                            {produto.ativo ? 'Ativo' : 'Inativo'}
-                        </span>
-                        <span className="meta-badge" style={{ background: '#e0e7ff', color: '#3730a3' }}>
-                            {/* O backend serializa `categoria` como STRING (o nome).
-                                Antes lia .nome de uma string -> undefined -> "Sem Categoria". */}
-                            {(typeof produto.categoria === 'string' ? produto.categoria : produto.categoria?.nome)
-                              || produto.categoria_nome || produto.subcategoria || 'Sem Categoria'}
-                        </span>
-                    </div>
-                    <h1 className="product-title">{produto.nome}</h1>
-                    <div className="product-subtitle">
-                        Código: {produto.codigo_interno} | Barras: {produto.codigo_barras || 'N/A'} | Curva ABC: <strong style={{color: '#3b82f6'}}>Classe {produto.classificacao_abc || 'C'}</strong>
-                    </div>
-                    {produto.descricao && (
-                        <div style={{ marginTop: '8px', fontSize: '0.9rem', color: '#64748b', fontStyle: 'italic' }}>
-                            Descrição: {produto.descricao}
+                    ) : (
+                        <div style={{
+                            width: 96, height: 96, flexShrink: 0, borderRadius: 16,
+                            border: '1px solid #1e293b', background: '#1e293b',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <Package size={32} color="#475569" />
                         </div>
                     )}
+                    <div className="product-title-group">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                            <button onClick={() => navigate('/products')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                                <ArrowLeft size={24} />
+                            </button>
+                            <span className="meta-badge" style={{ background: produto.ativo ? '#dcfce7' : '#fee2e2', color: produto.ativo ? '#166534' : '#991b1b' }}>
+                                {produto.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                            <span className="meta-badge" style={{ background: '#e0e7ff', color: '#3730a3' }}>
+                                {/* O backend serializa `categoria` como STRING (o nome).
+                                    Antes lia .nome de uma string -> undefined -> "Sem Categoria". */}
+                                {(typeof produto.categoria === 'string' ? produto.categoria : produto.categoria?.nome)
+                                  || produto.categoria_nome || produto.subcategoria || 'Sem Categoria'}
+                            </span>
+                        </div>
+                        <h1 className="product-title">{produto.nome}</h1>
+                        <div className="product-subtitle">
+                            Código: {produto.codigo_interno} | Barras: {produto.codigo_barras || 'N/A'} | Curva ABC: <strong style={{color: '#3b82f6'}}>Classe {produto.classificacao_abc || 'C'}</strong>
+                        </div>
+                        {produto.descricao && (
+                            <div style={{ marginTop: '8px', fontSize: '0.9rem', color: '#64748b', fontStyle: 'italic' }}>
+                                Descrição: {produto.descricao}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Status Rápido */}
@@ -707,6 +738,11 @@ export default function ProductHubPage() {
                     </div>
                 </div>
             </section>
+            <ImageZoomModal
+                src={fotoZoomAberto ? produto.imagem_url : null}
+                alt={produto.nome}
+                onClose={() => setFotoZoomAberto(false)}
+            />
         </div>
     );
 }

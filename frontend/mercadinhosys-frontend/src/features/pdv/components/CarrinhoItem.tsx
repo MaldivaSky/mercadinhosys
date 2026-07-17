@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 import { showToast } from '../../../utils/toast';
+import { useConfig } from '../../../contexts/ConfigContext';
+import ImageZoomModal from '../../../components/ui/ImageZoomModal';
 
 interface CarrinhoItemProps {
     produto: Produto;
@@ -27,6 +29,12 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
     onAplicarDesconto,
 }) => {
     const isGranel = ['KG', 'L', 'G', 'ML'].includes(produto.unidade_medida?.toUpperCase()) || (produto as any).tipo === 'granel';
+
+    const { config } = useConfig();
+    const mostrarFotoProduto = config?.mostrar_foto_produto_pdv ?? false;
+    const imagemUrl = (produto as any).imagem_url;
+    const [fotoComErro, setFotoComErro] = useState(false);
+    const [zoomAberto, setZoomAberto] = useState(false);
 
     const [mostrarDesconto, setMostrarDesconto] = useState(false);
     const [valorDesconto, setValorDesconto] = useState('');
@@ -80,10 +88,37 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                     horizontal antigo é preservado. */}
                 <div className="flex items-start gap-2.5">
 
-                    {/* Quantidade badge */}
-                    <div className="w-8 h-8 flex-shrink-0 bg-red-600 dark:bg-red-700 rounded-lg text-white font-black flex items-center justify-center text-sm shadow-sm tabular-nums">
-                        {quantidade}
-                    </div>
+                    {/* Foto do produto (se habilitado) com badge de quantidade sobreposto —
+                        clicável, abre em tamanho grande (detalhe importa em roupa/material
+                        de construção). Sem foto, cai de volta no badge sozinho de sempre. */}
+                    {mostrarFotoProduto && imagemUrl && !fotoComErro ? (
+                        <button
+                            type="button"
+                            onClick={() => setZoomAberto(true)}
+                            className="relative w-14 h-14 flex-shrink-0"
+                            title="Ampliar foto"
+                        >
+                            <img
+                                src={imagemUrl}
+                                alt={produto.nome}
+                                loading="lazy"
+                                onError={() => setFotoComErro(true)}
+                                className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700 bg-white"
+                            />
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-600 dark:bg-red-700 rounded-full text-white font-black flex items-center justify-center text-[10px] shadow-sm tabular-nums ring-2 ring-white dark:ring-gray-800">
+                                {quantidade}
+                            </span>
+                        </button>
+                    ) : (
+                        <div className="w-8 h-8 flex-shrink-0 bg-red-600 dark:bg-red-700 rounded-lg text-white font-black flex items-center justify-center text-sm shadow-sm tabular-nums">
+                            {quantidade}
+                        </div>
+                    )}
+                    <ImageZoomModal
+                        src={zoomAberto ? imagemUrl : null}
+                        alt={produto.nome}
+                        onClose={() => setZoomAberto(false)}
+                    />
 
                     {/* Nome + metadados */}
                     <div className="flex-1 min-w-0">

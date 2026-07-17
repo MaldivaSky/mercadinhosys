@@ -1,7 +1,49 @@
-import React from 'react';
-import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers, PackageX, MoreHorizontal, History } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers, PackageX, MoreHorizontal, History, Package, ZoomIn } from 'lucide-react';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
+import ImageZoomModal from '../../../components/ui/ImageZoomModal';
+
+/** Miniatura do produto com fallback gracioso e zoom ao clicar — precisa de
+ * estado próprio por linha (erro de carregamento), por isso vive em seu
+ * próprio componente. Tamanho maior que o antigo (40px não revelava
+ * detalhe nenhum em roupa/material de construção, onde a foto importa
+ * mais pra reconhecer o item). */
+const ProdutoThumb: React.FC<{ produto: Produto; size?: number; onZoom: (produto: Produto) => void }> = ({ produto, size = 56, onZoom }) => {
+    const [erro, setErro] = useState(false);
+    const imagemUrl = (produto as any).imagem_url;
+    if (imagemUrl && !erro) {
+        return (
+            <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onZoom(produto); }}
+                className="relative flex-shrink-0 group/thumb"
+                style={{ width: size, height: size }}
+                title="Ampliar foto"
+            >
+                <img
+                    src={imagemUrl}
+                    alt={produto.nome}
+                    loading="lazy"
+                    onError={() => setErro(true)}
+                    style={{ width: size, height: size }}
+                    className="rounded-lg object-cover border border-slate-700 bg-white transition-transform group-hover/thumb:scale-105"
+                />
+                <span className="absolute inset-0 rounded-lg bg-black/0 group-hover/thumb:bg-black/30 flex items-center justify-center transition-colors">
+                    <ZoomIn className="w-4 h-4 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity" />
+                </span>
+            </button>
+        );
+    }
+    return (
+        <div
+            style={{ width: size, height: size }}
+            className="flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800 flex items-center justify-center"
+        >
+            <Package className="text-slate-500" size={Math.round(size * 0.45)} />
+        </div>
+    );
+};
 
 export interface LinhaProdutoLote {
     produto: Produto & { lotes_no_periodo?: Array<{ id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number }> };
@@ -47,6 +89,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
     onSort,
     sortConfig,
 }) => {
+    const [produtoZoom, setProdutoZoom] = useState<Produto | null>(null);
 
     const SortIcon = ({ columnKey }: { columnKey: string }) => {
         if (!sortConfig || sortConfig.key !== columnKey) {
@@ -161,6 +204,9 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                 }
                             }}>
                                 <td className="px-5 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <ProdutoThumb produto={produto} onZoom={setProdutoZoom} />
+                                    <div className="min-w-0">
                                     <div className="font-semibold text-slate-200">
                                         {produto.nome}
                                         {produto.ativo === false && (
@@ -173,6 +219,8 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                         <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{produto.categoria}</span>
                                         {produto.codigo_barras && <span>{produto.codigo_barras}</span>}
                                     </div>
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="px-5 py-3 tabular-nums font-medium text-slate-300">
                                     {produto.quantidade} <span className="text-xs text-slate-500">{produto.unidade_medida}</span>
@@ -297,12 +345,15 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                             }
                         }}>
                             <div className="flex justify-between items-start">
-                                <div className="flex-1 pr-4">
+                                <div className="flex-1 pr-4 flex items-start gap-3">
+                                  <ProdutoThumb produto={produto} size={52} onZoom={setProdutoZoom} />
+                                  <div className="min-w-0 flex-1">
                                     <h4 className="font-bold text-slate-200 text-lg leading-tight">{produto.nome}</h4>
                                     <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
                                         <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">{produto.categoria}</span>
                                         {produto.codigo_barras && <span className="font-mono text-slate-500">{produto.codigo_barras}</span>}
                                     </div>
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStockBadge(produto)} whitespace-nowrap`}>
@@ -386,6 +437,11 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                     </button>
                 </div>
             </div>
+            <ImageZoomModal
+                src={produtoZoom ? (produtoZoom as any).imagem_url : null}
+                alt={produtoZoom?.nome}
+                onClose={() => setProdutoZoom(null)}
+            />
         </div>
     );
 };
