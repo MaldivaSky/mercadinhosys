@@ -99,16 +99,16 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                 {/* Header do modal */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center">
-                            <Eye className="w-5 h-5 text-white" />
+                        <div className="w-9 h-9 bg-gray-50 dark:bg-slate-900 rounded-xl flex items-center justify-center">
+                            <Eye className="w-5 h-5 text-gray-900 dark:text-white" />
                         </div>
                         <div>
                             <p className="text-sm font-black text-slate-900 uppercase tracking-tight">Comprovante</p>
-                            <p className="text-[10px] text-slate-400 font-semibold">{venda?.codigo || '—'}</p>
+                            <p className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold">{venda?.codigo || '—'}</p>
                         </div>
                     </div>
                     <button onClick={onFechar}
-                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors">
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-400 dark:text-slate-500 transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -118,7 +118,7 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                     {carregando && (
                         <div className="flex flex-col items-center justify-center py-16 gap-3">
                             <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
-                            <p className="text-xs text-slate-400 font-semibold">Carregando comprovante...</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Carregando comprovante...</p>
                         </div>
                     )}
                     {erro && (
@@ -210,7 +210,7 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                                     <p>
                                         Valor Aprox. dos Tributos: {formatBRL(comp.valor_tributos ?? 0)} ({(comp.percentual_tributos ?? 0).toFixed(2)}%)
                                     </p>
-                                    <p className="text-slate-500">Fonte: IBPT (Lei 12.741/2012)</p>
+                                    <p className="text-gray-400 dark:text-slate-500">Fonte: IBPT (Lei 12.741/2012)</p>
                                 </div>
                             )}
 
@@ -219,7 +219,7 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                                 <p className="font-bold">{comp.rodape || 'Obrigado pela preferência!'}</p>
                                 {!dados.nfce && (
                                     <>
-                                        <p className="text-[9px] mt-1 text-slate-500">
+                                        <p className="text-[9px] mt-1 text-gray-400 dark:text-slate-500">
                                             Documento sem valor fiscal • MercadinhoSys
                                         </p>
                                         <p className="text-[9px]">
@@ -265,7 +265,7 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                     {dados && (
                         <button
                             onClick={handleImprimir}
-                            className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg"
+                            className="flex-1 py-3 rounded-xl bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-900 dark:text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg"
                         >
                             <Printer className="w-4 h-4" />
                             Imprimir

@@ -103,7 +103,7 @@ const AlertsPanel: React.FC = () => {
                                         navigate('/products');
                                     }
                                 }}
-                                className="px-3 py-1 bg-white/50 dark:bg-black/20 hover:bg-white dark:hover:bg-black/40 rounded text-xs font-bold uppercase transition-all">
+                                className="px-3 py-1 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:hover:bg-black/40 text-gray-700 dark:text-slate-200 rounded text-xs font-bold uppercase transition-all">
                                 Resolver
                             </button>
                         </motion.div>

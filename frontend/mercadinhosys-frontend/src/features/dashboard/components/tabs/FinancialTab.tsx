@@ -21,28 +21,28 @@ export default function FinancialTab({ data }: FinancialTabProps) {
     <div className="space-y-8">
       {/* Resumo Financeiro */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">
-          <p className="text-slate-400 font-bold mb-2">Entradas (Faturamento)</p>
+        <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-gray-200 dark:border-slate-700/60">
+          <p className="text-gray-500 dark:text-slate-400 font-bold mb-2">Entradas (Faturamento)</p>
           <p className="text-2xl font-black text-blue-400">{formatCurrency(faturamento)}</p>
         </div>
-        <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">
-          <p className="text-slate-400 font-bold mb-2">CMV (Custo Mercadoria)</p>
+        <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-gray-200 dark:border-slate-700/60">
+          <p className="text-gray-500 dark:text-slate-400 font-bold mb-2">CMV (Custo Mercadoria)</p>
           <p className="text-2xl font-black text-amber-400">{formatCurrency(cogs)}</p>
         </div>
-        <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">
-          <p className="text-slate-400 font-bold mb-2">Despesas Operacionais</p>
+        <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-gray-200 dark:border-slate-700/60">
+          <p className="text-gray-500 dark:text-slate-400 font-bold mb-2">Despesas Operacionais</p>
           <p className="text-2xl font-black text-red-400">{formatCurrency(despesas)}</p>
         </div>
-        <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">
-          <p className="text-slate-400 font-bold mb-2">Lucro Líquido</p>
+        <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-gray-200 dark:border-slate-700/60">
+          <p className="text-gray-500 dark:text-slate-400 font-bold mb-2">Lucro Líquido</p>
           <p className="text-2xl font-black text-emerald-400">{formatCurrency(lucroLiquido)}</p>
         </div>
       </div>
 
       {/* DRE Simplificado */}
-      <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden">
-        <div className="p-6 border-b border-slate-700/60 bg-slate-800/80">
-           <h2 className="text-lg font-bold text-white flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-800/60 rounded-3xl border border-gray-200 dark:border-slate-700/60 overflow-hidden">
+        <div className="p-6 border-b border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/80">
+           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
              <Activity className="text-blue-400" /> DRE Gerencial Simplificado
            </h2>
         </div>
@@ -50,26 +50,26 @@ export default function FinancialTab({ data }: FinancialTabProps) {
            <div className="space-y-4">
              
              {/* Faturamento */}
-             <div className="flex justify-between items-center pb-4 border-b border-slate-700/50">
-               <span className="font-bold text-slate-300">(=) Receita Bruta</span>
-               <span className="font-bold text-white">{formatCurrency(faturamento)}</span>
+             <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-slate-700/50">
+               <span className="font-bold text-gray-600 dark:text-slate-300">(=) Receita Bruta</span>
+               <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(faturamento)}</span>
              </div>
              
              {/* Deduções */}
-             <div className="flex justify-between items-center pb-4 border-b border-slate-700/50">
-               <span className="text-slate-400">(-) Custo das Mercadorias Vendidas (CMV)</span>
+             <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-slate-700/50">
+               <span className="text-gray-500 dark:text-slate-400">(-) Custo das Mercadorias Vendidas (CMV)</span>
                <span className="text-red-400">{formatCurrency(cogs)}</span>
              </div>
              
              {/* Lucro Bruto */}
-             <div className="flex justify-between items-center pb-4 border-b border-slate-700/50">
+             <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-slate-700/50">
                <span className="font-bold text-blue-300">(=) Lucro Bruto</span>
                <span className="font-bold text-blue-400">{formatCurrency(lucroBruto)}</span>
              </div>
              
              {/* Despesas */}
-             <div className="flex justify-between items-center pb-4 border-b border-slate-700/50">
-               <span className="text-slate-400">(-) Despesas Operacionais e Folha</span>
+             <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-slate-700/50">
+               <span className="text-gray-500 dark:text-slate-400">(-) Despesas Operacionais e Folha</span>
                <span className="text-red-400">{formatCurrency(despesas)}</span>
              </div>
              
@@ -78,7 +78,7 @@ export default function FinancialTab({ data }: FinancialTabProps) {
                <span className="font-black text-emerald-400 text-xl">(=) Lucro Líquido</span>
                <div className="text-right">
                  <span className="font-black text-emerald-400 text-xl">{formatCurrency(lucroLiquido)}</span>
-                 <p className="text-sm text-slate-400 mt-1">Margem Líquida: {margemLiquida.toFixed(1)}%</p>
+                 <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Margem Líquida: {margemLiquida.toFixed(1)}%</p>
                </div>
              </div>
              
@@ -88,22 +88,22 @@ export default function FinancialTab({ data }: FinancialTabProps) {
       {/* =======================================================================
           MÓDULO ESPECIALISTA: GESTÃO AVANÇADA DE FIADO / CREDIÁRIO
       ======================================================================= */}
-      <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden mt-8">
-        <div className="p-6 border-b border-slate-700/60 bg-slate-800/80">
-           <h2 className="text-lg font-bold text-white flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-800/60 rounded-3xl border border-gray-200 dark:border-slate-700/60 overflow-hidden mt-8">
+        <div className="p-6 border-b border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/80">
+           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
              <Activity className="text-orange-400" /> Saúde Financeira do Crediário (Fiado)
            </h2>
-           <p className="text-sm text-slate-400 mt-1">Análise inteligente de clientes, scores de crédito e recomendações de limites.</p>
+           <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Análise inteligente de clientes, scores de crédito e recomendações de limites.</p>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-             <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-               <p className="text-sm font-semibold text-slate-400 mb-1">Exposição (Total Aberto)</p>
-               <p className="text-2xl font-black text-white">{formatCurrency(data?.fiado?.total_aberto ?? totalRecebivel)}</p>
+             <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700/50">
+               <p className="text-sm font-semibold text-gray-500 dark:text-slate-400 mb-1">Exposição (Total Aberto)</p>
+               <p className="text-2xl font-black text-gray-900 dark:text-white">{formatCurrency(data?.fiado?.total_aberto ?? totalRecebivel)}</p>
              </div>
-             <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-               <p className="text-sm font-semibold text-slate-400 mb-1">Limite Total Cedido</p>
-               <p className="text-2xl font-black text-white">{formatCurrency(data?.fiado?.total_limite || 0)}</p>
+             <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700/50">
+               <p className="text-sm font-semibold text-gray-500 dark:text-slate-400 mb-1">Limite Total Cedido</p>
+               <p className="text-2xl font-black text-gray-900 dark:text-white">{formatCurrency(data?.fiado?.total_limite || 0)}</p>
              </div>
              <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
                <p className="text-sm font-semibold text-emerald-400 mb-1">Pagamentos (30d)</p>
@@ -125,7 +125,7 @@ export default function FinancialTab({ data }: FinancialTabProps) {
                 {data?.fiado?.top_devedores?.length > 0 ? data.fiado.top_devedores.map((cliente: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center p-4 rounded-lg bg-red-950/20 hover:bg-red-950/40 transition-colors border border-red-900/30">
                     <div className="flex-1">
-                      <p className="font-bold text-slate-200">{cliente.nome}</p>
+                      <p className="font-bold text-gray-700 dark:text-slate-200">{cliente.nome}</p>
                       <p className="text-xs text-red-400 font-medium">Uso de Limite: {(cliente.percentual_limite ?? 0).toFixed(0)}%</p>
                     </div>
                     <div className="text-right flex items-center gap-4">
@@ -141,7 +141,7 @@ export default function FinancialTab({ data }: FinancialTabProps) {
                       </button>
                     </div>
                   </div>
-                )) : <p className="text-slate-500 text-sm">Nenhum devedor crítico encontrado.</p>}
+                )) : <p className="text-gray-400 dark:text-slate-500 text-sm">Nenhum devedor crítico encontrado.</p>}
               </div>
             </div>
 
@@ -152,7 +152,7 @@ export default function FinancialTab({ data }: FinancialTabProps) {
                 {data?.fiado?.bons_pagadores?.length > 0 ? data.fiado.bons_pagadores.map((cliente: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center p-4 rounded-lg bg-emerald-950/20 hover:bg-emerald-950/40 transition-colors border border-emerald-900/30">
                     <div className="flex-1">
-                      <p className="font-bold text-slate-200">{cliente.nome}</p>
+                      <p className="font-bold text-gray-700 dark:text-slate-200">{cliente.nome}</p>
                       <p className="text-xs text-emerald-400 font-medium">Volume total já quitado no fiado</p>
                     </div>
                     <div className="text-right flex items-center gap-4">
@@ -161,24 +161,24 @@ export default function FinancialTab({ data }: FinancialTabProps) {
                       </div>
                     </div>
                   </div>
-                )) : <p className="text-slate-500 text-sm">Nenhum bom pagador recente.</p>}
+                )) : <p className="text-gray-400 dark:text-slate-500 text-sm">Nenhum bom pagador recente.</p>}
               </div>
             </div>
           </div>
 
           {/* Produtos mais vendidos no fiado */}
           <div className="mt-8">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Top Produtos Vendidos no Fiado</h3>
+            <h3 className="text-sm font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wider mb-4 border-b border-gray-200 dark:border-slate-700 pb-2">Top Produtos Vendidos no Fiado</h3>
             <div className="flex flex-wrap gap-3">
               {data?.fiado?.top_produtos?.length > 0 ? data.fiado.top_produtos.map((p: any, idx: number) => (
-                <div key={idx} className="bg-slate-900/50 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-3">
+                <div key={idx} className="bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">{idx + 1}º</div>
                   <div>
-                    <p className="text-sm font-bold text-slate-200">{p.nome}</p>
-                    <p className="text-xs text-slate-400">{formatCurrency(p.valor)} ({p.quantidade} un)</p>
+                    <p className="text-sm font-bold text-gray-700 dark:text-slate-200">{p.nome}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{formatCurrency(p.valor)} ({p.quantidade} un)</p>
                   </div>
                 </div>
-              )) : <p className="text-slate-500 text-sm">Nenhum dado de produto no fiado.</p>}
+              )) : <p className="text-gray-400 dark:text-slate-500 text-sm">Nenhum dado de produto no fiado.</p>}
             </div>
           </div>
         </div>
@@ -186,9 +186,9 @@ export default function FinancialTab({ data }: FinancialTabProps) {
 
       {/* Inteligência de Crédito e Finanças */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden">
-          <div className="p-6 border-b border-slate-700/60 bg-slate-800/80">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800/60 rounded-3xl border border-gray-200 dark:border-slate-700/60 overflow-hidden">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/80">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Activity className="text-purple-400" /> Concentração de Vendas (Risco)
             </h2>
           </div>
@@ -196,22 +196,22 @@ export default function FinancialTab({ data }: FinancialTabProps) {
             {data?.gini_index !== undefined ? (
               faturamento < 50 ? (
                 <div className="h-48 flex flex-col items-center justify-center text-center">
-                  <div className="text-3xl font-black text-slate-500 mb-2">Volume Insuficiente</div>
-                  <p className="text-sm text-slate-400 max-w-sm">
+                  <div className="text-3xl font-black text-gray-400 dark:text-slate-500 mb-2">Volume Insuficiente</div>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 max-w-sm">
                     As vendas do período estão muito baixas (abaixo de R$ 50,00) para calcular uma concentração de horários válida. Não há dados suficientes para uma análise estatística.
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-center bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                  <div className="flex justify-between items-center bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700/50">
                     <div>
-                      <p className="text-sm text-slate-400 font-bold mb-1">Índice Técnico (Gini)</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 font-bold mb-1">Índice Técnico (Gini)</p>
                       <div className="text-3xl font-black text-purple-400">
                         {data.gini_index.toFixed(3)}
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-slate-300 mb-1">Status de Risco</p>
+                      <p className="text-sm font-bold text-gray-600 dark:text-slate-300 mb-1">Status de Risco</p>
                       <div className="text-lg font-bold">
                         {data.gini_index > 0.7 ? (
                           <span className="text-rose-400 bg-rose-400/10 px-3 py-1 rounded-full">Alto (Muito Concentrado)</span>
@@ -226,14 +226,14 @@ export default function FinancialTab({ data }: FinancialTabProps) {
 
                   {data?.hourly_concentration?.top_hours?.length > 0 && (
                     <div>
-                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Horários de Maior Receita (Cálculo Base)</h3>
+                      <h3 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Top 3 Horários de Maior Receita (Cálculo Base)</h3>
                       <div className="space-y-2">
                         {data.hourly_concentration.top_hours.slice(0, 3).map((h: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center text-sm bg-slate-800/40 px-3 py-2 rounded-lg border border-slate-700/30">
-                            <span className="font-bold text-slate-200">Às {h.hora}</span>
+                          <div key={idx} className="flex justify-between items-center text-sm bg-white dark:bg-slate-800/40 px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700/30">
+                            <span className="font-bold text-gray-700 dark:text-slate-200">Às {h.hora}</span>
                             <div className="text-right">
                               <span className="text-emerald-400 font-bold mr-3">{formatCurrency(h.faturamento)}</span>
-                              <span className="text-slate-400 bg-slate-700/50 px-2 py-0.5 rounded text-xs">{h.percentual}% do total</span>
+                              <span className="text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700/50 px-2 py-0.5 rounded text-xs">{h.percentual}% do total</span>
                             </div>
                           </div>
                         ))}
@@ -244,7 +244,7 @@ export default function FinancialTab({ data }: FinancialTabProps) {
               )
             ) : (
               <div className="h-48 flex items-center justify-center">
-                <p className="text-slate-400 text-sm text-center">
+                <p className="text-gray-500 dark:text-slate-400 text-sm text-center">
                   Métrica de concentração não disponível para o período selecionado.
                 </p>
               </div>
@@ -252,27 +252,27 @@ export default function FinancialTab({ data }: FinancialTabProps) {
           </div>
         </div>
 
-        <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden">
-          <div className="p-6 border-b border-slate-700/60 bg-slate-800/80">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800/60 rounded-3xl border border-gray-200 dark:border-slate-700/60 overflow-hidden">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/80">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Activity className="text-cyan-400" /> Correlações Financeiras
             </h2>
           </div>
           <div className="p-6 h-48 overflow-y-auto hide-scrollbar space-y-4">
             {(data?.correlations || data?.insights_cientificos?.correlações) && (data?.correlations || data?.insights_cientificos?.correlações).length > 0 ? (
               (data?.correlations || data?.insights_cientificos?.correlações).map((corr: any, i: number) => (
-                <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                <div key={i} className="p-3 bg-gray-50 dark:bg-slate-900/50 rounded-lg border border-gray-200 dark:border-slate-700/50">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-bold text-slate-200">{corr.variavel1} ↔ {corr.variavel2}</span>
+                    <span className="text-sm font-bold text-gray-700 dark:text-slate-200">{corr.variavel1} ↔ {corr.variavel2}</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${corr.correlacao > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
                       {corr.correlacao > 0 ? '+' : ''}{(corr.correlacao * 100).toFixed(0)}%
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">{corr.insight || corr.descricao || 'Forte correlação estatística encontrada.'}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{corr.insight || corr.descricao || 'Forte correlação estatística encontrada.'}</p>
                 </div>
               ))
             ) : (
-              <p className="text-slate-400 text-sm text-center pt-8">
+              <p className="text-gray-500 dark:text-slate-400 text-sm text-center pt-8">
                 Sem correlações significativas encontradas no período.
               </p>
             )}

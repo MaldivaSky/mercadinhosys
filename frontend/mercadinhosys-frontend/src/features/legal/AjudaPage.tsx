@@ -82,7 +82,7 @@ const AjudaPage: React.FC = () => {
             subtitulo={`Base de conhecimento oficial e manuais de operação do ERP ${legalInfo.produto}.`}
             mostrarData={false}
         >
-            <div className="text-sm text-slate-500 mb-8 border-b border-slate-200 pb-4">
+            <div className="text-sm text-gray-400 dark:text-slate-500 mb-8 border-b border-slate-200 pb-4">
                 Encontre tutoriais de uso, entenda as regras de negócio ou abra um chamado técnico.
             </div>
 
@@ -97,7 +97,7 @@ const AjudaPage: React.FC = () => {
                             </div>
                             <div>
                                 <h3 className="font-bold text-slate-800 text-sm mb-1">{titulo}</h3>
-                                <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+                                <p className="text-xs text-gray-400 dark:text-slate-500 leading-relaxed">{desc}</p>
                             </div>
                         </div>
                     ))}
@@ -110,7 +110,7 @@ const AjudaPage: React.FC = () => {
                     <Activity className="w-6 h-6 text-emerald-600" />
                     <h2 className="text-xl font-extrabold text-slate-900">Indicadores e Métricas de Alta Gestão</h2>
                 </div>
-                <p className="text-sm text-slate-600 mt-2 mb-6">
+                <p className="text-sm text-gray-400 dark:text-slate-600 mt-2 mb-6">
                     Entenda como o MercadinhoSys calcula as métricas vitais para a saúde da sua empresa. 
                     Nós vamos muito além do simples contas a pagar/receber.
                 </p>
@@ -152,10 +152,10 @@ const AjudaPage: React.FC = () => {
                                     aria-expanded={open}
                                 >
                                     <span className={`text-[15px] font-semibold ${open ? 'text-blue-700' : 'text-slate-800'}`}>{item.q}</span>
-                                    <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className={`w-5 h-5 text-gray-500 dark:text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                                 </button>
                                 {open && (
-                                    <div className="px-2 pb-4 pt-1 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                                    <div className="px-2 pb-4 pt-1 text-sm text-gray-400 dark:text-slate-600 leading-relaxed whitespace-pre-wrap">
                                         {item.a}
                                     </div>
                                 )}
@@ -168,7 +168,7 @@ const AjudaPage: React.FC = () => {
             {/* Abertura de Chamado (Ticketing) */}
             <section>
                 <SecaoTitulo>Atendimento Técnico</SecaoTitulo>
-                <p className="text-sm text-slate-600 mb-4 mt-2">
+                <p className="text-sm text-gray-400 dark:text-slate-600 mb-4 mt-2">
                     Não encontrou o que precisava? Nossa equipe de engenharia e suporte de Nível 2 está disponível em horário comercial (08:00 às 18:00).
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -176,9 +176,9 @@ const AjudaPage: React.FC = () => {
                         href={`mailto:${legalInfo.emailContato}`}
                         className="flex flex-col gap-2 p-5 border border-slate-200 rounded-lg hover:border-slate-300 hover:bg-slate-50 transition"
                     >
-                        <Mail className="w-6 h-6 text-slate-600 mb-1" />
+                        <Mail className="w-6 h-6 text-gray-400 dark:text-slate-600 mb-1" />
                         <h4 className="font-bold text-slate-800 text-sm">Abertura de Ticket (E-mail)</h4>
-                        <p className="text-xs text-slate-500">{legalInfo.emailContato}</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500">{legalInfo.emailContato}</p>
                     </a>
                     {wa && (
                         <a
@@ -187,9 +187,9 @@ const AjudaPage: React.FC = () => {
                             rel="noopener noreferrer"
                             className="flex flex-col gap-2 p-5 border border-slate-200 rounded-lg hover:border-slate-300 hover:bg-slate-50 transition"
                         >
-                            <MessageCircle className="w-6 h-6 text-slate-600 mb-1" />
+                            <MessageCircle className="w-6 h-6 text-gray-400 dark:text-slate-600 mb-1" />
                             <h4 className="font-bold text-slate-800 text-sm">Suporte via WhatsApp</h4>
-                            <p className="text-xs text-slate-500">Apenas chat textual. Não recebe ligações.</p>
+                            <p className="text-xs text-gray-400 dark:text-slate-500">Apenas chat textual. Não recebe ligações.</p>
                         </a>
                     )}
                 </div>

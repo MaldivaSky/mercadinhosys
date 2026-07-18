@@ -4,8 +4,16 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Clock, Camera, MapPin, CheckCircle, AlertCircle, Calendar,
-  TrendingUp, BarChart3, RefreshCw, X, Wifi, WifiOff, History, Navigation
+  TrendingUp, BarChart3, RefreshCw, X, Wifi, WifiOff, History, Navigation,
+  LogIn, LogOut, Coffee, RotateCcw
 } from 'lucide-react';
+
+const PONTO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  entrada: LogIn,
+  saida_almoco: Coffee,
+  retorno_almoco: RotateCcw,
+  saida: LogOut,
+};
 import { pontoService, RegistroPonto, ConfiguracaoHorario, EstatisticasPonto } from './pontoService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
@@ -494,7 +502,7 @@ const PontoPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4 md:p-6 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 md:p-6 animate-in fade-in duration-500">
 
       {/* STATUS ONLINE/OFFLINE */}
       {!online && (
@@ -529,11 +537,11 @@ const PontoPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center gap-3 tour-ponto-bater">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white flex items-center gap-3 tour-ponto-bater">
               <Clock className="w-10 h-10 text-blue-500" />
               Controle de Ponto
             </h1>
-            <p className="text-slate-400 mt-2">
+            <p className="text-gray-500 dark:text-slate-400 mt-2">
               Registre sua entrada, saídas e retornos com foto e localização
             </p>
           </div>
@@ -567,9 +575,9 @@ const PontoPage: React.FC = () => {
             paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto shadow-2xl">
-            <h3 className="text-2xl font-bold text-white mb-2">📸 Tire sua foto</h3>
-            <p className="text-slate-400 text-sm mb-4">Posicione seu rosto na câmera e clique em "Capturar Foto"</p>
+          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto shadow-2xl">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">📸 Tire sua foto</h3>
+            <p className="text-gray-500 dark:text-slate-400 text-sm mb-4">Posicione seu rosto na câmera e clique em "Capturar Foto"</p>
 
             {!cameraReady && (
               <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded-lg">
@@ -587,7 +595,7 @@ const PontoPage: React.FC = () => {
                 className="w-full aspect-video object-cover bg-black"
               />
               <canvas ref={canvasRef} className="hidden" />
-              <div className="absolute top-4 left-4 text-white text-sm bg-black/50 px-3 py-1 rounded">
+              <div className="absolute top-4 left-4 text-gray-900 dark:text-white text-sm bg-black/50 px-3 py-1 rounded">
                 {cameraReady ? '✅ Câmera pronta' : '⏳ Carregando...'}
               </div>
             </div>
@@ -622,8 +630,8 @@ const PontoPage: React.FC = () => {
             paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto shadow-2xl">
-            <h3 className="text-2xl font-bold text-white mb-4">Confirmar foto e localização</h3>
+          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto shadow-2xl">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Confirmar foto e localização</h3>
             <img src={foto} alt="Preview" className="w-full rounded-lg mb-4" />
 
             {/* Info de localização */}
@@ -684,20 +692,21 @@ const PontoPage: React.FC = () => {
       {/* BOTÕES DE REGISTRO */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { tipo: 'entrada', label: 'Entrada', icon: '🌅', color: 'from-green-500 to-emerald-600' },
-          { tipo: 'saida_almoco', label: 'Saída Almoço', icon: '🍽️', color: 'from-orange-500 to-red-600' },
-          { tipo: 'retorno_almoco', label: 'Retorno Almoço', icon: '🔙', color: 'from-blue-500 to-cyan-600' },
-          { tipo: 'saida', label: 'Saída', icon: '🌙', color: 'from-purple-500 to-pink-600' }
+          { tipo: 'entrada', label: 'Entrada', color: 'from-green-500 to-emerald-600' },
+          { tipo: 'saida_almoco', label: 'Saída Almoço', color: 'from-orange-500 to-red-600' },
+          { tipo: 'retorno_almoco', label: 'Retorno Almoço', color: 'from-blue-500 to-cyan-600' },
+          { tipo: 'saida', label: 'Saída', color: 'from-purple-500 to-pink-600' }
         ].map((item) => {
           const registrado = jaRegistrou(item.tipo);
           const registro = registrosHoje.find(r => r.tipo_registro === item.tipo);
+          const ItemIcon = PONTO_ICONS[item.tipo];
 
           return (
             <button
               key={item.tipo}
               onClick={() => !registrado && registrarPonto(item.tipo)}
               disabled={registrado || loading}
-              className={`relative p-6 rounded-2xl shadow-xl transform transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border ${registrado ? 'bg-slate-800 border-slate-700' : `bg-gradient-to-r ${item.color} border-transparent`
+              className={`relative p-6 rounded-2xl shadow-xl transform transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border ${registrado ? 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700' : `bg-gradient-to-r ${item.color} border-transparent`
                 }`}
             >
               {registrado && (
@@ -707,20 +716,20 @@ const PontoPage: React.FC = () => {
               )}
 
               <div className="text-center">
-                <div className="text-4xl mb-2">{item.icon}</div>
-                <h3 className={`text-xl font-bold mb-2 ${registrado ? 'text-slate-300' : 'text-white'}`}>
+                <ItemIcon className={`w-10 h-10 mb-2 mx-auto ${registrado ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-white'}`} />
+                <h3 className={`text-xl font-bold mb-2 ${registrado ? 'text-gray-600 dark:text-slate-300' : 'text-gray-900 dark:text-white'}`}>
                   {item.label}
                 </h3>
 
                 {configuracao && (
-                  <p className={`text-sm mb-2 ${registrado ? 'text-slate-400' : 'text-white/90'}`}>
+                  <p className={`text-sm mb-2 ${registrado ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-white/90'}`}>
                     Horário: {getHorarioEsperado(item.tipo)}
                   </p>
                 )}
 
                 {registrado && registro && (
-                  <div className="mt-3 p-2 bg-slate-900/50 border border-slate-700 rounded-lg">
-                    <p className="text-sm font-semibold text-white">
+                  <div className="mt-3 p-2 bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700 rounded-lg">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
                       Registrado às {registro.hora}
                     </p>
                     {registro.status === 'atrasado' && (
@@ -740,8 +749,8 @@ const PontoPage: React.FC = () => {
       {estatisticas && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* GRÁFICO DE FREQUÊNCIA - MELHORADO */}
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6 flex flex-col">
-            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl p-6 flex flex-col">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
               <BarChart3 className="w-6 h-6 text-blue-400" />
               Frequência (Últimos 30 dias)
             </h3>
@@ -783,10 +792,10 @@ const PontoPage: React.FC = () => {
                         const data = payload[0].payload;
                         return (
                           <div className="p-3">
-                            <p className="font-bold text-white mb-1">{data.data}</p>
+                            <p className="font-bold text-gray-900 dark:text-white mb-1">{data.data}</p>
                             <div className="flex items-center gap-2">
                               <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                              <p className="text-sm text-slate-300">Registros: <span className="font-bold text-white">{data.total_registros}</span></p>
+                              <p className="text-sm text-gray-600 dark:text-slate-300">Registros: <span className="font-bold text-gray-900 dark:text-white">{data.total_registros}</span></p>
                             </div>
                             {data.teve_atraso && (
                               <p className="text-sm text-red-400 font-semibold mt-2">
@@ -814,7 +823,7 @@ const PontoPage: React.FC = () => {
 
           {/* RESUMO ESTATÍSTICAS - MELHORADO */}
           <div className="space-y-4">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 text-white">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 text-gray-900 dark:text-white">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm opacity-90 font-semibold">Taxa de Presença</p>
@@ -825,7 +834,7 @@ const PontoPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-r from-red-500 to-orange-600 rounded-2xl shadow-xl p-6 text-white">
+            <div className="bg-gradient-to-r from-red-500 to-orange-600 rounded-2xl shadow-xl p-6 text-gray-900 dark:text-white">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm opacity-90 font-semibold">Total de Atrasos</p>
@@ -836,21 +845,16 @@ const PontoPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6">
-              <h4 className="font-bold text-white mb-4 text-lg">Registros por Tipo</h4>
+            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl p-6">
+              <h4 className="font-bold text-gray-900 dark:text-white mb-4 text-lg">Registros por Tipo</h4>
               <div className="space-y-3">
                 {Object.entries(estatisticas.frequencia_tipo).map(([tipo, count]) => {
-                  const icons = {
-                    'entrada': '🌅',
-                    'saida_almoco': '🍽️',
-                    'retorno_almoco': '🔙',
-                    'saida': '🌙'
-                  };
+                  const TipoIcon = PONTO_ICONS[tipo] || Clock;
                   return (
-                    <div key={tipo} className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg hover:bg-slate-700 transition border border-slate-700/50">
+                    <div key={tipo} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-900/50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition border border-gray-200 dark:border-slate-700/50">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{icons[tipo]}</span>
-                        <span className="text-slate-300 font-medium">{getTipoLabel(tipo)}</span>
+                        <TipoIcon className="w-6 h-6 text-gray-500 dark:text-slate-400" />
+                        <span className="text-gray-600 dark:text-slate-300 font-medium">{getTipoLabel(tipo)}</span>
                       </div>
                       <span className="font-bold text-blue-400 text-lg">{count}</span>
                     </div>
@@ -863,8 +867,8 @@ const PontoPage: React.FC = () => {
       )}
 
       {/* REGISTROS DE HOJE - MELHORADO */}
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6 mb-8">
-        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl p-6 mb-8">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <Calendar className="w-6 h-6 text-blue-400" />
           Registros de Hoje
         </h3>
@@ -879,12 +883,7 @@ const PontoPage: React.FC = () => {
           <div>
             <div className="space-y-3 mb-6">
               {registrosHoje.map((registro) => {
-                const icons = {
-                  'entrada': '🌅',
-                  'saida_almoco': '🍽️',
-                  'retorno_almoco': '🔙',
-                  'saida': '🌙'
-                };
+                const RegistroIcon = PONTO_ICONS[registro.tipo_registro] || Clock;
 
                 return (
                   <div
@@ -901,8 +900,8 @@ const PontoPage: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl`}>
-                          {icons[registro.tipo_registro]}
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${registro.status === 'atrasado' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                          <RegistroIcon className="w-6 h-6" />
                         </div>
                         <div>
                           <p className="font-bold text-gray-900 text-lg">{getTipoLabel(registro.tipo_registro)}</p>
@@ -942,7 +941,7 @@ const PontoPage: React.FC = () => {
                               }}
                             />
                             <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition flex items-center justify-center">
-                              <Camera className="w-5 h-5 text-white opacity-0 hover:opacity-100" />
+                              <Camera className="w-5 h-5 text-gray-900 dark:text-white opacity-0 hover:opacity-100" />
                             </div>
                           </div>
                         ) : (
@@ -998,7 +997,7 @@ const PontoPage: React.FC = () => {
         >
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-full flex flex-col overflow-hidden animate-fadeIn my-auto">
             {/* HEADER */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 flex items-center justify-between text-white flex-shrink-0">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 flex items-center justify-between text-gray-900 dark:text-white flex-shrink-0">
               <div className="flex-1">
                 <h3 className="text-lg sm:text-2xl font-bold">📷 Visualizar Foto</h3>
                 <p className="text-blue-100 text-xs sm:text-sm mt-1">

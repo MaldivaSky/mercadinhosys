@@ -52,19 +52,19 @@ const CommandToolbar: React.FC<CommandToolbarProps> = ({
   }, []);
 
   return (
-    <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/80 backdrop-blur-md border border-slate-800 p-4 rounded-2xl shadow-xl">
+    <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50 dark:bg-slate-900/80 backdrop-blur-md border border-gray-200 dark:border-slate-800 p-4 rounded-2xl shadow-xl">
       
       {/* Left Area: Title & Search */}
       <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto flex-1">
         <div className="relative w-full md:w-80 group">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+            <Search className="h-5 w-5 text-gray-500 dark:text-slate-400 group-focus-within:text-blue-500 transition-colors" />
           </div>
           <input
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2.5 border border-slate-700 rounded-xl leading-5 bg-slate-800/50 text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-slate-800 transition-all sm:text-sm"
+            className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl leading-5 bg-white dark:bg-slate-800/50 text-gray-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all sm:text-sm"
             placeholder="Pesquisar por nome, código..."
           />
         </div>
@@ -74,7 +74,7 @@ const CommandToolbar: React.FC<CommandToolbarProps> = ({
           className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors ${
             showFilters 
               ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' 
-              : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'
+              : 'bg-white dark:bg-slate-800/50 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:text-white'
           }`}
         >
           <Filter className="w-4 h-4" />
@@ -84,7 +84,7 @@ const CommandToolbar: React.FC<CommandToolbarProps> = ({
 
         <button 
           onClick={onRefresh}
-          className="p-2.5 bg-slate-800/50 border border-slate-700 text-slate-300 rounded-xl hover:bg-slate-700 hover:text-white transition-colors"
+          className="p-2.5 bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:text-white transition-colors"
           title="Atualizar Dados"
         >
           <RefreshCw className="w-4 h-4" />
@@ -112,23 +112,23 @@ const CommandToolbar: React.FC<CommandToolbarProps> = ({
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setShowMoreMenu(!showMoreMenu)}
-            className="p-2.5 bg-slate-800/50 border border-slate-700 text-slate-300 rounded-xl hover:bg-slate-700 hover:text-white transition-colors"
+            className="p-2.5 bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:text-white transition-colors"
             title="Mais Ações"
           >
             <MoreVertical className="w-4 h-4" />
           </button>
           
           {showMoreMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
               <button
                 onClick={() => { setShowMoreMenu(false); onImport(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:text-white transition-colors"
               >
                 <Upload className="w-4 h-4" /> Importar Planilha
               </button>
               <button
                 onClick={() => { setShowMoreMenu(false); onExport(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:text-white transition-colors"
               >
                 <Download className="w-4 h-4" /> Exportar CSV
               </button>
@@ -136,7 +136,7 @@ const CommandToolbar: React.FC<CommandToolbarProps> = ({
           )}
         </div>
 
-        <div className="w-px h-8 bg-slate-700 mx-1 hidden sm:block"></div>
+        <div className="w-px h-8 bg-gray-100 dark:bg-slate-700 mx-1 hidden sm:block"></div>
 
         <button
           onClick={onNew}

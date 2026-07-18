@@ -30,7 +30,7 @@ const BrandedLoading: React.FC<BrandedLoadingProps> = ({ message = 'Carregando i
 
             <div className="flex flex-col items-center gap-4">
                 {/* Barra de progresso animada */}
-                <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
+                <div className="w-64 h-1.5 bg-white dark:bg-slate-800 rounded-full overflow-hidden relative">
                     <motion.div 
                         className="absolute top-0 left-0 h-full bg-blue-500 rounded-full"
                         initial={{ width: "0%", left: "0%" }}
@@ -49,7 +49,7 @@ const BrandedLoading: React.FC<BrandedLoadingProps> = ({ message = 'Carregando i
                 <motion.p 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-slate-400 font-medium tracking-widest uppercase text-xs"
+                    className="text-gray-500 dark:text-slate-400 font-medium tracking-widest uppercase text-xs"
                 >
                     {message}
                 </motion.p>
