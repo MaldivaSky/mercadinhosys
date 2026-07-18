@@ -12,6 +12,7 @@ from flask_mail import Mail
 from app.models import db
 from config import config
 import os
+import re
 import logging
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
@@ -1086,13 +1087,16 @@ def create_app(config_name=None):
             logger.error(f"Erro ao servir arquivo {filename}: {e}")
             abort(404)
 
-    # Log de inicialização
+    # Log de inicialização — nunca logar a URI crua: ela carrega a senha do banco
+    # em texto puro e este log roda em todo boot (fica em logs do Render/CI).
+    _db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'SQLite')
+    _db_uri_masked = re.sub(r'://([^:/]+):([^@]+)@', r'://\1:****@', _db_uri)
     logger.info(
         f"""
     {'='*60}
     MercadinhoSys API v2.0.0 INICIALIZADA
     Ambiente: {config_name}
-    Banco: {app.config.get('SQLALCHEMY_DATABASE_URI', 'SQLite')}
+    Banco: {_db_uri_masked}
     Dashboard Cientifico: {'[OK] Disponivel' if app.config.get('DASHBOARD_CIENTIFICO_DISPONIVEL') else '[OFF] Nao disponivel'}
     {'='*60}
     """
