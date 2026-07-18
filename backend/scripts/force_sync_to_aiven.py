@@ -94,7 +94,16 @@ def force_sync(app=None, silent=False):
         # SFA: tabelas de preço e rotas ANTES de clientes — clientes referenciam
         # rota_id e tabela_preco_id, então precisam existir no destino primeiro.
         "tabelas_preco", "rotas",
-        "clientes", "produtos", "produto_lotes", "estoque_lotes",
+        "clientes", "produtos",
+        # pedidos_compra ANTES de produto_lotes/contas_pagar — ambos têm FK
+        # pedido_compra_id (fk_produto_lotes_pedido_compra / fk_contas_pagar_
+        # pedido_compra) e falhavam silenciosamente quando pedidos_compra
+        # ainda não existia no destino. Nome de tabela também corrigido:
+        # PedidoCompraItem.__tablename__ é "pedido_compra_itens" (singular),
+        # não "pedidos_compra_itens" — a grafia errada fazia a tabela inteira
+        # ser pulada (Radar de Fornecedores nunca chegava ao Aiven).
+        "pedidos_compra", "pedido_compra_itens",
+        "produto_lotes", "estoque_lotes",
         # SFA: dependem de produtos/funcionarios (já sincronizados acima).
         "tabela_preco_itens", "produtos_foco", "metas_vendedor",
         "caixas", "vendas", "venda_itens", "pagamentos",
@@ -102,7 +111,6 @@ def force_sync(app=None, silent=False):
         "pedidos_venda", "pedido_venda_itens",
         "movimentacao_estoque", "despesas", "contas_pagar", "contas_receber",
         "fiados", "registros_ponto", "movimentacoes_caixa",
-        "pedidos_compra", "pedidos_compra_itens",
         "motoristas", "veiculos", "taxas_entrega", "entregas",
         "beneficios", "funcionario_beneficios", "dashboard_metricas"
     ]

@@ -174,8 +174,8 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                         <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="data" stroke="#cbd5e1" fontSize={11} tickFormatter={(d) => { if(!d) return ''; const parts = d.split('-'); return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d; }} />
-                    <YAxis stroke="#cbd5e1" fontSize={11} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                    <XAxis dataKey="data" stroke="#64748b" fontSize={11} tickFormatter={(d) => { if(!d) return ''; const parts = d.split('-'); return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d; }} />
+                    <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
                     <Tooltip 
                       contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
                       itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
@@ -204,8 +204,8 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                           <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <XAxis dataKey="hora" stroke="#cbd5e1" fontSize={11} tickFormatter={(h) => `${h}h`} />
-                      <YAxis stroke="#cbd5e1" fontSize={11} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                      <XAxis dataKey="hora" stroke="#64748b" fontSize={11} tickFormatter={(h) => `${h}h`} />
+                      <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
                       <Tooltip 
                         contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
                         itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
@@ -285,8 +285,8 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
             <div className="h-[400px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={filteredAbcProdutos} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
-                  <XAxis type="number" stroke="#cbd5e1" fontSize={12} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
-                  <YAxis dataKey="nome" type="category" stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} width={150} />
+                  <XAxis type="number" stroke="#64748b" fontSize={12} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                  <YAxis dataKey="nome" type="category" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={150} />
                   <Tooltip 
                     cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} 
                     contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
@@ -322,9 +322,9 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
               {categoriasVendas && categoriasVendas.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoriasVendas} margin={{ top: 0, right: 30, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey="categoria" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" vertical={false} />
+                    <XAxis dataKey="categoria" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
                     <Tooltip 
                       cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} 
                       contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
@@ -493,9 +493,9 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
             <div className="h-[340px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={fornecedores} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                  <XAxis dataKey="fornecedor" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={60} />
-                  <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" vertical={false} />
+                  <XAxis dataKey="fornecedor" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={60} />
+                  <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
                   <Tooltip
                     cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                     contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }}
@@ -609,8 +609,8 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
               <div className="h-[320px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={vendedoresRaw} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} onClick={(d) => d?.activePayload && setSelectedVendedorId(d.activePayload[0].payload.id)}>
-                    <XAxis dataKey="nome" stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`} />
+                    <XAxis dataKey="nome" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`} />
                     <Tooltip 
                       cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} 
                       contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 

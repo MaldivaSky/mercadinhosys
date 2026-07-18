@@ -15,25 +15,15 @@ from app.services.rh_calculator_service import (
     calcular_custo_folha_detalhado,
     calcular_custo_folha_periodos,
 )
-despesas_bp = Blueprint("despesas", __name__)
+from app.utils.financeiro_constants import sem_categorias_integradas
 
-# Categorias de Despesa que são ESPELHOS de outros módulos (razão primário):
-# - "Fornecedores"/"Boleto de Mercadoria": criadas automaticamente ao pagar um
-#   boleto (ContaPagar é a fonte da verdade desses valores);
-# - "Folha de Pagamento": lançamentos manuais/seed de salário (a fonte da
-#   verdade é o cálculo de folha do RH).
-# Elas continuam VISÍVEIS na listagem (rastreabilidade), mas ficam FORA de
-# qualquer agregado/indicador — antes eram somadas junto com a fonte primária
-# e o mesmo dinheiro contava duas vezes nos cards, DRE e fluxo de caixa.
-CATEGORIAS_INTEGRADAS = ("fornecedores", "folha de pagamento", "boleto de mercadoria")
+despesas_bp = Blueprint("despesas", __name__)
 
 
 def _sem_categorias_integradas(query):
-    """Aplica o filtro de exclusão das categorias espelhadas num query de Despesa."""
-    return query.filter(
-        or_(Despesa.categoria.is_(None),
-            func.lower(func.trim(Despesa.categoria)).notin_(CATEGORIAS_INTEGRADAS))
-    )
+    """Aplica o filtro de exclusão das categorias espelhadas (ver
+    app.utils.financeiro_constants) num query de Despesa."""
+    return sem_categorias_integradas(query, Despesa.categoria)
 
 
 @despesas_bp.route("/", methods=["GET"], strict_slashes=False)

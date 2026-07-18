@@ -1120,7 +1120,8 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
                                    valor_total=self.preco_venda * quantidade if tipo == 'saida' else self.preco_custo * quantidade, motivo=motivo)
 
     def recalcular_preco_custo_ponderado(self, quantidade_entrada: int, custo_unitario_entrada, estoque_atual: int = None,
-                                         registrar_historico: bool = True, funcionario_id: int = None, motivo: str = "Entrada de estoque - CMP"):
+                                         registrar_historico: bool = True, funcionario_id: int = None, motivo: str = "Entrada de estoque - CMP",
+                                         data_alteracao=None):
         if quantidade_entrada is None or int(quantidade_entrada) <= 0 or custo_unitario_entrada is None: return
         custo_entrada = Decimal(str(custo_unitario_entrada))
         if custo_entrada < 0: raise ValueError("Custo unitário não pode ser negativo")
@@ -1138,10 +1139,14 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
             self.margem_lucro = (self.preco_venda - self.preco_custo) / self.preco_custo * 100
         else: self.margem_lucro = 0
         if registrar_historico and funcionario_id and abs(self.preco_custo - custo_anterior) > Decimal("0.01"):
-            db.session.add(HistoricoPrecos(estabelecimento_id=self.estabelecimento_id, produto_id=self.id, funcionario_id=funcionario_id,
-                                           preco_custo_anterior=custo_anterior, preco_venda_anterior=self.preco_venda, margem_anterior=margem_anterior,
-                                           preco_custo_novo=self.preco_custo, preco_venda_novo=self.preco_venda, margem_nova=self.margem_lucro,
-                                           motivo=motivo, observacoes=f"CMP recalculado: entrada de {quantidade_entrada} unidades a R$ {custo_unitario_entrada}"))
+            historico_kwargs = dict(
+                estabelecimento_id=self.estabelecimento_id, produto_id=self.id, funcionario_id=funcionario_id,
+                preco_custo_anterior=custo_anterior, preco_venda_anterior=self.preco_venda, margem_anterior=margem_anterior,
+                preco_custo_novo=self.preco_custo, preco_venda_novo=self.preco_venda, margem_nova=self.margem_lucro,
+                motivo=motivo, observacoes=f"CMP recalculado: entrada de {quantidade_entrada} unidades a R$ {custo_unitario_entrada}")
+            if data_alteracao is not None:
+                historico_kwargs["data_alteracao"] = data_alteracao
+            db.session.add(HistoricoPrecos(**historico_kwargs))
 
     @staticmethod
     def calcular_preco_por_markup(preco_custo, markup_percentual):
@@ -1156,6 +1161,51 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
         custo = Decimal(str(preco_custo)); venda = Decimal(str(preco_venda))
         if custo <= 0: return Decimal("0")
         return ((venda - custo) / custo * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    # Janela padrão de análise de giro (varejo alimentar) — alinhada com a ABC.
+    GIRO_JANELA_DIAS = 90
+
+    @staticmethod
+    def calcular_giro_metrica(quantidade_atual, qtd_janela, dias_ativos, janela_dias: int = 90):
+        """FONTE ÚNICA da matemática de giro (VMD / cobertura / classe).
+
+        Todos os consumidores (cards do dashboard, lista, modais e Hub) devem
+        passar por aqui para nunca mais divergirem entre si.
+
+        Parâmetros:
+        - quantidade_atual: estoque atual em unidades.
+        - qtd_janela: unidades vendidas na janela (agregadas do ledger venda_itens).
+        - dias_ativos: dias em que o produto esteve vendendo dentro da janela
+          (dias desde a 1ª venda, limitado à janela). Evita punir item novo de
+          alto volume com um denominador de 90 dias que ele nunca teve.
+
+        Retorna {vmd, cobertura_dias, classe}. classe ∈ {'rapido','normal','lento'}:
+        rápido = cobertura ≤ 15d, normal = 16–60d, lento = > 60d ou sem venda.
+        """
+        try:
+            estoque = float(quantidade_atual or 0)
+            vendido = float(qtd_janela or 0)
+            if vendido <= 0:
+                return {"vmd": 0.0, "cobertura_dias": None, "classe": "lento"}
+            # Denominador: dias ativos, com piso 1 e teto na janela. Se não
+            # informado, usa a janela cheia (leitura conservadora).
+            dias = int(dias_ativos or 0)
+            if dias <= 0:
+                dias = int(janela_dias or 90)
+            dias = max(1, min(int(janela_dias or 90), dias))
+            vmd = vendido / dias
+            if vmd <= 0:
+                return {"vmd": 0.0, "cobertura_dias": None, "classe": "lento"}
+            cobertura = estoque / vmd
+            if cobertura <= 15:
+                classe = "rapido"
+            elif cobertura <= 60:
+                classe = "normal"
+            else:
+                classe = "lento"
+            return {"vmd": round(vmd, 2), "cobertura_dias": round(cobertura, 1), "classe": classe}
+        except Exception:
+            return {"vmd": 0.0, "cobertura_dias": None, "classe": "lento"}
 
     @staticmethod
     def calcular_classificacao_abc_dinamica(estabelecimento_id: int, periodo_dias: int = 90):
@@ -1284,16 +1334,27 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
         data["controlar_estoque"] = self.controlar_estoque is not False
 
         if include_metrics:
-            giro = round(float(self.quantidade_vendida or 0) / 30.0, 2)
-            dias = int(float(self.quantidade or 0) / giro) if giro > 0 else 0
+            # Fonte única: usa a métrica de giro pré-anexada (_giro_metrica) pelo
+            # endpoint, que vem do ledger real. Sem fallbacks inventados (o antigo
+            # giro=1.5/15 dias mentia quando não havia venda).
+            metrica = getattr(self, "_giro_metrica", None)
+            vmd = float(metrica["vmd"]) if metrica else 0.0
+            cobertura = metrica.get("cobertura_dias") if metrica else None
+            classe = metrica["classe"] if metrica else "lento"
+            data["vmd"] = vmd
+            data["cobertura_dias"] = cobertura
+            data["giro_classe"] = classe
             data["metricas_gestao"] = {
-                "giro_estoque": giro if giro > 0 else 1.5,
-                "dias_estoque": dias if dias > 0 else 15,
-                "cobertura_estoque": f"{dias if dias > 0 else 15} dias",
-                "frequencia_venda": "Alta" if (self.classificacao_abc == 'A' or (self.quantidade_vendida or 0) > 10) else "Média"
+                "vmd": vmd,
+                "giro_classe": classe,
+                "dias_estoque": cobertura,
+                "cobertura_estoque": (f"{round(cobertura)} dias" if cobertura is not None else "Sem vendas"),
+                "frequencia_venda": (
+                    "Alta" if classe == "rapido" else ("Média" if classe == "normal" else "Baixa")
+                ),
             }
             data["estoque_status"] = self.estoque_status
-            
+
         return data
 
 

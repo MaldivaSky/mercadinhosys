@@ -98,7 +98,7 @@ export default function ProductHubPage() {
         );
     }
 
-    const { produto, estatisticas, historico_precos, lotes, pedidos_pendentes } = hubData;
+    const { produto, estatisticas, historico_precos, lotes, pedidos_pendentes, radar_fornecedores } = hubData;
 
     const iniciarEdicaoLote = (lote: any) => {
         setEditingLoteId(lote.id);
@@ -181,8 +181,15 @@ export default function ProductHubPage() {
         diasPeriodo = diasDesdeCadastro;
     }
 
-    const vmd = (produto?.quantidade_vendida || 0) / diasPeriodo;
-    const coberturaDias = vmd > 0 ? Math.round(produto.quantidade / vmd) : 0;
+    // VMD e cobertura vêm da FONTE ÚNICA do backend (janela de 90d, ledger real),
+    // coerentes com os cards/lista/modal. Fallback ao cálculo por período só se o
+    // backend não enviar (compatibilidade). Antes recalculávamos aqui e o card do
+    // Hub contradizia o dashboard (VMD estourava com created_at=hoje).
+    const vmdFallback = (produto?.quantidade_vendida || 0) / diasPeriodo;
+    const vmd = (produto?.vmd ?? null) !== null ? produto.vmd : vmdFallback;
+    const coberturaDias = (produto?.cobertura_dias ?? null) !== null
+        ? Math.round(produto.cobertura_dias)
+        : (vmd > 0 ? Math.round(produto.quantidade / vmd) : 0);
 
     // Preparar dados do gráfico (Histórico de Preços cruzado com Lotes)
     const chartData: any[] = [];
@@ -291,12 +298,11 @@ export default function ProductHubPage() {
                             />
                         </button>
                     ) : (
-                        <div style={{
-                            width: 96, height: 96, flexShrink: 0, borderRadius: 16,
-                            border: '1px solid #1e293b', background: '#1e293b',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <Package size={32} color="#475569" />
+                        <div
+                            className="flex items-center justify-center flex-shrink-0 rounded-2xl border border-gray-200 bg-gray-100 dark:border-slate-700 dark:bg-slate-800"
+                            style={{ width: 96, height: 96 }}
+                        >
+                            <Package size={32} className="text-gray-400 dark:text-slate-500" />
                         </div>
                     )}
                     <div className="product-title-group">
@@ -567,49 +573,60 @@ export default function ProductHubPage() {
                     </p>
                     
                     <div className="supplier-list">
-                        {/* Lista de Fornecedores baseada nos lotes */}
+                        {/* Fornecedores a partir do histórico REAL de ordens de compra
+                            (radar_fornecedores do backend). Fallback: fornecedores dos
+                            lotes (que agora trazem o nome). */}
                         {(() => {
-                            const lotesForRadar = lotes && lotes.length > 0 ? lotes : [];
-                            if (lotesForRadar.length === 0 && produto?.fornecedor) {
-                                lotesForRadar.push({
-                                    fornecedor: produto.fornecedor,
-                                    numero_lote: 'Padrão (Cadastro Inicial)',
-                                    quantidade: produto.quantidade || 0,
-                                    preco_custo_unitario: produto.preco_custo
-                                });
-                            }
+                            const radar: any[] = (radar_fornecedores && radar_fornecedores.length > 0)
+                                ? radar_fornecedores
+                                : (lotes || [])
+                                    .filter((l: any) => l.fornecedor)
+                                    .map((l: any) => ({
+                                        fornecedor_id: l.fornecedor_id,
+                                        fornecedor_nome: l.fornecedor,
+                                        num_pedidos: 1,
+                                        qtd_total: l.quantidade || 0,
+                                        preco_medio: l.preco_custo_unitario,
+                                        ultimo_preco: l.preco_custo_unitario,
+                                        ultima_compra: l.data_entrada,
+                                    }));
 
-                            return lotesForRadar.length > 0 ? (
-                                lotesForRadar.map((lote: any, idx: number) => {
-                                    if (!lote.fornecedor) return null;
-                                    return (
-                                        <div 
-                                            key={idx}
-                                            className="supplier-item best-price" 
-                                            style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid transparent', marginBottom: '8px' }}
-                                            onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                                            onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
-                                            onClick={() => navigate(`/suppliers/${lote.fornecedor.id}`)}
-                                        >
-                                            <div className="supplier-info">
-                                                <span className="supplier-name">{lote.fornecedor.nome_fantasia || lote.fornecedor.razao_social}</span>
-                                                <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
-                                                    Lote: {lote.numero_lote} | Qtd: {lote.quantidade}
-                                                </div>
-                                            </div>
-                                            <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
-                                                <span className="supplier-price">{formatCurrency(lote.preco_custo_unitario)}</span>
+                            return radar.length > 0 ? (
+                                radar.map((f: any, idx: number) => (
+                                    <div
+                                        key={f.fornecedor_id ?? idx}
+                                        className={`supplier-item ${f.melhor_preco ? 'best-price' : ''}`}
+                                        style={{ cursor: f.fornecedor_id ? 'pointer' : 'default', transition: 'all 0.2s ease', border: '1px solid transparent', marginBottom: '8px' }}
+                                        onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                        onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                                        onClick={() => f.fornecedor_id && navigate(`/suppliers/${f.fornecedor_id}`)}
+                                    >
+                                        <div className="supplier-info">
+                                            <span className="supplier-name">
+                                                {f.fornecedor_nome}
+                                                {f.melhor_preco && (
+                                                    <span style={{ marginLeft: '8px', fontSize: '0.7rem', fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '2px 6px', borderRadius: '6px' }}>MELHOR PREÇO</span>
+                                                )}
+                                            </span>
+                                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
+                                                {f.num_pedidos ? `${f.num_pedidos} pedido(s)` : ''}
+                                                {f.qtd_total ? ` | ${f.qtd_total} un` : ''}
+                                                {f.ultima_compra ? ` | última: ${new Date(f.ultima_compra).toLocaleDateString('pt-BR')}` : ''}
                                             </div>
                                         </div>
-                                    );
-                                }).filter(Boolean)
+                                        <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
+                                            <span className="supplier-price">{formatCurrency(f.preco_medio)}</span>
+                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>preço médio</div>
+                                        </div>
+                                    </div>
+                                ))
                             ) : (
                                 <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
-                                    Nenhum fornecedor registrado.
+                                    Nenhuma ordem de compra registrada para este produto.
                                 </div>
                             );
                         })()}
-                        
+
                         {pedidos_pendentes && pedidos_pendentes.length > 0 && (
                             <div style={{ marginTop: '16px', padding: '12px', background: '#fff7ed', borderRadius: '8px', border: '1px solid #ffedd5' }}>
                                 <h4 style={{ color: '#c2410c', fontWeight: '600', fontSize: '0.9rem', marginBottom: '8px' }}>Pedidos Pendentes</h4>
@@ -661,7 +678,7 @@ export default function ProductHubPage() {
                                                             type="text"
                                                             value={draft.numero_lote}
                                                             onChange={(e) => atualizarDraftLote(lote.id, 'numero_lote', e.target.value)}
-                                                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                                            className="w-full px-2.5 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
                                                         />
                                                     ) : lote.numero_lote}
                                                 </td>
@@ -672,7 +689,7 @@ export default function ProductHubPage() {
                                                             type="date"
                                                             value={draft.data_fabricacao || ''}
                                                             onChange={(e) => atualizarDraftLote(lote.id, 'data_fabricacao', e.target.value)}
-                                                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                                            className="w-full px-2.5 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
                                                         />
                                                     ) : (
                                                         lote.data_fabricacao ? new Date(lote.data_fabricacao).toLocaleDateString('pt-BR') : '---'
@@ -684,7 +701,7 @@ export default function ProductHubPage() {
                                                             type="date"
                                                             value={draft.data_validade}
                                                             onChange={(e) => atualizarDraftLote(lote.id, 'data_validade', e.target.value)}
-                                                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                                            className="w-full px-2.5 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
                                                         />
                                                     ) : (
                                                         <>
@@ -710,7 +727,7 @@ export default function ProductHubPage() {
                                                                 type="button"
                                                                 onClick={cancelarEdicaoLote}
                                                                 disabled={savingLoteId === lote.id}
-                                                                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #334155', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}
+                                                                className="px-3 py-2 rounded-lg border border-gray-300 bg-transparent text-gray-700 dark:border-slate-700 dark:text-slate-300 font-bold cursor-pointer"
                                                             >
                                                                 Cancelar
                                                             </button>
@@ -719,7 +736,7 @@ export default function ProductHubPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => iniciarEdicaoLote(lote)}
-                                                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #334155', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}
+                                                            className="px-3 py-2 rounded-lg border border-gray-300 bg-transparent text-gray-700 dark:border-slate-700 dark:text-slate-300 font-bold cursor-pointer"
                                                         >
                                                             Editar
                                                         </button>

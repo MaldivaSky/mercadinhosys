@@ -261,7 +261,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                         <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />
                       ))}
                     </Pie>
-                    <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
+                    <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', color: '#64748b' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -285,7 +285,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                     margin={{ top: 0, right: 20, left: 20, bottom: 0 }}
                   >
                     <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="nome" stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                    <YAxis type="category" dataKey="nome" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={120} />
                     <Tooltip 
                       cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                       contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9', fontSize: '12px' }}

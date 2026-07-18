@@ -1,18 +1,14 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
-from sqlalchemy import func, and_, or_, case
+from sqlalchemy import func
 from app import db
 from app.models import Despesa, ContaPagar, Venda
 from app.services.rh_calculator_service import calcular_custo_folha_detalhado
+from app.utils.financeiro_constants import sem_categorias_integradas
 
-# Referência a routes/despesas.py
-CATEGORIAS_INTEGRADAS = ("fornecedores", "folha de pagamento", "boleto de mercadoria")
 
 def _sem_categorias_integradas(query):
-    return query.filter(
-        or_(Despesa.categoria.is_(None),
-            func.lower(func.trim(Despesa.categoria)).notin_(CATEGORIAS_INTEGRADAS))
-    )
+    return sem_categorias_integradas(query, Despesa.categoria)
 
 def montar_contexto(estabelecimento_id: int, is_manager: bool = True) -> dict:
     """Monta o contexto financeiro para o consultor IA.

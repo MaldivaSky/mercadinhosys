@@ -125,8 +125,70 @@ def _serialize_lote(lote: ProdutoLote):
         "data_entrada": lote.data_entrada.isoformat() if lote.data_entrada else None,
         "preco_custo_unitario": float(lote.preco_custo_unitario) if lote.preco_custo_unitario is not None else 0.0,
         "preco_venda": float(lote.preco_venda) if lote.preco_venda is not None else None,
+        # Nome do fornecedor (não só o id) para o Radar de Fornecedores e telas de lote.
+        "fornecedor": lote.fornecedor.nome_fantasia if getattr(lote, "fornecedor", None) else None,
         "ativo": bool(lote.ativo),
     }
+
+
+def _montar_radar_fornecedores(produto_id, estabelecimento_id):
+    """Comparativo de fornecedores de um produto a partir do histórico REAL de
+    ordens de compra (PedidoCompra ⋈ PedidoCompraItem), agrupado por fornecedor.
+
+    Retorna lista ordenada por melhor preço médio:
+    [{fornecedor_id, fornecedor_nome, num_pedidos, qtd_total, preco_medio,
+      ultimo_preco, ultima_compra, melhor_preco}]
+    """
+    from app.models import PedidoCompra, PedidoCompraItem, Fornecedor
+
+    q = (
+        db.session.query(PedidoCompraItem, PedidoCompra, Fornecedor)
+        .join(PedidoCompra, PedidoCompra.id == PedidoCompraItem.pedido_id)
+        .outerjoin(Fornecedor, Fornecedor.id == PedidoCompra.fornecedor_id)
+        .filter(
+            PedidoCompraItem.produto_id == produto_id,
+            PedidoCompra.estabelecimento_id == estabelecimento_id,
+        )
+        .order_by(PedidoCompra.data_pedido.asc())
+    )
+
+    por_forn = {}
+    for item, pedido, forn in q.all():
+        fid = pedido.fornecedor_id
+        preco = float(item.preco_unitario or 0)
+        qtd = float(item.quantidade_recebida or item.quantidade_solicitada or 0)
+        data = pedido.data_recebimento or (
+            pedido.data_pedido.date() if hasattr(pedido.data_pedido, "date") else pedido.data_pedido
+        )
+        agg = por_forn.setdefault(fid, {
+            "fornecedor_id": fid,
+            "fornecedor_nome": (forn.nome_fantasia if forn else "Fornecedor removido"),
+            "num_pedidos": 0,
+            "qtd_total": 0.0,
+            "_soma_ponderada": 0.0,
+            "ultimo_preco": preco,
+            "ultima_compra": None,
+        })
+        agg["num_pedidos"] += 1
+        agg["qtd_total"] += qtd
+        agg["_soma_ponderada"] += preco * qtd
+        # Itens vêm em ordem crescente de data → o último visto é o mais recente.
+        agg["ultimo_preco"] = preco
+        if data:
+            agg["ultima_compra"] = data.isoformat() if hasattr(data, "isoformat") else str(data)
+
+    radar = []
+    for agg in por_forn.values():
+        soma_ponderada = agg.pop("_soma_ponderada")
+        qt = agg["qtd_total"]
+        agg["preco_medio"] = round(soma_ponderada / qt, 4) if qt > 0 else agg["ultimo_preco"]
+        agg["qtd_total"] = round(qt, 3)
+        radar.append(agg)
+
+    radar.sort(key=lambda a: a["preco_medio"])
+    if radar:
+        radar[0]["melhor_preco"] = True
+    return radar
 
 # ============================================
 # VALIDAÇÕES ESPECÍFICAS DE PRODUTO
@@ -302,57 +364,22 @@ def calcular_classificacao_abc(produto):
     return "C"
 
 
-def classificar_giro_produto(produto, hoje_date=None):
-    """FONTE ÚNICA da classificação de giro por cobertura de estoque (VMD).
+def classificar_giro_produto(produto, hoje_date=None, agregado=None):
+    """Classe de giro do produto pela FONTE ÚNICA (utils/giro_cache + Produto.calcular_giro_metrica).
 
-    Mantém os contadores do dashboard, a lista filtrada e o modal de detalhe
-    SEMPRE coerentes — antes cada lugar usava um critério diferente
-    (cobertura<=15 no card, quantidade_vendida>=30 na lista), o que fazia
-    o card dizer "2" e o modal abrir "12".
+    Delega toda a matemática (VMD/cobertura) para a fonte única, alimentada pelo
+    ledger real (venda_itens) na janela de 90 dias — os cards do dashboard, a
+    lista filtrada, os modais e o Hub passam TODOS por aqui, então nunca mais
+    divergem. `agregado` opcional evita recarregar o cache num loop.
 
     Retorna: 'rapido' (cobertura <= 15 dias), 'normal' (16-60) ou
-             'lento' (> 60 dias ou sem vendas).
+             'lento' (> 60 dias ou sem vendas na janela).
     """
     try:
+        from app.utils.giro_cache import metrica_produto
         if hoje_date is None:
             hoje_date = datetime.now(timezone.utc).date()
-
-        data_cadastro = produto.created_at.date() if produto.created_at else (hoje_date - timedelta(days=30))
-        dias_vida = max(1, (hoje_date - data_cadastro).days)
-
-        ultima = getattr(produto, '_ultima_venda_real', None) or produto.ultima_venda
-        if ultima:
-            dt_venda = ultima
-            if isinstance(dt_venda, str):
-                try:
-                    dt_venda = datetime.fromisoformat(dt_venda.replace('Z', '+00:00')).date()
-                except ValueError:
-                    dt_venda = hoje_date
-            elif hasattr(dt_venda, 'date'):
-                dt_venda = dt_venda.date()
-            if isinstance(dt_venda, date):
-                dias_desde_venda = (hoje_date - dt_venda).days
-                if dias_desde_venda > dias_vida:
-                    dias_vida = max(1, dias_desde_venda)
-
-        qtd_vendida = float(produto.quantidade_vendida or 0)
-        # Suaviza VMD de produtos recém-cadastrados com alto volume (seed/importação)
-        if dias_vida < 7 and qtd_vendida > 10:
-            dias_vida = 30
-
-        if qtd_vendida <= 0:
-            return 'lento'
-
-        vmd = qtd_vendida / dias_vida
-        if vmd <= 0:
-            return 'lento'
-
-        cobertura = float(produto.quantidade or 0) / vmd
-        if cobertura <= 15:
-            return 'rapido'
-        if cobertura <= 60:
-            return 'normal'
-        return 'lento'
+        return metrica_produto(produto, hoje_date, agregado=agregado)["classe"]
     except Exception:
         return 'lento'
 
@@ -1027,8 +1054,10 @@ def listar_produtos():
             # então o custo é desprezível e a consistência com o card é garantida.
             alvo = filtro_rapido.replace("giro_", "")
             hoje_giro = datetime.now(timezone.utc).date()
+            from app.utils.giro_cache import get_vendas_agregadas
+            agregado_giro = get_vendas_agregadas(estabelecimento_id)
             todos = query.options(*opts).all()
-            filtrados = [p for p in todos if classificar_giro_produto(p, hoje_giro) == alvo]
+            filtrados = [p for p in todos if classificar_giro_produto(p, hoje_giro, agregado=agregado_giro) == alvo]
             total_itens = len(filtrados)
             total_paginas = math.ceil(total_itens / por_pagina) if total_itens > 0 else 1
             inicio = (pagina - 1) * por_pagina
@@ -1045,8 +1074,22 @@ def listar_produtos():
         produtos = []
         alertas = []
 
+        # FONTE ÚNICA de giro/VMD/cobertura: agrega o ledger do tenant UMA vez e
+        # anexa a métrica a cada produto (via _giro_metrica), para que to_dict e o
+        # status_giro leiam os MESMOS números dos cards/modais/Hub.
+        from app.utils.giro_cache import get_vendas_agregadas, metrica_produto
+        hoje_giro_lista = datetime.now(timezone.utc).date()
+        agregado_lista = get_vendas_agregadas(estabelecimento_id)
+
         for produto in paginacao_items:
+            metrica = metrica_produto(produto, hoje_giro_lista, agregado=agregado_lista)
+            produto._giro_metrica = metrica
             produto_dict = produto.to_dict(include_metrics=include_metrics)
+            # Métricas da fonte única sempre disponíveis para o frontend (cards,
+            # lista e modais), independentemente de include_metrics.
+            produto_dict["vmd"] = metrica["vmd"]
+            produto_dict["cobertura_dias"] = metrica["cobertura_dias"]
+            produto_dict["giro_classe"] = metrica["classe"]
 
             # Adicionar informações calculadas com proteção contra None
             p_venda = float(produto.preco_venda or 0)
@@ -1057,20 +1100,18 @@ def listar_produtos():
             produto_dict["margem_lucro"] = calcular_margem_lucro(p_venda, p_custo)
             produto_dict["valor_total_estoque"] = p_qtd * p_custo
             produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
-            
-            try:
-                # Otimização: Evitar N+1 queries chamando calcular_status_giro (que faz query no banco)
-                dmd = float(produto.quantidade_vendida or 0) / 30.0
-                if dmd <= 0:
-                    produto_dict["status_giro"] = "Sem Vendas"
-                elif dmd < 1:
-                    produto_dict["status_giro"] = "Baixo Giro"
-                elif dmd < 5:
-                    produto_dict["status_giro"] = "Médio Giro"
-                else:
-                    produto_dict["status_giro"] = "Alto Giro"
-            except Exception:
+
+            # status_giro derivado da fonte única (VMD real do ledger, não a
+            # coluna denormalizada que ficava zerada/dessincronizada).
+            vmd = metrica["vmd"]
+            if vmd <= 0:
                 produto_dict["status_giro"] = "Sem Vendas"
+            elif vmd < 1:
+                produto_dict["status_giro"] = "Baixo Giro"
+            elif vmd < 5:
+                produto_dict["status_giro"] = "Médio Giro"
+            else:
+                produto_dict["status_giro"] = "Alto Giro"
             
             # Definir status de estoque para frontend
             if p_qtd <= 0:
@@ -1373,7 +1414,7 @@ def obter_produto(id):
 
         # Pedidos de compra pendentes
         pedidos_pendentes = PedidoCompraItem.query.filter_by(
-            produto_id=id, status="pendente"
+            produto_id=id, status="pendente", estabelecimento_id=estabelecimento_id
         ).all()
 
         pedidos_lista = []
@@ -3460,9 +3501,14 @@ def obter_estatisticas_produtos():
         giro_estoque = {"rapido": 0, "normal": 0, "lento": 0}
         produtos_com_margem = []
         produtos_criticos = []
-        
+
         hoje_datetime = datetime.now(timezone.utc)
-        
+
+        # FONTE ÚNICA de giro: agregado do ledger do tenant (uma query, cacheada).
+        from app.utils.giro_cache import get_vendas_agregadas, metrica_produto
+        agregado_stats = get_vendas_agregadas(estabelecimento_id)
+        hoje_giro_stats = hoje_datetime.date()
+
         for p in produtos_lite:
             # 5.1 Cálculo de Margem Individual
             p_custo = float(p.preco_custo or 0)
@@ -3485,39 +3531,11 @@ def obter_estatisticas_produtos():
                     "preco_venda": p_venda
                 })
 
-            # 5.2 Giro de Estoque (Replicando a lógica do classificar_giro_produto() para Tuplas)
-            data_cadastro = p.created_at.date() if p.created_at else (hoje_datetime.date() - timedelta(days=30))
-            dias_vida = max(1, (hoje_datetime.date() - data_cadastro).days)
-            
-            dt_venda = p.ultima_venda
-            if dt_venda:
-                if isinstance(dt_venda, str):
-                    try:
-                        dt_venda = datetime.fromisoformat(dt_venda.replace('Z', '+00:00')).date()
-                    except ValueError:
-                        dt_venda = hoje_datetime.date()
-                elif hasattr(dt_venda, 'date'):
-                    dt_venda = dt_venda.date()
-                if isinstance(dt_venda, date):
-                    dias_desde_venda = (hoje_datetime.date() - dt_venda).days
-                    if dias_desde_venda > dias_vida:
-                        dias_vida = max(1, dias_desde_venda)
-
-            qtd_vendida = float(p.quantidade_vendida or 0)
-            if dias_vida < 7 and qtd_vendida > 10:
-                dias_vida = 30
-                
-            giro = "lento"
-            if qtd_vendida > 0:
-                vmd = qtd_vendida / dias_vida
-                if vmd > 0:
-                    cobertura = float(p.quantidade or 0) / vmd
-                    if cobertura <= 15:
-                        giro = "rapido"
-                    elif cobertura <= 60:
-                        giro = "normal"
-                        
-            giro_estoque[giro] += 1
+            # 5.2 Giro de Estoque — pela FONTE ÚNICA (mesmo cálculo do card, lista,
+            # modal e Hub). Antes reimplementava a matemática aqui com a coluna
+            # denormalizada (que ficava zerada) e created_at=hoje da seed, o que
+            # jogava 100% em "lento".
+            giro_estoque[metrica_produto(p, hoje_giro_stats, agregado=agregado_stats)["classe"]] += 1
             
             # 5.3 Produtos Críticos (Apenas para exibir no final, limitado)
             qtd = float(p.quantidade or 0)
@@ -4573,9 +4591,29 @@ def obter_produto_hub(id):
         for l in lotes_obj:
             lotes.append(_serialize_lote(l))
             
-        # Pedidos pendentes (placeholder se o modelo existir, mas por segurança evito joins não confirmados)
-        pedidos_pendentes = []
-        
+        # Pedidos de compra pendentes (aguardando recebimento do fornecedor).
+        from app.models import PedidoCompraItem
+        pedidos_pendentes = [
+            {
+                "id": item.id,
+                "pedido_id": item.pedido_id,
+                "pedido_numero": item.pedido.numero_pedido if item.pedido else None,
+                "fornecedor_nome": (
+                    item.pedido.fornecedor.nome_fantasia
+                    if item.pedido and item.pedido.fornecedor else None
+                ),
+                "quantidade_solicitada": float(item.quantidade_solicitada or 0),
+                "preco_unitario": float(item.preco_unitario or 0),
+                "data_previsao_entrega": (
+                    item.pedido.data_previsao_entrega.isoformat()
+                    if item.pedido and item.pedido.data_previsao_entrega else None
+                ),
+            }
+            for item in PedidoCompraItem.query.filter_by(
+                produto_id=id, status="pendente", estabelecimento_id=estabelecimento_id
+            ).all()
+        ]
+
         # Estatísticas complementares e Filtro de Período
         from datetime import datetime, timezone, timedelta
         from sqlalchemy import func
@@ -4591,12 +4629,14 @@ def obter_produto_hub(id):
         base_q = db.session.query(
             func.sum(VendaItem.quantidade).label('qtd'),
             func.sum(VendaItem.total_item).label('total'),
+            func.min(Venda.data_venda).label('primeira'),
         ).join(Venda, Venda.id == VendaItem.venda_id).filter(
             VendaItem.produto_id == id,
             Venda.estabelecimento_id == estabelecimento_id,
             func.lower(func.coalesce(Venda.status, '')) != 'cancelada',
         )
 
+        dias_filtro = None
         if periodo != 'all':
             dias_filtro = {'7d': 7, '30d': 30, '90d': 90, '1y': 365}.get(periodo, 30)
             base_q = base_q.filter(Venda.data_venda >= hoje - timedelta(days=dias_filtro))
@@ -4604,6 +4644,7 @@ def obter_produto_hub(id):
         agg = base_q.first()
         qtd_vendida = float(agg.qtd or 0) if agg else 0.0
         total_vendido = float(agg.total or 0) if agg else 0.0
+        primeira_venda_periodo = agg.primeira if agg else None
 
         # Última venda calculada ao vivo (max data_venda para este produto).
         ultima_venda_dt = db.session.query(func.max(Venda.data_venda)).join(
@@ -4623,7 +4664,23 @@ def obter_produto_hub(id):
         if produto.preco_venda and produto.preco_custo:
             lucro_unitario = float(produto.preco_venda - produto.preco_custo)
             lucro_estimado = lucro_unitario * qtd_vendida
-            
+
+        # Giro/VMD/cobertura: por padrão (periodo=all) usa a FONTE ÚNICA de
+        # janela fixa de 90d, coerente com os cards e a lista. Quando o usuário
+        # escolhe um período no Hub (7d/30d/90d/1y), o giro passa a refletir
+        # ESSE período — antes ficava travado em 90d mesmo com outro filtro
+        # selecionado, enquanto faturamento/quantidade já respeitavam o filtro.
+        # Cards e lista continuam na janela fixa (não regride a unificação).
+        if periodo != 'all' and dias_filtro:
+            from app.utils.giro_cache import dias_efetivos as _dias_efetivos
+            dias_ativos_periodo = _dias_efetivos(primeira_venda_periodo, hoje.date(), janela_dias=dias_filtro)
+            produto._giro_metrica = Produto.calcular_giro_metrica(
+                produto.quantidade, qtd_vendida, dias_ativos_periodo, janela_dias=dias_filtro
+            )
+        else:
+            from app.utils.giro_cache import metrica_produto as _metrica_produto
+            produto._giro_metrica = _metrica_produto(produto, hoje.date())
+
         produto_dict = produto.to_dict(include_metrics=True, include_relationships=True)
         # Override the metrics in the dict so the UI uses the filtered ones
         produto_dict['quantidade_vendida'] = qtd_vendida
@@ -4647,13 +4704,20 @@ def obter_produto_hub(id):
             "dias_sem_venda": dias_sem_venda,
             "primeira_venda": primeira_venda_str
         }
-        
+
+        # RADAR DE FORNECEDORES: comparativo REAL do histórico de compras deste
+        # produto, agrupado por fornecedor (o painel prometia "histórico de ordens
+        # de compra e preços recebidos", mas antes lia lotes e um campo que a API
+        # nem enviava, ficando sempre vazio).
+        radar_fornecedores = _montar_radar_fornecedores(id, estabelecimento_id)
+
         return jsonify({
             "success": True,
             "produto": produto_dict,
             "historico_precos": [h.to_dict() for h in historico_precos],
             "lotes": lotes,
             "pedidos_pendentes": pedidos_pendentes,
+            "radar_fornecedores": radar_fornecedores,
             "estatisticas": estatisticas,
         })
         

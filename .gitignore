@@ -107,6 +107,7 @@ backend/generate_seed_audit_logs.py
 backend/restore_admin_access.py
 backend/RESTAURAR_DASHBOARD_AGORA.md
 docs/seed-v2-*.md
+PLANO_AUDITORIA_ENTREGA_*.md
 old_dashboard.txt
 INICIAR_SISTEMA_COMPLETO.bat
 .kiro/

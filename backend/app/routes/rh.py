@@ -820,7 +820,8 @@ def listar_provisoes():
     if not _pode_ver_tudo_rh(_usuario_atual()):
         return jsonify({"success": False, "message": "Apenas Admin, Gerente ou RH acessam as provisões"}), 403
     try:
-        from app.services.rh_calculator_service import calcular_provisoes
+        import calendar
+        from app.services.rh_calculator_service import calcular_provisoes, calcular_custo_folha_detalhado
         from app.utils.query_helpers import get_authorized_establishment_id
 
         estab_id = get_authorized_establishment_id()
@@ -855,9 +856,21 @@ def listar_provisoes():
             prov["custo_real"] = round(prov["custo_real"] + ben, 2)
             itens.append(prov)
 
-        custo_total = round(sum(i["custo_real"] for i in itens), 2)
         folha_nominal = round(sum(i["salario_base"] for i in itens), 2)
-        total_beneficios = round(sum(i["beneficios"] for i in itens), 2)
+
+        # Resumo (cards do topo): usa a MESMA fonte única de Despesas/DRE
+        # (calcular_custo_folha_periodos) — inclui horas extras e descontos
+        # de atraso reais, que calcular_provisoes (usada só no detalhe por
+        # funcionário abaixo, para a planilha do contador) não tinha. Antes
+        # o card "Custo Real Total" desta página e o "Folha de Pagamento" de
+        # Despesas usavam fórmulas diferentes e nunca batiam.
+        ano_num, mes_num = (int(p) for p in ano_mes.split("-"))
+        dt_inicio_mes = date(ano_num, mes_num, 1)
+        dt_fim_mes = date(ano_num, mes_num, calendar.monthrange(ano_num, mes_num)[1])
+        folha_real = calcular_custo_folha_detalhado(estab_id, dt_inicio_mes, dt_fim_mes)["custo_folha"]
+
+        total_beneficios = round(folha_real.get("total_beneficios", 0.0), 2)
+        custo_total = round(folha_real.get("custo_real_total", 0.0), 2)
 
         return jsonify({
             "success": True,

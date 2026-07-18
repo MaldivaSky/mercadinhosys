@@ -46,35 +46,15 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
             let filtered = [...allProducts];
 
             if (type.startsWith('giro_') || type === 'alerta_cobertura') {
-                const hoje = new Date();
-                const DIA = 1000 * 60 * 60 * 24;
+                // FONTE ÚNICA: usa vmd/cobertura_dias vindos do backend (janela de
+                // 90d, ledger real). Antes o modal reimplementava a matemática no
+                // cliente com a coluna denormalizada e created_at, divergindo do card
+                // que o abriu. Agora card = lista = modal = Hub.
                 filtered.forEach(p => {
-                    // ESPELHO EXATO do backend classificar_giro_produto():
-                    // dias de vida desde o cadastro, estendidos pela última venda,
-                    // suavizados para itens novos de alto volume. Assim a cobertura
-                    // exibida bate com a classificação que filtrou o produto.
-                    const dataCadastro = p.created_at ? new Date(p.created_at) : new Date(hoje.getTime() - 30 * DIA);
-                    let diasVida = Math.max(1, Math.floor((hoje.getTime() - dataCadastro.getTime()) / DIA));
-
-                    if (p.ultima_venda) {
-                        const diasDesdeVenda = Math.floor((hoje.getTime() - new Date(p.ultima_venda).getTime()) / DIA);
-                        if (diasDesdeVenda > diasVida) diasVida = Math.max(1, diasDesdeVenda);
-                    }
-
-                    const qv = p.quantidade_vendida || 0;
-                    if (diasVida < 7 && qv > 10) {
-                        diasVida = 30;
-                    }
-
-                    const vmd = qv > 0 ? qv / diasVida : 0;
-
-                    if (vmd > 0) {
-                        (p as any)._vmd_calc = vmd;
-                        (p as any)._cobertura_calc = (p.quantidade || 0) / vmd;
-                    } else {
-                        (p as any)._vmd_calc = 0;
-                        (p as any)._cobertura_calc = 999;
-                    }
+                    const vmd = (p as any).vmd ?? 0;
+                    const cobertura = (p as any).cobertura_dias;
+                    (p as any)._vmd_calc = vmd;
+                    (p as any)._cobertura_calc = (cobertura === null || cobertura === undefined) ? 999 : cobertura;
                 });
 
                 filtered.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);

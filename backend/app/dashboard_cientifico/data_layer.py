@@ -114,10 +114,19 @@ class DataLayer:
     @staticmethod
     @provide_session
     def get_sales_timeseries(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
-        """Série temporal de vendas diárias integrando Receita, CMV e Despesas."""
+        """Série temporal de vendas diárias integrando Receita, CMV e Despesas.
+
+        Despesas exclui espelhos (ver app.utils.financeiro_constants) — do
+        contrário fornecedor/boleto de mercadoria contavam junto do CMV — e
+        rateia a folha REAL calculada da janela por dia (competência), em vez
+        do espelho de salário (sem encargos) concentrado no dia 1 do mês.
+        """
         try:
+            from app.utils.financeiro_constants import sem_categorias_integradas
+
             start_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
-            
+            end_date = start_date + timedelta(days=max(days - 1, 0))
+
             # Garante formato start_date datetime
             start_dt = datetime.combine(start_date, datetime.min.time())
             
@@ -151,18 +160,29 @@ class DataLayer:
                 
             resultados_cogs = query_cogs.group_by(func.date(Venda.data_venda)).all()
 
-            # Query Despesas
+            # Query Despesas (exclui espelhos — fonte primária é ContaPagar/folha)
             query_despesas = db.session.query(
                 func.date(Despesa.data_despesa).label('data'),
                 func.sum(Despesa.valor).label('valor')
             ).filter(
                 func.date(Despesa.data_despesa) >= start_date
             )
-            
+            query_despesas = sem_categorias_integradas(query_despesas, Despesa.categoria)
+
             if str(estabelecimento_id).lower() != 'all':
                 query_despesas = query_despesas.filter(Despesa.estabelecimento_id == estabelecimento_id)
-                
+
             resultados_despesas = query_despesas.group_by(func.date(Despesa.data_despesa)).all()
+
+            # Folha REAL da janela inteira, rateada por dia — evita concentrar
+            # o custo de pessoal no dia 1 (comportamento do espelho da seed).
+            try:
+                folha = calcular_custo_folha_detalhado(estabelecimento_id, start_date, end_date)
+                custo_folha_total = float(folha.get("custo_folha", {}).get("custo_real_total", 0.0))
+            except Exception as e_folha:
+                logger.error(f"Erro ao calcular folha em get_sales_timeseries: {e_folha}")
+                custo_folha_total = 0.0
+            custo_folha_dia = (custo_folha_total / days) if days > 0 else 0.0
 
             # Construir mapa de dias
             mapa_dias = {}
@@ -193,11 +213,13 @@ class DataLayer:
                 if d_str in mapa_dias:
                     mapa_dias[d_str]["cogs"] = float(r.cogs or 0)
                     
-            # Preencher Despesas
+            # Preencher Despesas (operacionais + rateio diário da folha real)
             for r in resultados_despesas:
                 d_str = str(r.data)
                 if d_str in mapa_dias:
                     mapa_dias[d_str]["despesas"] = float(r.valor or 0)
+            for k in mapa_dias:
+                mapa_dias[k]["despesas"] += custo_folha_dia
 
             # Calcular Lucro Bruto e Líquido Diários
             for k in mapa_dias:
@@ -560,8 +582,17 @@ class DataLayer:
     @staticmethod
     @provide_session
     def get_expense_details(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
-        """Detalhamento de despesas por categoria (período específico)"""
+        """Detalhamento de despesas por tipo (período específico).
+
+        Exclui despesas-espelho (ver app.utils.financeiro_constants) e injeta uma
+        linha sintética com o custo REAL da folha (mesma fonte da página Despesas
+        e do DRE) — sem isso o total do dashboard (soma desta lista) tanto contava
+        boleto/fornecedor 2× (junto do CMV) quanto usava o espelho de salário
+        (sem encargos/benefícios) em vez da folha calculada.
+        """
         try:
+            from app.utils.financeiro_constants import sem_categorias_integradas
+
             # db injetado pelo decorator
             # 🔥 CORREÇÃO: Despesa.data_despesa é do tipo DATE no banco.
             # Devemos comparar com objetos date simples, sem time ou tzinfo.
@@ -575,19 +606,31 @@ class DataLayer:
                 Despesa.data_despesa >= start_date_norm,
                 Despesa.data_despesa <= end_date_norm
             )
-            
+            query_expenses = sem_categorias_integradas(query_expenses, Despesa.categoria)
+
             if str(estabelecimento_id).lower() != 'all':
                 query_expenses = query_expenses.filter(Despesa.estabelecimento_id == estabelecimento_id)
-                
+
             results = query_expenses.group_by(Despesa.tipo).all()
 
-            return [
+            detalhes = [
                 {
-                    "tipo": r.tipo or "Sem Categoria", 
+                    "tipo": r.tipo or "Sem Categoria",
                     "valor": float(Decimal(str(r.total or 0)))
                 }
                 for r in results
             ]
+
+            try:
+                folha = calcular_custo_folha_detalhado(estabelecimento_id, start_date_norm, end_date_norm)
+                custo_folha = float(folha.get("custo_folha", {}).get("custo_real_total", 0.0))
+            except Exception as e_folha:
+                logger.error(f"Erro ao calcular folha em get_expense_details: {e_folha}")
+                custo_folha = 0.0
+            if custo_folha > 0:
+                detalhes.append({"tipo": "folha_calculada", "valor": custo_folha})
+
+            return detalhes
         except Exception as e:
             db.session.rollback()
             logger.error(f"ERRO CRÍTICO em get_expense_details: {e}", exc_info=True)
@@ -599,8 +642,15 @@ class DataLayer:
         """
         Retorna o valor TOTAL de despesas para o período, sem agrupamento.
         Usado para cálculo de Lucro Líquido no Dashboard (Sincronizado com DRE).
+
+        Exclui despesas-espelho (ver app.utils.financeiro_constants) e soma a
+        folha de pagamento REAL calculada — mesma fonte que a página Despesas e
+        o DRE (antes somava Despesa bruta, contando boleto/fornecedor junto com
+        o CMV e usando o espelho de salário sem encargos).
         """
         try:
+            from app.utils.financeiro_constants import sem_categorias_integradas
+
             # db injetado pelo decorator
             # 🔥 CORREÇÃO: Despesa.data_despesa é DATE.
             # Normalização rigorosa para objetos date (sem timezone/time)
@@ -611,13 +661,21 @@ class DataLayer:
                 Despesa.data_despesa >= start_date_norm,
                 Despesa.data_despesa <= end_date_norm
             )
-            
+            query = sem_categorias_integradas(query, Despesa.categoria)
+
             if str(estabelecimento_id).lower() != 'all':
                 query = query.filter(Despesa.estabelecimento_id == estabelecimento_id)
-                
-            total = query.scalar()
-            
-            return float(total or 0.0)
+
+            total_operacionais = float(query.scalar() or 0.0)
+
+            try:
+                folha = calcular_custo_folha_detalhado(estabelecimento_id, start_date_norm, end_date_norm)
+                custo_folha = float(folha.get("custo_folha", {}).get("custo_real_total", 0.0))
+            except Exception as e_folha:
+                logger.error(f"Erro ao calcular folha em get_total_expenses_value: {e_folha}")
+                custo_folha = 0.0
+
+            return total_operacionais + custo_folha
         except Exception as e:
             logger.error(f"ERRO CRÍTICO em get_total_expenses_value: {e}", exc_info=True)
             return 0.0
@@ -1816,13 +1874,13 @@ class DataLayer:
 
             # 2. DADOS DE DESPESAS
             try:
-                # Categorias espelhadas (ver despesas.CATEGORIAS_INTEGRADAS):
+                # Categorias espelhadas (ver app.utils.financeiro_constants):
                 # 'Fornecedores'/'Boleto de Mercadoria' duplicam ContaPagar.pago;
-                # 'Folha de Pagamento' (lançamentos manuais) duplica a folha
-                # calculada. Ficam fora dos agregados de competência.
-                _CATS_INTEGRADAS = ("fornecedores", "folha de pagamento", "boleto de mercadoria")
+                # 'Folha de Pagamento'/'Benefícios' (lançamentos manuais) duplicam a
+                # folha calculada. Ficam fora dos agregados de competência.
+                from app.utils.financeiro_constants import CATEGORIAS_INTEGRADAS as _CATS_INTEGRADAS, CATEGORIAS_ESPELHO_BOLETO as _CATS_ESPELHO_BOLETO
                 _cat_norm = func.lower(func.trim(func.coalesce(Despesa.categoria, '')))
-                _sem_espelho_boleto = _cat_norm.notin_(("fornecedores", "boleto de mercadoria"))
+                _sem_espelho_boleto = _cat_norm.notin_(_CATS_ESPELHO_BOLETO)
                 _sem_espelho_total = _cat_norm.notin_(_CATS_INTEGRADAS)
 
                 q_desp = db.session.query(
