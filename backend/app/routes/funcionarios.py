@@ -1403,7 +1403,8 @@ def excluir_funcionario(id):
 
         # Exclusão lógica
         funcionario.ativo = False
-        # funcionario.data_demissao = date.today() # Campo removido do modelo
+        funcionario.data_demissao = date.today()
+        funcionario.status = "inativo"
 
         db.session.commit()
 

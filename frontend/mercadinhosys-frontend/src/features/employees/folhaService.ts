@@ -156,6 +156,11 @@ const folhaService = {
         return data.data;
     },
 
+    cancelarRescisao: async (rescisao_id: number) => {
+        const { data } = await apiClient.post<{ success: boolean; message: string }>(`/rh/rescisao/${rescisao_id}/cancelar`);
+        return data;
+    },
+
     listarProvisoes: async (ano_mes?: string) => {
         const { data } = await apiClient.get<{ success: boolean } & ProvisoesResposta>('/rh/provisoes', { params: ano_mes ? { ano_mes } : {} });
         return { data: data.data, resumo: data.resumo };

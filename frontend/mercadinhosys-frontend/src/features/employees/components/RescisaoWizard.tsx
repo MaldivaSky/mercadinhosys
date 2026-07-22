@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { UserMinus, ArrowRight, ArrowLeft, Download, Save, AlertTriangle, CheckCircle2, FileText, History, Search } from 'lucide-react';
+import { UserMinus, ArrowRight, ArrowLeft, Download, Save, AlertTriangle, CheckCircle2, FileText, History, Search, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { apiClient } from '../../../api/apiClient';
@@ -48,10 +48,17 @@ export default function RescisaoWizard() {
     const [registrada, setRegistrada] = useState(false);
     const [estab, setEstab] = useState<Estabelecimento | null>(null);
 
+    const carregarFuncionarios = async () => {
+        try {
+            const r = await apiClient.get('/funcionarios', { params: { simples: true, por_pagina: 200, incluir_estatisticas: false, ativos: true } });
+            setFuncionarios(r.data?.data || r.data?.funcionarios || []);
+        } catch {
+            setFuncionarios([]);
+        }
+    };
+
     useEffect(() => {
-        apiClient.get('/funcionarios', { params: { simples: true, por_pagina: 200, incluir_estatisticas: false } })
-            .then(r => setFuncionarios(r.data?.data || r.data?.funcionarios || []))
-            .catch(() => setFuncionarios([]));
+        carregarFuncionarios();
         apiClient.get('/configuracao/estabelecimento')
             .then(r => setEstab(r.data?.estabelecimento || null))
             .catch(() => { });
@@ -92,7 +99,8 @@ export default function RescisaoWizard() {
                 ferias_vencidas_dias: feriasVencidas ? Number(feriasVencidas) : 0,
             });
             setRegistrada(true);
-            showToast.success('Rescisão registrada com sucesso');
+            showToast.success('Rescisão registrada e funcionário desligado com sucesso');
+            carregarFuncionarios();
         } catch (e: any) {
             showToast.error(e?.response?.data?.message || 'Erro ao registrar rescisão');
         } finally {
@@ -112,6 +120,19 @@ export default function RescisaoWizard() {
             showToast.error(e?.response?.data?.message || 'Erro ao carregar histórico');
         } finally {
             setCarregandoHist(false);
+        }
+    };
+
+    const reverterRescisao = async (r: RescisaoRegistro) => {
+        const nome = nomeHist(r);
+        if (!window.confirm(`Deseja realmente cancelar a demissão de "${nome}" e reativar o colaborador?`)) return;
+        try {
+            await folhaService.cancelarRescisao(r.id);
+            showToast.success(`Demissão de ${nome} cancelada com sucesso. Colaborador reativado!`);
+            carregarHistorico();
+            carregarFuncionarios();
+        } catch (e: any) {
+            showToast.error(e?.response?.data?.message || 'Erro ao cancelar demissão');
         }
     };
 
@@ -239,7 +260,7 @@ export default function RescisaoWizard() {
                                             <th className="text-left px-4 py-3 font-bold uppercase text-xs">Demissão</th>
                                             <th className="text-left px-4 py-3 font-bold uppercase text-xs">Motivo</th>
                                             <th className="text-right px-4 py-3 font-bold uppercase text-xs">Total bruto</th>
-                                            <th className="text-right px-4 py-3 font-bold uppercase text-xs">Relatório</th>
+                                            <th className="text-right px-4 py-3 font-bold uppercase text-xs">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -250,10 +271,16 @@ export default function RescisaoWizard() {
                                                 <td className="px-4 py-3"><span className="px-2.5 py-1 text-xs font-bold rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{TIPOS.find(t => t.valor === r.tipo_rescisao)?.titulo || r.tipo_rescisao}</span></td>
                                                 <td className="px-4 py-3 text-right font-black text-emerald-600 dark:text-emerald-400">{fmtMoeda(r.total_liquido)}</td>
                                                 <td className="px-4 py-3 text-right">
-                                                    <button onClick={() => r.detalhe && gerarPDF(r.detalhe, nomeHist(r), r.cargo || '')}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 dark:bg-gray-700 hover:bg-black text-white text-xs font-bold">
-                                                        <Download className="w-3.5 h-3.5" /> PDF
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={() => r.detalhe && gerarPDF(r.detalhe, nomeHist(r), r.cargo || '')}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 dark:bg-gray-700 hover:bg-black text-white text-xs font-bold transition-colors">
+                                                            <Download className="w-3.5 h-3.5" /> PDF
+                                                        </button>
+                                                        <button onClick={() => reverterRescisao(r)} title="Cancelar demissão e reativar funcionário"
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-xs font-bold transition-colors">
+                                                            <RotateCcw className="w-3.5 h-3.5" /> Reverter
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
