@@ -61,6 +61,12 @@ def listar_despesas():
     if not estabelecimento_id:
         return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
+    try:
+        from app.routes.rh import _garantir_despesas_rescisoes_legadas
+        _garantir_despesas_rescisoes_legadas()
+    except Exception:
+        pass
+
     # Query base
     query = Despesa.query
     if estabelecimento_id != 'all':

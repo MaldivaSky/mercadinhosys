@@ -739,6 +739,54 @@ def cancelar_rescisao(rescisao_id):
 
 
 
+def _garantir_despesas_rescisoes_legadas():
+    """Garante retroativamente que rescisões passadas registradas no banco tenham seu lançamento em Despesas."""
+    try:
+        from app.models import Rescisao, Despesa
+        rescisoes_sem_despesa = Rescisao.query.filter(Rescisao.despesa_id.is_(None)).all()
+        if not rescisoes_sem_despesa:
+            return
+        
+        alterou = False
+        for r in rescisoes_sem_despesa:
+            nome_func = r.funcionario.nome if r.funcionario else f"Funcionário #{r.funcionario_id}"
+            valor_despesa = Decimal(str(r.total_liquido or r.total_proventos or 0))
+            
+            desp_existente = Despesa.query.filter(
+                Despesa.estabelecimento_id == r.estabelecimento_id,
+                Despesa.categoria == "Rescisão Trabalhista",
+                Despesa.descricao.like(f"%Rescisão Trabalhista - {nome_func}%")
+            ).first()
+
+            if desp_existente:
+                r.despesa_id = desp_existente.id
+                alterou = True
+            else:
+                despesa_rescisao = Despesa(
+                    estabelecimento_id=r.estabelecimento_id,
+                    descricao=f"Rescisão Trabalhista - {nome_func} ({r.tipo_rescisao})",
+                    categoria="Rescisão Trabalhista",
+                    tipo="variavel",
+                    valor=valor_despesa,
+                    data_despesa=r.data_demissao,
+                    data_emissao=r.data_demissao,
+                    data_vencimento=r.data_demissao,
+                    forma_pagamento="PIX",
+                    recorrente=False,
+                    observacoes=f"Lançamento automático de verbas rescisórias da demissão de {nome_func}. Motivo: {r.tipo_rescisao}.",
+                )
+                db.session.add(despesa_rescisao)
+                db.session.flush()
+                r.despesa_id = despesa_rescisao.id
+                alterou = True
+
+        if alterou:
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro no retro-sync de despesas de rescisão: {e}")
+
+
 @rh_bp.route("/rescisoes", methods=["GET"])
 @funcionario_required
 @plan_required('Pro')
@@ -750,6 +798,7 @@ def listar_rescisoes():
         from app.models import Rescisao
         from app.utils.query_helpers import get_authorized_establishment_id
 
+        _garantir_despesas_rescisoes_legadas()
         estab_id = get_authorized_establishment_id()
         q = Rescisao.query
         if estab_id and str(estab_id).lower() != "all":
