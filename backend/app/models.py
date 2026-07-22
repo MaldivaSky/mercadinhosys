@@ -700,6 +700,7 @@ class Rescisao(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
     total_proventos = db.Column(db.Numeric(19, 4), default=0)
     total_descontos = db.Column(db.Numeric(19, 4), default=0)
     total_liquido = db.Column(db.Numeric(19, 4), default=0)
+    forma_pagamento = db.Column(db.String(50))
     funcionario = db.relationship("Funcionario", backref=db.backref("rescisoes", lazy=True))
     despesa = db.relationship("Despesa", backref=db.backref("rescisao", uselist=False))
     __table_args__ = (db.Index("ix_rescisao_funcionario", "funcionario_id"),)

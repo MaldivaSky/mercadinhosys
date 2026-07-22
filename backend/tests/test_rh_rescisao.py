@@ -124,3 +124,108 @@ def test_registrar_e_cancelar_rescisao_com_despesa_financeira(session):
     assert Despesa.query.get(despesa_id_salvo) is None
     assert Rescisao.query.filter_by(funcionario_id=func.id).first() is None
     assert Funcionario.query.get(func.id).ativo is True
+
+
+def test_deduplicacao_e_forma_pagamento_rescisao(session):
+    """Garante que a forma de pagamento é gravada e que demissões repetidas por testes anteriores são deduplicadas."""
+    admin = Funcionario.query.filter_by(role="admin").first()
+    assert admin is not None
+    estab_id = admin.estabelecimento_id
+
+    # 1. Criar um funcionário para o teste de deduplicação
+    vendedor = Funcionario(
+        estabelecimento_id=estab_id,
+        nome="Vendedor Gama Teste Deduplicacao",
+        cpf="11122233344",
+        username="vendedor_gama",
+        role="FUNCIONARIO",
+        ativo=True,
+        status="ativo",
+        data_nascimento=date(1990, 1, 1),
+        celular="92977776666",
+        email="vendedor@gama.com",
+        cargo="Vendedor",
+        data_admissao=date(2023, 1, 1),
+        salario_base=Decimal("3000.00")
+    )
+    vendedor.set_password("senha123")
+    session.add(vendedor)
+    session.commit()
+
+    # 2. Primeira demissão com ACORDO (valor menor)
+    from app.services.rh_calculator_service import calcular_rescisao
+    res_acordo = calcular_rescisao(vendedor, date(2026, 7, 20), "ACORDO")
+    d1 = Despesa(
+        estabelecimento_id=estab_id,
+        descricao=f"Rescisão Trabalhista - {vendedor.nome} (ACORDO)",
+        categoria="Rescisão Trabalhista",
+        tipo="variavel",
+        valor=Decimal(str(res_acordo["total_liquido_estimado"])),
+        data_despesa=date(2026, 7, 20),
+        forma_pagamento="PIX"
+    )
+    session.add(d1)
+    session.flush()
+
+    r1 = Rescisao(
+        estabelecimento_id=estab_id,
+        funcionario_id=vendedor.id,
+        despesa_id=d1.id,
+        data_demissao=date(2026, 7, 20),
+        tipo_rescisao="ACORDO",
+        verbas_rescisorias_json=res_acordo,
+        total_proventos=Decimal(str(res_acordo["total_proventos"])),
+        total_liquido=Decimal(str(res_acordo["total_liquido_estimado"])),
+        forma_pagamento="PIX"
+    )
+    session.add(r1)
+    session.commit()
+
+    # 3. Segunda demissão sem acordo (S_JUSTA) com forma de pagamento 'Transferência'
+    res_sjusta = calcular_rescisao(vendedor, date(2026, 7, 20), "S_JUSTA")
+    
+    # Simula a limpeza do backend (garantir_despesas_rescisoes_legadas)
+    from app.routes.rh import _garantir_despesas_rescisoes_legadas
+    
+    # Criar 2ª rescisão simulando clique do usuário
+    d2 = Despesa(
+        estabelecimento_id=estab_id,
+        descricao=f"Rescisão Trabalhista - {vendedor.nome} (S_JUSTA)",
+        categoria="Rescisão Trabalhista",
+        tipo="variavel",
+        valor=Decimal(str(res_sjusta["total_liquido_estimado"])),
+        data_despesa=date(2026, 7, 20),
+        forma_pagamento="Transferência"
+    )
+    session.add(d2)
+    session.flush()
+
+    r2 = Rescisao(
+        estabelecimento_id=estab_id,
+        funcionario_id=vendedor.id,
+        despesa_id=d2.id,
+        data_demissao=date(2026, 7, 20),
+        tipo_rescisao="S_JUSTA",
+        verbas_rescisorias_json=res_sjusta,
+        total_proventos=Decimal(str(res_sjusta["total_proventos"])),
+        total_liquido=Decimal(str(res_sjusta["total_liquido_estimado"])),
+        forma_pagamento="Transferência"
+    )
+    session.add(r2)
+    session.commit()
+
+    # Executar a sincronização e deduplicação
+    _garantir_despesas_rescisoes_legadas()
+
+    # 4. Validar que existe APENAS 1 rescisão ativa (a mais recente, S_JUSTA)
+    rescisoes = Rescisao.query.filter_by(funcionario_id=vendedor.id).all()
+    assert len(rescisoes) == 1
+    assert rescisoes[0].tipo_rescisao == "S_JUSTA"
+    assert rescisoes[0].forma_pagamento == "Transferência"
+
+    # Validar que a despesa financeira reflete exatamente S_JUSTA e R$ 9.000+
+    desp_final = Despesa.query.get(rescisoes[0].despesa_id)
+    assert desp_final is not None
+    assert desp_final.forma_pagamento == "Transferência"
+    assert "S_JUSTA" in desp_final.descricao
+

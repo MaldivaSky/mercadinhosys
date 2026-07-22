@@ -42,6 +42,9 @@ export default function RescisaoWizard() {
     const [dataDemissao, setDataDemissao] = useState('');
     const [saldoFgts, setSaldoFgts] = useState('');
     const [feriasVencidas, setFeriasVencidas] = useState('');
+    const [formaPagamento, setFormaPagamento] = useState('PIX');
+    const [avisoCumprido, setAvisoCumprido] = useState(false);
+    const [descontosAdicionais, setDescontosAdicionais] = useState('');
     const [resultado, setResultado] = useState<RescisaoData | null>(null);
     const [calculando, setCalculando] = useState(false);
     const [registrando, setRegistrando] = useState(false);
@@ -77,6 +80,9 @@ export default function RescisaoWizard() {
                 tipo_rescisao: tipo,
                 saldo_fgts: saldoFgts ? Number(saldoFgts) : null,
                 ferias_vencidas_dias: feriasVencidas ? Number(feriasVencidas) : 0,
+                forma_pagamento: formaPagamento,
+                aviso_cumprido: avisoCumprido,
+                descontos_adicionais: descontosAdicionais ? Number(descontosAdicionais) : 0,
             });
             setResultado(r);
             setPasso(3);
@@ -97,6 +103,9 @@ export default function RescisaoWizard() {
                 tipo_rescisao: tipo,
                 saldo_fgts: saldoFgts ? Number(saldoFgts) : null,
                 ferias_vencidas_dias: feriasVencidas ? Number(feriasVencidas) : 0,
+                forma_pagamento: formaPagamento,
+                aviso_cumprido: avisoCumprido,
+                descontos_adicionais: descontosAdicionais ? Number(descontosAdicionais) : 0,
             });
             setRegistrada(true);
             showToast.success('Rescisão registrada e funcionário desligado com sucesso');
@@ -368,6 +377,32 @@ export default function RescisaoWizard() {
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Férias vencidas (dias)</label>
                                 <input type="number" min={0} value={feriasVencidas} onChange={e => setFeriasVencidas(e.target.value)} placeholder="0"
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Forma de Pagamento *</label>
+                                <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white">
+                                    <option value="PIX">PIX</option>
+                                    <option value="Transferência">Transferência Bancária</option>
+                                    <option value="Dinheiro">Dinheiro em Espécie</option>
+                                    <option value="Cheque">Cheque Bancário</option>
+                                    <option value="Débito em Conta">Débito em Conta</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Aviso Prévio Cumprido?</label>
+                                <select value={avisoCumprido ? 'sim' : 'nao'} onChange={e => setAvisoCumprido(e.target.value === 'sim')}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white">
+                                    <option value="nao">Não (Indenizado / Descontado)</option>
+                                    <option value="sim">Sim (Trabalhado)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Descontos / Adiantamentos (R$)</label>
+                                <input type="number" min={0} step="0.01" value={descontosAdicionais} onChange={e => setDescontosAdicionais(e.target.value)} placeholder="0.00"
                                     className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white" />
                             </div>
                         </div>

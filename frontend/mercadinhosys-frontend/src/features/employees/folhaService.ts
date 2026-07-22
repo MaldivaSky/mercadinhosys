@@ -121,6 +121,9 @@ interface RescisaoPayload {
     tipo_rescisao: TipoRescisao;
     saldo_fgts?: number | null;
     ferias_vencidas_dias?: number;
+    forma_pagamento?: string;
+    aviso_cumprido?: boolean;
+    descontos_adicionais?: number;
 }
 
 export interface RescisaoRegistro {
