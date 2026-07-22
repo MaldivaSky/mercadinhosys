@@ -740,27 +740,42 @@ def cancelar_rescisao(rescisao_id):
 
 
 def _garantir_despesas_rescisoes_legadas():
-    """Garante retroativamente que rescisões passadas registradas no banco tenham seu lançamento em Despesas."""
+    """Garante retroativamente que todas as rescisões no banco tenham seu lançamento em Despesas com o valor exato."""
     try:
         from app.models import Rescisao, Despesa
-        rescisoes_sem_despesa = Rescisao.query.filter(Rescisao.despesa_id.is_(None)).all()
-        if not rescisoes_sem_despesa:
+        rescisoes = Rescisao.query.all()
+        if not rescisoes:
             return
         
         alterou = False
-        for r in rescisoes_sem_despesa:
+        for r in rescisoes:
             nome_func = r.funcionario.nome if r.funcionario else f"Funcionário #{r.funcionario_id}"
-            valor_despesa = Decimal(str(r.total_liquido or r.total_proventos or 0))
+            json_data = r.verbas_rescisorias_json or {}
             
-            desp_existente = Despesa.query.filter(
-                Despesa.estabelecimento_id == r.estabelecimento_id,
-                Despesa.categoria == "Rescisão Trabalhista",
-                Despesa.descricao.like(f"%Rescisão Trabalhista - {nome_func}%")
-            ).first()
+            # O valor real da despesa rescisória é o total líquido estimado (ou proventos) da rescisão no JSON
+            val_liq = json_data.get("total_liquido_estimado") or json_data.get("total_proventos") or r.total_liquido or r.total_proventos or 0
+            valor_despesa = Decimal(str(val_liq))
+            if valor_despesa <= Decimal("0.00"):
+                continue
 
-            if desp_existente:
-                r.despesa_id = desp_existente.id
-                alterou = True
+            desp = None
+            if getattr(r, "despesa_id", None):
+                desp = Despesa.query.get(r.despesa_id)
+            if not desp:
+                desp = Despesa.query.filter(
+                    Despesa.estabelecimento_id == r.estabelecimento_id,
+                    Despesa.categoria == "Rescisão Trabalhista",
+                    Despesa.descricao.like(f"%Rescisão Trabalhista - {nome_func}%")
+                ).first()
+
+            if desp:
+                # Sincronizar o valor e o vínculo caso estivessem divergentes
+                if r.despesa_id != desp.id or Decimal(str(desp.valor)) != valor_despesa:
+                    r.despesa_id = desp.id
+                    desp.valor = valor_despesa
+                    desp.data_despesa = r.data_demissao
+                    desp.data_vencimento = r.data_demissao
+                    alterou = True
             else:
                 despesa_rescisao = Despesa(
                     estabelecimento_id=r.estabelecimento_id,
@@ -778,6 +793,11 @@ def _garantir_despesas_rescisoes_legadas():
                 db.session.add(despesa_rescisao)
                 db.session.flush()
                 r.despesa_id = despesa_rescisao.id
+                alterou = True
+
+            # Atualizar a coluna r.total_liquido na própria tabela Rescisao se divergente
+            if Decimal(str(r.total_liquido or 0)) != valor_despesa:
+                r.total_liquido = valor_despesa
                 alterou = True
 
         if alterou:

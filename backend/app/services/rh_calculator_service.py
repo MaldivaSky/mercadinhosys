@@ -356,16 +356,44 @@ def _ultimo_aniversario(admissao: date, referencia: date) -> date:
     return max(aniv, admissao)
 
 
-def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
-                      saldo_fgts=None, ferias_vencidas_dias: int = 0, config_folha=None) -> dict:
+def _calcular_inss(valor: Decimal) -> Decimal:
+    """Calcula o INSS pela tabela progressiva oficial da Previdência Social (2025/2026).
+    Faixa 1: até R$ 1.518,00 -> 7,5%
+    Faixa 2: R$ 1.518,01 até R$ 2.793,88 -> 9%
+    Faixa 3: R$ 2.793,89 até R$ 4.190,83 -> 12%
+    Faixa 4: R$ 4.190,84 até R$ 8.157,41 (Teto) -> 14%
     """
-    Calcula as verbas rescisórias (CLT) com memória de cálculo para o contador.
+    v = float(valor)
+    if v <= 0:
+        return Decimal("0.00")
+    
+    teto = 8157.41
+    base = min(v, teto)
+    
+    inss = 0.0
+    if base > 4190.83:
+        inss += (base - 4190.83) * 0.14
+        base = 4190.83
+    if base > 2793.88:
+        inss += (base - 2793.88) * 0.12
+        base = 2793.88
+    if base > 1518.00:
+        inss += (base - 1518.00) * 0.09
+        base = 1518.00
+    if base > 0:
+        inss += base * 0.075
+
+    return Decimal(str(round(inss, 2)))
+
+
+def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
+                      saldo_fgts=None, ferias_vencidas_dias: int = 0, config_folha=None,
+                      aviso_cumprido: bool = False, descontos_adicionais=0.0) -> dict:
+    """
+    Calcula as verbas rescisórias (CLT) completas (proventos + descontos legais de INSS/aviso/adiantamento).
 
     tipo_rescisao ∈ {PEDIDO, S_JUSTA (dispensa sem justa causa),
     C_JUSTA (com justa causa), ACORDO (distrato 484-A)}.
-
-    Percentuais de FGTS/multa vêm da ConfiguracaoFolha (nada hardcoded).
-    Estimativa para conferência — NÃO substitui o TRCT oficial.
     """
     tipo = (tipo_rescisao or "").upper()
     if tipo not in TIPOS_RESCISAO:
@@ -405,6 +433,7 @@ def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
         fgts_estimado = False
 
     proventos = []
+    descontos = []
     memoria = []
 
     # 1) Saldo de salário — todas as modalidades
@@ -418,7 +447,7 @@ def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
     inclui_multa = tipo in ("S_JUSTA", "ACORDO")
 
     # 2) Aviso prévio indenizado (integral na dispensa; metade no acordo)
-    if inclui_aviso:
+    if inclui_aviso and not aviso_cumprido:
         fator = Decimal("0.5") if tipo == "ACORDO" else Decimal(1)
         valor_aviso = salario_dia * Decimal(dias_aviso) * fator
         rotulo = "Aviso prévio indenizado" + (" (50% - acordo)" if tipo == "ACORDO" else "")
@@ -427,6 +456,7 @@ def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
         memoria.append(f"{rotulo}: (R${_q2(salario)}/30) × {dias_aviso} × {fator} = R${_q2(valor_aviso)}")
 
     # 3) 13º proporcional
+    valor_13 = Decimal("0.00")
     if inclui_prop and avos_13 > 0:
         valor_13 = (salario / Decimal(12)) * Decimal(avos_13)
         proventos.append({"codigo": "DECIMO_TERCEIRO_PROP", "descricao": "13º salário proporcional",
@@ -462,11 +492,43 @@ def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
         origem = "estimado" if fgts_estimado else "informado"
         memoria.append(f"Multa FGTS: {int(pct*100)}% × saldo FGTS {origem} R${_q2(saldo_fgts)} = R${_q2(multa)}")
 
-    total_proventos = sum(Decimal(str(p["valor"])) for p in proventos)
+    # ─── DESCONTOS LEGAIS E RETENÇÕES (CLT) ─────────────────────────────────
 
-    aviso_legal = ("Estimativa das verbas rescisórias para conferência do contador. "
-                   "NÃO substitui o TRCT oficial. Retenções legais (INSS/IRRF) e "
-                   "eventuais descontos devem ser apuradas separadamente.")
+    # A) INSS sobre Saldo de Salário
+    inss_saldo = _calcular_inss(saldo_salario)
+    if inss_saldo > Decimal("0.00"):
+        descontos.append({"codigo": "INSS_SALARIO", "descricao": "INSS sobre saldo de salário",
+                          "referencia": "Tabela progressiva", "valor": _q2(inss_saldo)})
+        memoria.append(f"Desconto INSS saldo de salário: R${_q2(inss_saldo)}")
+
+    # B) INSS sobre 13º Salário
+    if valor_13 > Decimal("0.00"):
+        inss_13 = _calcular_inss(valor_13)
+        if inss_13 > Decimal("0.00"):
+            descontos.append({"codigo": "INSS_DECIMO_TERCEIRO", "descricao": "INSS sobre 13º salário",
+                              "referencia": "Tabela progressiva", "valor": _q2(inss_13)})
+            memoria.append(f"Desconto INSS sobre 13º salário: R${_q2(inss_13)}")
+
+    # C) Desconto de Aviso Prévio não cumprido no Pedido de Demissão
+    if tipo == "PEDIDO" and not aviso_cumprido:
+        valor_desc_aviso = salario
+        descontos.append({"codigo": "DESCONTO_AVISO_PREVIO", "descricao": "Desconto de aviso prévio não cumprido",
+                          "referencia": "30 dias", "valor": _q2(valor_desc_aviso)})
+        memoria.append(f"Desconto de aviso prévio não cumprido: R${_q2(valor_desc_aviso)}")
+
+    # D) Descontos adicionais / Adiantamentos informados
+    desc_add_dec = _D(descontos_adicionais)
+    if desc_add_dec > Decimal("0.00"):
+        descontos.append({"codigo": "DESCONTOS_DIVERSOS", "descricao": "Adiantamentos / Outros descontos",
+                          "referencia": "Informado", "valor": _q2(desc_add_dec)})
+        memoria.append(f"Descontos adicionais/adiantamentos: R${_q2(desc_add_dec)}")
+
+    total_proventos = sum(Decimal(str(p["valor"])) for p in proventos)
+    total_descontos = sum(Decimal(str(d["valor"])) for d in descontos)
+    total_liquido = max(Decimal("0.00"), total_proventos - total_descontos)
+
+    aviso_legal = ("Cálculo detalhado de verbas rescisórias e descontos legais (CLT/INSS). "
+                   "NÃO substitui a gravação final do TRCT oficial no sistema contábil.")
     if fgts_estimado:
         aviso_legal += (" O saldo de FGTS foi ESTIMADO (8% do salário por mês trabalhado); "
                         "informe o saldo real para precisão da multa.")
@@ -480,10 +542,10 @@ def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
         "saldo_fgts": _q2(saldo_fgts),
         "saldo_fgts_estimado": fgts_estimado,
         "proventos": proventos,
-        "descontos": [],
+        "descontos": descontos,
         "total_proventos": _q2(total_proventos),
-        "total_descontos": 0.0,
-        "total_liquido_estimado": _q2(total_proventos),
+        "total_descontos": _q2(total_descontos),
+        "total_liquido_estimado": _q2(total_liquido),
         "memoria_calculo": memoria,
         "aviso_legal": aviso_legal,
     }
