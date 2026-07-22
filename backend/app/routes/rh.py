@@ -614,7 +614,7 @@ def simular_rescisao():
 @funcionario_required
 @plan_required('Pro')
 def registrar_rescisao():
-    """Calcula e GRAVA a rescisão (com a memória de cálculo para o contador) e desliga o funcionário."""
+    """Calcula, GRAVA a rescisão e lança a DESPESA financeira correspondente no módulo de Despesas."""
     if not _pode_ver_tudo_rh(_usuario_atual()):
         return jsonify({"success": False, "message": "Apenas Admin, Gerente ou RH podem registrar rescisões"}), 403
     funcionario, resultado, erro = _calcular_rescisao_do_payload()
@@ -622,11 +622,32 @@ def registrar_rescisao():
         return jsonify({"success": False, "message": erro[0]}), erro[1]
 
     try:
-        from app.models import Rescisao, FuncionarioBeneficio
+        from app.models import Rescisao, FuncionarioBeneficio, Despesa
         data_dem_obj = datetime.strptime(resultado["data_demissao"], "%Y-%m-%d").date()
+        
+        # 1. Lançamento financeiro automático na tabela de Despesas Operacionais
+        valor_despesa = Decimal(str(resultado.get("total_liquido_estimado") or resultado.get("total_proventos") or 0))
+        despesa_rescisao = Despesa(
+            estabelecimento_id=funcionario.estabelecimento_id,
+            descricao=f"Rescisão Trabalhista - {funcionario.nome} ({resultado['tipo_rescisao']})",
+            categoria="Rescisão Trabalhista",
+            tipo="variavel",
+            valor=valor_despesa,
+            data_despesa=data_dem_obj,
+            data_emissao=data_dem_obj,
+            data_vencimento=data_dem_obj,
+            forma_pagamento="PIX",
+            recorrente=False,
+            observacoes=f"Lançamento automático de verbas rescisórias da demissão de {funcionario.nome}. Motivo: {resultado['tipo_rescisao']}.",
+        )
+        db.session.add(despesa_rescisao)
+        db.session.flush()
+
+        # 2. Gravação do registro de rescisão no RH vinculado à despesa
         rescisao = Rescisao(
             estabelecimento_id=funcionario.estabelecimento_id,
             funcionario_id=funcionario.id,
+            despesa_id=despesa_rescisao.id,
             data_demissao=data_dem_obj,
             tipo_rescisao=resultado["tipo_rescisao"],
             verbas_rescisorias_json=resultado,
@@ -636,20 +657,26 @@ def registrar_rescisao():
         )
         db.session.add(rescisao)
 
-        # Atualiza cadastro do funcionário para refletir o desligamento de fato
+        # 3. Atualiza cadastro do funcionário para refletir o desligamento de fato
         funcionario.data_demissao = data_dem_obj
         funcionario.ativo = False
         funcionario.status = "demitido"
 
-        # Inativa os benefícios ativos do colaborador
+        # 4. Inativa os benefícios ativos do colaborador
         FuncionarioBeneficio.query.filter_by(
             funcionario_id=funcionario.id,
             ativo=True
         ).update({"ativo": False})
 
         db.session.commit()
-        return jsonify({"success": True, "data": resultado, "rescisao_id": rescisao.id,
-                        "message": "Rescisão registrada e funcionário desligado com sucesso"}), 201
+        return jsonify({
+            "success": True,
+            "data": resultado,
+            "rescisao_id": rescisao.id,
+            "despesa_id": despesa_rescisao.id,
+            "valor_despesa": float(valor_despesa),
+            "message": "Rescisão registrada, funcionário desligado e despesa financeira lançada com sucesso"
+        }), 201
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Erro ao registrar rescisão: {e}")
@@ -660,12 +687,12 @@ def registrar_rescisao():
 @funcionario_required
 @plan_required('Pro')
 def cancelar_rescisao(rescisao_id):
-    """Reverte/Cancela uma rescisão registrada e reativa o funcionário (Admin/Gerente/RH)."""
+    """Reverte/Cancela uma rescisão registrada, estorna a despesa financeira e reativa o funcionário (Admin/Gerente/RH)."""
     if not _pode_ver_tudo_rh(_usuario_atual()):
         return jsonify({"success": False, "message": "Apenas Admin, Gerente ou RH podem cancelar rescisões"}), 403
 
     try:
-        from app.models import Rescisao, Funcionario
+        from app.models import Rescisao, Funcionario, Despesa
         from app.utils.query_helpers import get_authorized_establishment_id
 
         estab_id = get_authorized_establishment_id()
@@ -683,12 +710,27 @@ def cancelar_rescisao(rescisao_id):
             funcionario.ativo = True
             funcionario.status = "ativo"
 
+        # Estorno financeiro: exclui a despesa associada de Rescisão Trabalhista
+        if getattr(rescisao, "despesa_id", None):
+            desp = Despesa.query.get(rescisao.despesa_id)
+            if desp:
+                db.session.delete(desp)
+        elif funcionario:
+            # Fallback de limpeza para dados legados por busca de descrição
+            desp_legada = Despesa.query.filter(
+                Despesa.estabelecimento_id == rescisao.estabelecimento_id,
+                Despesa.categoria == "Rescisão Trabalhista",
+                Despesa.descricao.like(f"%Rescisão Trabalhista - {funcionario.nome}%")
+            ).first()
+            if desp_legada:
+                db.session.delete(desp_legada)
+
         db.session.delete(rescisao)
         db.session.commit()
 
         return jsonify({
             "success": True,
-            "message": "Rescisão cancelada e funcionário reativado com sucesso"
+            "message": "Rescisão e despesa financeira canceladas, e funcionário reativado com sucesso"
         }), 200
     except Exception as e:
         db.session.rollback()

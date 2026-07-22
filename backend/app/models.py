@@ -693,6 +693,7 @@ class Rescisao(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
     funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    despesa_id = db.Column(db.Integer, db.ForeignKey("despesas.id", ondelete="SET NULL"), nullable=True, index=True)
     data_demissao = db.Column(db.Date, nullable=False)
     tipo_rescisao = db.Column(db.String(20), nullable=False)  # ver TIPOS_RESCISAO
     verbas_rescisorias_json = db.Column(db.JSON, default=dict)
@@ -700,6 +701,7 @@ class Rescisao(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
     total_descontos = db.Column(db.Numeric(19, 4), default=0)
     total_liquido = db.Column(db.Numeric(19, 4), default=0)
     funcionario = db.relationship("Funcionario", backref=db.backref("rescisoes", lazy=True))
+    despesa = db.relationship("Despesa", backref=db.backref("rescisao", uselist=False))
     __table_args__ = (db.Index("ix_rescisao_funcionario", "funcionario_id"),)
 
     def to_dict(self, include_relationships: bool = False, depth: int = 0):

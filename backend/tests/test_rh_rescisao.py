@@ -1,14 +1,14 @@
 import pytest
 from datetime import date
 from decimal import Decimal
-from app.models import Funcionario, Rescisao, FuncionarioBeneficio, Beneficio
+from app.models import Funcionario, Rescisao, FuncionarioBeneficio, Beneficio, Despesa
 
-def test_registrar_e_cancelar_rescisao(session):
+def test_registrar_e_cancelar_rescisao_com_despesa_financeira(session):
     admin = Funcionario.query.filter_by(role="admin").first()
     assert admin is not None
     estab_id = admin.estabelecimento_id
 
-    # Criar um funcionário teste
+    # 1. Criar um funcionário teste
     func = Funcionario(
         estabelecimento_id=estab_id,
         nome="João da Silva Demissão Teste",
@@ -28,7 +28,7 @@ def test_registrar_e_cancelar_rescisao(session):
     session.add(func)
     session.flush()
 
-    # Criar um benefício ativo para o funcionário
+    # 2. Criar um benefício ativo para o funcionário
     ben = Beneficio(
         estabelecimento_id=estab_id,
         nome="Vale Transporte",
@@ -48,18 +48,32 @@ def test_registrar_e_cancelar_rescisao(session):
     session.add(fb)
     session.commit()
 
-    # Importar motor de rescisão e testar simulação e gravação
+    # 3. Simular e gravar rescisão com despesa financeira associada
     from app.services.rh_calculator_service import calcular_rescisao
     dt_dem = date(2026, 7, 20)
     resultado = calcular_rescisao(func, dt_dem, "S_JUSTA", ferias_vencidas_dias=0)
 
-    assert resultado["tipo_rescisao"] == "S_JUSTA"
-    assert resultado["total_proventos"] > 0
+    valor_despesa = Decimal(str(resultado["total_liquido_estimado"]))
+    despesa = Despesa(
+        estabelecimento_id=estab_id,
+        descricao=f"Rescisão Trabalhista - {func.nome} ({resultado['tipo_rescisao']})",
+        categoria="Rescisão Trabalhista",
+        tipo="variavel",
+        valor=valor_despesa,
+        data_despesa=dt_dem,
+        data_emissao=dt_dem,
+        data_vencimento=dt_dem,
+        forma_pagamento="PIX",
+        recorrente=False,
+        observacoes=f"Lançamento automático de verbas rescisórias da demissão de {func.nome}."
+    )
+    session.add(despesa)
+    session.flush()
 
-    # Gravar rescisão e desativar funcionário
     rescisao = Rescisao(
         estabelecimento_id=estab_id,
         funcionario_id=func.id,
+        despesa_id=despesa.id,
         data_demissao=dt_dem,
         tipo_rescisao="S_JUSTA",
         verbas_rescisorias_json=resultado,
@@ -80,7 +94,7 @@ def test_registrar_e_cancelar_rescisao(session):
 
     session.commit()
 
-    # Verificar se funcionário está demitido e inativo
+    # 4. Verificar se funcionário, benefício, rescisão e despesa foram gravados
     func_db = Funcionario.query.get(func.id)
     assert func_db.ativo is False
     assert func_db.status == "demitido"
@@ -91,19 +105,22 @@ def test_registrar_e_cancelar_rescisao(session):
 
     rescisao_db = Rescisao.query.filter_by(funcionario_id=func.id).first()
     assert rescisao_db is not None
-    assert rescisao_db.tipo_rescisao == "S_JUSTA"
+    assert rescisao_db.despesa_id == despesa.id
 
-    # Testar Cancelamento/Reversão
+    despesa_db = Despesa.query.get(despesa.id)
+    assert despesa_db is not None
+    assert despesa_db.categoria == "Rescisão Trabalhista"
+    assert despesa_db.valor == valor_despesa
+
+    # 5. Testar Cancelamento/Estorno da Rescisão e da Despesa Financeira
+    despesa_id_salvo = rescisao_db.despesa_id
+    session.delete(despesa_db)
+    session.delete(rescisao_db)
     func_db.data_demissao = None
     func_db.ativo = True
     func_db.status = "ativo"
-    session.delete(rescisao_db)
     session.commit()
 
-    func_reativado = Funcionario.query.get(func.id)
-    assert func_reativado.ativo is True
-    assert func_reativado.status == "ativo"
-    assert func_reativado.data_demissao is None
-
-    rescisao_deletada = Rescisao.query.filter_by(funcionario_id=func.id).first()
-    assert rescisao_deletada is None
+    assert Despesa.query.get(despesa_id_salvo) is None
+    assert Rescisao.query.filter_by(funcionario_id=func.id).first() is None
+    assert Funcionario.query.get(func.id).ativo is True

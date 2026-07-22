@@ -560,6 +560,8 @@ def create_app(config_name=None):
                     # Despesas
                     ("despesas", "data_emissao",                    "DATE"),
                     ("despesas", "data_vencimento",                 "DATE"),
+                    # Rescisão - vínculo financeiro
+                    ("rescisoes", "despesa_id",                     "INTEGER"),
                     # Pedido de Compra - janela de entrega
                     ("pedidos_compra", "horario_entrega",           "VARCHAR(30)"),
                 ]

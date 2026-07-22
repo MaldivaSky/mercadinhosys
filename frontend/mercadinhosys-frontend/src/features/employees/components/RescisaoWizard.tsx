@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { UserMinus, ArrowRight, ArrowLeft, Download, Save, AlertTriangle, CheckCircle2, FileText, History, Search, RotateCcw } from 'lucide-react';
+import { UserMinus, ArrowRight, ArrowLeft, Download, Save, AlertTriangle, CheckCircle2, FileText, History, Search, RotateCcw, Wallet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { apiClient } from '../../../api/apiClient';
@@ -421,6 +421,14 @@ export default function RescisaoWizard() {
                                 {resultado.memoria_calculo.map((m, i) => <li key={i}>{m}</li>)}
                             </ul>
                         </details>
+
+                        <div className="flex items-start gap-3 text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3.5 border border-emerald-200 dark:border-emerald-500/20">
+                            <Wallet className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                            <div>
+                                <span className="font-bold block text-sm text-emerald-900 dark:text-emerald-200">Impacto Financeiro Automático</span>
+                                <span>Ao registrar a rescisão, o valor de <strong>{fmtMoeda(resultado.total_liquido_estimado || resultado.total_proventos)}</strong> será automaticamente lançado no módulo de <strong>Despesas (Rescisão Trabalhista)</strong> com data de vencimento em {new Date(resultado.data_demissao).toLocaleDateString('pt-BR')}.</span>
+                            </div>
+                        </div>
 
                         <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-lg p-3">
                             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {resultado.aviso_legal}
