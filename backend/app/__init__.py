@@ -827,6 +827,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar logistica: {e}")
 
+    # LGPD (Anonimização e Exclusão de Dados)
+    try:
+        from app.routes.lgpd import lgpd_bp
+        app.register_blueprint(lgpd_bp, url_prefix="/api/lgpd")
+        logger.info("✅ Blueprint lgpd registrado em /api/lgpd")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar lgpd: {e}")
+
     # Monitoramento Global (SaaS Monitor)
     try:
         from app.routes.monitor import monitor_bp

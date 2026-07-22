@@ -67,6 +67,7 @@ error*.log
 # Uploads/Dados Dinâmicos
 backend/uploads/
 backend/backups/
+backups/
 **/tmp/
 **/cache/
 **/media/
@@ -140,6 +141,7 @@ backend/test_out.txt
 
 # Documents
 documents/
+🚀ROADMAP_MERCADINHOSYS_LANCAMENTO.md
 
 # PWA dev service worker (gerado pelo vite-plugin-pwa) — nao versionar
 frontend/mercadinhosys-frontend/dev-dist/
